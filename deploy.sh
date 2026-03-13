@@ -3,7 +3,7 @@ set -e
 
 echo "🚀 BotEnergy avtomatik deploy boshlandi – Hammasi bir joyda!"
 
-# Mikroservicelar (faqat *Api papkalari)
+# Mikroservicelar
 SERVICES=("AdminApi" "AuthApi" "BillingApi" "DeviceApi" "PaymentApi" "UserApi")
 
 for SERVICE in "${SERVICES[@]}"; do
@@ -12,8 +12,12 @@ for SERVICE in "${SERVICES[@]}"; do
   # WebApi ichiga kirish
   cd "WebApi/$SERVICE" || { echo "❌ WebApi/$SERVICE topilmadi!"; exit 1; }
 
-  # .NET loyiha publish (Release rejimida)
-  dotnet publish -c Release -o /tmp/$SERVICE --no-restore
+  # 1. NuGet paketlarni yuklash (eng muhim qadam!)
+  echo "📦 NuGet restore qilmoqda..."
+  dotnet restore
+
+  # 2. Publish (Release rejimida)
+  dotnet publish -c Release -o /tmp/$SERVICE
 
   # Eski versiyani tozalash va yangisini joylashtirish
   sudo rm -rf /home/ubuntu/botenergy/$SERVICE
