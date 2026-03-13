@@ -22,4 +22,4 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.Run("http://*:5006");
+app.Run("https://*:5006");
