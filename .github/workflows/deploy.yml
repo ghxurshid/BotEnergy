@@ -1,0 +1,20 @@
+name: BotEnergy Auto Deploy
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Hammasi bir joyda – kodni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: Deploy skriptini ishga tushirish
+        run: |
+          chmod +x deploy.sh
+          ./deploy.sh
+
+      - name: Muvaffaqiyatli deploy – xizmatlarni qayta ishga tushirish
+        run: echo "✅ BotEnergy mikro xizmatlari yangilandi! Hammasi bir joyda ishlamoqda."
