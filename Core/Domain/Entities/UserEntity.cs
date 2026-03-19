@@ -1,25 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Domain.Entities.BaseEntity;
+using Domain.Enums;
 
 namespace Domain.Entities
 {
-    public class UserEntity
+    public class UserEntity : Entity
     {
-        public Guid Id { get; set; }
-
-        public string PhoneNumber { get; set; }
-
-        public string PhoneId { get; set; }
-
-        public string Gmail { get; set; }
-
-        public decimal Balance { get; set; }
-
-        public bool IsBlocked { get; set; }
-
-        public DateTime CreatedAt { get; set; }
+        public required string PhoneId { get; set; }
+        public required string Mail { get; set; }
+        public required string PhoneNumber { get; set; }
+        public decimal Balance { get; set; } = 0;
+        public bool IsBlocked { get; set; } = false;
+        public bool IsVerified { get; set; } = false;
+        UserType UserType { get; set; } = UserType.NaturalPerson;
+        public DateTime LastLoginDate { get; set; } = DateTime.Now;
+        public DateTime LastActiveDate { get; set; } = DateTime.Now;
+        public required string PasswordHash { get; set; }
+        public required string PasswordSalt { get; set; }
     }
 }

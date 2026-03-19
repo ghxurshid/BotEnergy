@@ -1,43 +1,47 @@
-﻿using AuthApi.Models.Requests;
-using AuthApi.Models.Responses;
-using Microsoft.AspNetCore.Http;
+using AuthApi.Models.Requests;
+using Domain.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using UserApi.Extensions;
 
-namespace AuthApi.Controllers
+namespace UserApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
     {
-        [HttpPost("register")]
-        public ActionResult<RegisterUserResponse> Register([FromBody] RegisterUserRequest request)
+        private readonly IAuthService _authService;
+
+        public AuthController(IAuthService authService)
         {
-            // Implement registration logic here
-            return Ok(new RegisterUserResponse { Success = true, UserId = "generated-user-id" });
+            _authService = authService;
         }
 
-        [HttpPost("verify-user")]
-        public ActionResult<RegisterUserResponse> VerifyUser([FromBody] RegisterUserRequest request)
+        [HttpPost]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
-            return Ok(new RegisterUserResponse { Success = true, UserId = "verified-user-id" });
+            var result = await _authService.RegisterAsync(request.ToDto());
+            return Ok(result);
         }
 
-        [HttpPost("login")]
-        public ActionResult<LoginResponse> Login([FromBody] LoginRequest request)
+        [HttpPost]
+        public async Task<IActionResult> Verify([FromBody] VerifyRequest request)
         {
-            return Ok(new LoginResponse { AccessToken = "jwt-token" });
+            var result = await _authService.VerifyAsync(request.ToDto());
+            return Ok(result);
         }
 
-        [HttpPost("send-otp")]
-        public ActionResult<SendOtpResponse> SendOtp([FromBody] SendOtpRequest request)
+        [HttpPost]
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            return Ok(new SendOtpResponse { Sent = true });
+            var result = await _authService.LoginAsync(request.ToDto());
+            return Ok(result);
         }
 
-        [HttpPost("verify-otp")]
-        public ActionResult<VerifyOtpResponse> VerifyOtp([FromBody] VerifyOtpRequest request)
+        [HttpPost]
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
         {
-            return Ok(new VerifyOtpResponse { Verified = true });
+            var result = await _authService.RefreshTokenAsync(request.ToDto());
+            return Ok(result);
         }
     }
 }

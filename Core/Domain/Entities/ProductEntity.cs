@@ -1,16 +1,10 @@
-﻿using Domain.Enums;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Domain.Entities.BaseEntity;
+using Domain.Enums;
 
 namespace Domain.Entities
 { 
-    public class ProductEntity
-    {
-        public Guid Id { get; set; }
-
+    public class ProductEntity : Entity
+    { 
         public required string Name { get; set; }
 
         public ProductType Type { get; set; }
@@ -19,8 +13,8 @@ namespace Domain.Entities
 
         public decimal Price { get; set; }
 
-        public bool IsActive { get; set; }
+        public bool IsActive { get; set; } = true;
 
-        public DateTime CreatedAt { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
 }

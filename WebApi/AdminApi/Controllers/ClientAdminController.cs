@@ -5,11 +5,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AdminApi.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/[controller]/[action]")]
     [ApiController]
     public class ClientAdminController : ControllerBase
     {
-        [HttpPost("register")]
+        [HttpPost]
         public ActionResult<RegisterClientResponse> Register([FromBody] RegisterClientRequest request)
         {
             return Ok(new RegisterClientResponse { Created = true });

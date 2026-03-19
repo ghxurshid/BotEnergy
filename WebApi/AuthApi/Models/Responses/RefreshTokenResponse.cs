@@ -1,6 +1,6 @@
 ﻿namespace AuthApi.Models.Responses
 {
-    public class LoginResponse
+    public class RefreshTokenResponse
     {
     }
 }
