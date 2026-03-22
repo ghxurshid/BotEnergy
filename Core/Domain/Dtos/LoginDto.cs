@@ -13,8 +13,7 @@ namespace Domain.Dtos
     }
 
     public class LoginResultDto
-    {
-        public required string ResultMessage { get; set; }
+    { 
         public required string AccessToken { get; set; }
         public required string RefreshToken { get; set; }
         public required DateTime AccessTokenExpiration { get; set; }

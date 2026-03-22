@@ -15,6 +15,16 @@ namespace Domain.Dtos.Base
     {
         public bool IsSuccess { get; set; }
         public TResult? Result { get; set; }
-        public Error? Error { get; set; }
+        public Error? ErrorObj { get; set; }
+
+        public static GenericDto<TResult> Success(TResult? result)
+        {
+            return new GenericDto<TResult> { IsSuccess = true, Result = result };
+        }
+
+        public static GenericDto<TResult> Error(int errorCode, string errorMessage)
+        {
+            return new GenericDto<TResult> { IsSuccess = false, ErrorObj = new Error { Code = errorCode, ErrorMessage = errorMessage } };
+        }
     }
 }

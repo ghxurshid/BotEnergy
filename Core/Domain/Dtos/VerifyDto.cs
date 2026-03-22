@@ -8,12 +8,14 @@ namespace Domain.Dtos
 {
     public class VerifyDto
     {
-        public required long UserId { get; set; }
+        public required string PhoneNumber { get; set; }
         public required string OtpCode { get; set; }
     }
 
     public class VerifyResultDto
     {
-        public required string ResultMessage { get; set; }
+        public required string AccessToken { get; set; }
+        public required string RefreshToken { get; set; }
+        public required DateTime AccessTokenExpiration { get; set; }
     }
 }

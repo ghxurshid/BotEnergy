@@ -20,7 +20,7 @@ namespace UserApi.Extensions
         {
             return new VerifyDto
             {
-                UserId = request.UserId,
+                PhoneNumber = request.PhoneNumber,
                 OtpCode = request.OtpCode
             };
         }
