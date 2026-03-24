@@ -19,7 +19,7 @@ namespace CommonConfiguration.ConfigurationServices
             return builder.Build();
         }
 
-        public static IServiceCollection AddCommonConfiguration(this IServiceCollection services)
+        public static ConfigurationManager AddCommonConfiguration(this ConfigurationManager manager)
         {
             var config = GetConfiguration();
 
@@ -28,9 +28,9 @@ namespace CommonConfiguration.ConfigurationServices
             //services.Configure<DatabaseSettings>(config.GetSection("DatabaseSettings"));
 
             // Agar kerak bo‘lsa IConfiguration ni ham register qilamiz
-            services.AddSingleton(config);
+            manager.AddConfiguration(config);
 
-            return services;
+            return manager;
         }
     }
 }

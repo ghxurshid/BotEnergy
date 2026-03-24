@@ -12,7 +12,7 @@ namespace Application.Services
 {
     public class TokenService : ITokenService
     {
-        private const string SECRET = "SUPER_SECRET_KEY_123456";
+        private const string SECRET = "3f1e2d4c5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d";
 
         public string GenerateAccessToken(UserEntity user)
         {

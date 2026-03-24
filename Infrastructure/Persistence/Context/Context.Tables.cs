@@ -1,4 +1,4 @@
-﻿using Domain.Entities;
+using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Persistence.Context
 {
-    public partial class Context
+    public partial class AppDbContext
     {
         public DbSet<UserEntity> Users { get; set; }
         public DbSet<OrganizationEntity> Organizations { get; set; }

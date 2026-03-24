@@ -8,6 +8,6 @@ namespace Domain.Repositories
         GenericDto<UserEntity> GetByPhoneNumber(string phoneNumber);
         GenericDto<UserEntity> CreateUser(UserEntity user);
         GenericDto<UserEntity> UpdateUser(UserEntity user);
-        GenericDto<UserEntity> DeleteUser(string userId);
+        GenericDto<UserEntity> DeleteUser(long userId);
     }
 }
