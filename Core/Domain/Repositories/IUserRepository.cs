@@ -1,13 +1,12 @@
-﻿using Domain.Dtos.Base;
-using Domain.Entities;
+﻿using Domain.Entities;
 
 namespace Domain.Repositories
 {
     public interface IUserRepository
     {
-        GenericDto<UserEntity> GetByPhoneNumber(string phoneNumber);
-        GenericDto<UserEntity> CreateUser(UserEntity user);
-        GenericDto<UserEntity> UpdateUser(UserEntity user);
-        GenericDto<UserEntity> DeleteUser(long userId);
+        Task<UserEntity?> GetByPhoneNumberAsync(string phoneNumber);
+        Task<UserEntity> CreateUserAsync(UserEntity user);
+        Task<UserEntity> UpdateUserAsync(UserEntity user);
+        Task DeleteUserAsync(long userId);
     }
 }

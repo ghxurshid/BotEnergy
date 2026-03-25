@@ -25,97 +25,96 @@ namespace Application.Services
 
         public async Task<GenericDto<RegisterResultDto>> RegisterAsync(RegisterDto request)
         {
-            var existing = _userRepository.GetByPhoneNumber(request.PhoneNumber);
+            var existingUser = await _userRepository.GetByPhoneNumberAsync(request.PhoneNumber);
 
-            if (existing.Result != null)
-                return GenericDto<RegisterResultDto>.Error(-5, "User already exists");
+            if (existingUser is not null)
+            {
+                existingUser.IsVerified = false;
+                await _userRepository.UpdateUserAsync(existingUser);
+                await _otpService.GenerateOtpAsync(existingUser.PhoneNumber);
+
+                return GenericDto<RegisterResultDto>.Success(
+                    new RegisterResultDto { ResultMessage = "OTP kod qayta yuborildi." });
+            }
 
             var (hash, salt) = PasswordHelper.CreatePassword(request.Password);
 
-            var user = new UserEntity
-            {                
+            var newUser = new UserEntity
+            {
+                PhoneId = request.PhoneId,
                 PhoneNumber = request.PhoneNumber,
                 Mail = request.Mail,
-                PhoneId = request.PhoneId,
                 PasswordHash = hash,
                 PasswordSalt = salt,
                 IsVerified = false
             };
 
-            _userRepository.CreateUser(user);
+            await _userRepository.CreateUserAsync(newUser);
+            await _otpService.GenerateOtpAsync(newUser.PhoneNumber);
 
-            await _otpService.GenerateOtpAsync(user.PhoneNumber);
-
-            return GenericDto<RegisterResultDto>.Success(new RegisterResultDto
-            {
-                ResultMessage = "OTP sent"
-            });
+            return GenericDto<RegisterResultDto>.Success(
+                new RegisterResultDto { ResultMessage = "Ro'yxatdan o'tdingiz. OTP kod yuborildi." });
         }
 
         public async Task<GenericDto<VerifyResultDto>> VerifyAsync(VerifyDto request)
         {
-            var user = _userRepository.GetByPhoneNumber(request.PhoneNumber).Result;
+            var user = await _userRepository.GetByPhoneNumberAsync(request.PhoneNumber);
+            if (user is null)
+                return GenericDto<VerifyResultDto>.Error(404, "Bu telefon raqam ro'yxatdan o'tmagan.");
 
-            if (user == null)
-                return GenericDto<VerifyResultDto>.Error(-404, "User not found");
-
-            var isValid = await _otpService.VerifyOtpAsync(request.PhoneNumber, request.OtpCode);
-
-            if (!isValid)
-                return GenericDto<VerifyResultDto>.Error(-5, "Invalid OTP");
+            var isOtpValid = await _otpService.VerifyOtpAsync(user.PhoneNumber, request.OtpCode);
+            if (!isOtpValid)
+                return GenericDto<VerifyResultDto>.Error(400, "OTP kod noto'g'ri yoki muddati o'tgan.");
 
             user.IsVerified = true;
-            _userRepository.UpdateUser(user);
+            user.LastLoginDate = DateTime.Now;
+            await _userRepository.UpdateUserAsync(user);
 
-            var token = _tokenService.GenerateAccessToken(user);
-            var refresh = _tokenService.GenerateRefreshToken();
+            var accessToken = _tokenService.GenerateAccessToken(user);
+            var refreshToken = _tokenService.GenerateRefreshToken();
 
             return GenericDto<VerifyResultDto>.Success(new VerifyResultDto
             {
-                AccessToken = token,
-                RefreshToken = refresh,
-                AccessTokenExpiration = DateTime.Now.AddMinutes(5)
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
+                AccessTokenExpiration = DateTime.Now.AddMinutes(15)
             });
         }
 
         public async Task<GenericDto<LoginResultDto>> LoginAsync(LoginDto request)
         {
-            var user = _userRepository.GetByPhoneNumber(request.PhoneNumber).Result;
+            var user = await _userRepository.GetByPhoneNumberAsync(request.PhoneNumber);
+            if (user is null)
+                return GenericDto<LoginResultDto>.Error(404, "Telefon raqam yoki parol noto'g'ri.");
 
-            if (user == null)
-                return GenericDto<LoginResultDto>.Error(-5, "User not found");
-
-            if (!PasswordHelper.Verify(request.Password, user.PasswordHash, user.PasswordSalt))
-                return GenericDto<LoginResultDto>.Error(-5, "Wrong password");
+            var isPasswordValid = PasswordHelper.Verify(request.Password, user.PasswordHash, user.PasswordSalt);
+            if (!isPasswordValid)
+                return GenericDto<LoginResultDto>.Error(401, "Telefon raqam yoki parol noto'g'ri.");
 
             if (!user.IsVerified)
-                return GenericDto<LoginResultDto>.Error(-5, "User not verified");
+                return GenericDto<LoginResultDto>.Error(403, "Akkaunt tasdiqlanmagan. Iltimos OTP orqali tasdiqlang.");
 
-            var token = _tokenService.GenerateAccessToken(user);
-            var refresh = _tokenService.GenerateRefreshToken();
+            if (user.IsBlocked)
+                return GenericDto<LoginResultDto>.Error(403, "Akkaunt bloklangan.");
+
+            user.LastLoginDate = DateTime.Now;
+            user.LastActiveDate = DateTime.Now;
+            await _userRepository.UpdateUserAsync(user);
+
+            var accessToken = _tokenService.GenerateAccessToken(user);
+            var refreshToken = _tokenService.GenerateRefreshToken();
 
             return GenericDto<LoginResultDto>.Success(new LoginResultDto
             {
-                AccessToken = token,
-                RefreshToken = refresh,
-                AccessTokenExpiration = DateTime.Now.AddMinutes(5)
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
+                AccessTokenExpiration = DateTime.Now.AddMinutes(15)
             });
         }
 
         public async Task<GenericDto<RefreshTokenResultDto>> RefreshTokenAsync(RefreshTokenDto request)
         {
-            // Oddiy variant (prod’da DBda saqlaysan)
-            //var newToken = _tokenService.GenerateAccessToken(new UserEntity
-            //{
-            //    Id = request.UserId,
-            //    PhoneNumber = request.PhoneNumber
-            //});
-
-            //return GenericDto<RefreshTokenResultDto>.Success(new RefreshTokenResultDto
-            //{
-            //    AccessToken = newToken
-            //});
-            return default;
+            return GenericDto<RefreshTokenResultDto>.Error(501, "Refresh token hali implement qilinmagan.");
         }
     }
 }

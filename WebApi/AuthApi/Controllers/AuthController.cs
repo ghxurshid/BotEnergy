@@ -22,7 +22,10 @@ namespace UserApi.Controllers
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
             var result = await _authService.RegisterAsync(request.ToDto());
-            return Ok(result);
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
         }
 
         [HttpPost]
@@ -30,7 +33,10 @@ namespace UserApi.Controllers
         public async Task<IActionResult> Verify([FromBody] VerifyRequest request)
         {
             var result = await _authService.VerifyAsync(request.ToDto());
-            return Ok(result);
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
         }
 
         [HttpPost]
@@ -38,7 +44,10 @@ namespace UserApi.Controllers
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             var result = await _authService.LoginAsync(request.ToDto());
-            return Ok(result);
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
         }
 
         [HttpPost]
@@ -46,7 +55,10 @@ namespace UserApi.Controllers
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
         {
             var result = await _authService.RefreshTokenAsync(request.ToDto());
-            return Ok(result);
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
         }
     }
 }
