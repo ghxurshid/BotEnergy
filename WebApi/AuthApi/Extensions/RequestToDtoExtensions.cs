@@ -1,5 +1,5 @@
-﻿using AuthApi.Models.Requests;
-using Domain.Dtos; 
+using AuthApi.Models.Requests;
+using Domain.Dtos;
 
 namespace UserApi.Extensions
 {
@@ -11,8 +11,7 @@ namespace UserApi.Extensions
             {
                 PhoneId = request.PhoneId,
                 Mail = request.Mail,
-                PhoneNumber = request.PhoneNumber,
-                Password = request.Password
+                PhoneNumber = request.PhoneNumber
             };
         }
 
@@ -22,6 +21,15 @@ namespace UserApi.Extensions
             {
                 PhoneNumber = request.PhoneNumber,
                 OtpCode = request.OtpCode
+            };
+        }
+
+        public static SetPasswordDto ToDto(this SetPasswordRequest request)
+        {
+            return new SetPasswordDto
+            {
+                PhoneNumber = request.PhoneNumber,
+                Password = request.Password
             };
         }
 
@@ -39,6 +47,32 @@ namespace UserApi.Extensions
             return new RefreshTokenDto
             {
                 RefreshToken = request.RefreshToken
+            };
+        }
+
+        public static ResetPasswordRequestDto ToDto(this ResetPasswordRequestRequest request)
+        {
+            return new ResetPasswordRequestDto
+            {
+                PhoneNumber = request.PhoneNumber
+            };
+        }
+
+        public static ResetPasswordVerifyDto ToDto(this ResetPasswordVerifyRequest request)
+        {
+            return new ResetPasswordVerifyDto
+            {
+                PhoneNumber = request.PhoneNumber,
+                OtpCode = request.OtpCode
+            };
+        }
+
+        public static ResetPasswordSetDto ToDto(this ResetPasswordSetRequest request)
+        {
+            return new ResetPasswordSetDto
+            {
+                PhoneNumber = request.PhoneNumber,
+                NewPassword = request.NewPassword
             };
         }
     }

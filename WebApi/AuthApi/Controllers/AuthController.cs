@@ -40,6 +40,17 @@ namespace UserApi.Controllers
         }
 
         [HttpPost]
+        [TypeFilter(typeof(SetPasswordValidationFilter))]
+        public async Task<IActionResult> SetPassword([FromBody] SetPasswordRequest request)
+        {
+            var result = await _authService.SetPasswordAsync(request.ToDto());
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
+        }
+
+        [HttpPost]
         [TypeFilter(typeof(LoginValidationFilter))]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
@@ -55,6 +66,39 @@ namespace UserApi.Controllers
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
         {
             var result = await _authService.RefreshTokenAsync(request.ToDto());
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
+        }
+
+        [HttpPost]
+        [TypeFilter(typeof(ResetPasswordRequestValidationFilter))]
+        public async Task<IActionResult> ResetPasswordRequest([FromBody] ResetPasswordRequestRequest request)
+        {
+            var result = await _authService.ResetPasswordRequestAsync(request.ToDto());
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
+        }
+
+        [HttpPost]
+        [TypeFilter(typeof(ResetPasswordVerifyValidationFilter))]
+        public async Task<IActionResult> ResetPasswordVerify([FromBody] ResetPasswordVerifyRequest request)
+        {
+            var result = await _authService.ResetPasswordVerifyAsync(request.ToDto());
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
+        }
+
+        [HttpPost]
+        [TypeFilter(typeof(ResetPasswordSetValidationFilter))]
+        public async Task<IActionResult> ResetPasswordSet([FromBody] ResetPasswordSetRequest request)
+        {
+            var result = await _authService.ResetPasswordSetAsync(request.ToDto());
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 

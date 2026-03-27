@@ -1,35 +1,50 @@
-﻿using Domain.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Domain.Enums;
+using Domain.Interfaces;
 
 namespace Application.Services
 {
     public class OtpService : IOtpService
     {
-        private static Dictionary<string, string> _storage = new();
+        private static readonly Dictionary<string, string> _otpStorage = new();
+        private static readonly HashSet<string> _verifiedStorage = new();
 
-        public Task<string> GenerateOtpAsync(string phoneNumber)
+        private static string Key(string phoneNumber, OtpPurpose purpose)
+            => $"{phoneNumber}:{purpose}";
+
+        public Task<string> GenerateOtpAsync(string phoneNumber, OtpPurpose purpose)
         {
             var code = new Random().Next(100000, 999999).ToString();
+            var key = Key(phoneNumber, purpose);
 
-            _storage[phoneNumber] = code;
+            _otpStorage[key] = code;
+            _verifiedStorage.Remove(key);
 
-            Console.WriteLine($"OTP for {phoneNumber}: {code}");
+            Console.WriteLine($"OTP for {phoneNumber} [{purpose}]: {code}");
 
             return Task.FromResult(code);
         }
 
-        public Task<bool> VerifyOtpAsync(string phoneNumber, string code)
+        public Task<bool> VerifyOtpAsync(string phoneNumber, string code, OtpPurpose purpose)
         {
-            if (_storage.TryGetValue(phoneNumber, out var saved))
+            var key = Key(phoneNumber, purpose);
+
+            if (_otpStorage.TryGetValue(key, out var saved) && saved == code)
             {
-                return Task.FromResult(saved == code);
+                _verifiedStorage.Add(key);
+                _otpStorage.Remove(key);
+                return Task.FromResult(true);
             }
 
             return Task.FromResult(false);
+        }
+
+        public Task<bool> IsOtpVerifiedAsync(string phoneNumber, OtpPurpose purpose)
+            => Task.FromResult(_verifiedStorage.Contains(Key(phoneNumber, purpose)));
+
+        public Task ConsumeOtpVerificationAsync(string phoneNumber, OtpPurpose purpose)
+        {
+            _verifiedStorage.Remove(Key(phoneNumber, purpose));
+            return Task.CompletedTask;
         }
     }
 }

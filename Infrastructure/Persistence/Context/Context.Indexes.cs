@@ -44,12 +44,13 @@ namespace Persistence.Context
                 b.Property(x => x.PhoneNumber).HasColumnName("phone_number").IsRequired().HasMaxLength(32);
                 b.Property(x => x.Mail).HasColumnName("mail").IsRequired().HasMaxLength(256);
 
-                b.Property(x => x.PasswordHash).HasColumnName("password_hash").IsRequired().HasMaxLength(256);
-                b.Property(x => x.PasswordSalt).HasColumnName("password_salt").IsRequired().HasMaxLength(256);
+                b.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(256);
+                b.Property(x => x.PasswordSalt).HasColumnName("password_salt").HasMaxLength(256);
 
                 b.Property(x => x.Balance).HasColumnName("balance").HasColumnType("numeric(18,2)").HasDefaultValue(0m);
                 b.Property(x => x.IsBlocked).HasColumnName("is_blocked").HasDefaultValue(false);
                 b.Property(x => x.IsVerified).HasColumnName("is_verified").HasDefaultValue(false);
+                b.Property(x => x.IsOtpVerified).HasColumnName("is_otp_verified").HasDefaultValue(false);
 
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
