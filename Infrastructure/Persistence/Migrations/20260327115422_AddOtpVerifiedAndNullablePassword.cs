@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -11,7 +11,7 @@ namespace Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AlterColumn<string>(
-                name: "password_hash",
+                name: "password_salt",
                 schema: "auth",
                 table: "users",
                 type: "character varying(256)",
@@ -22,7 +22,7 @@ namespace Persistence.Migrations
                 oldMaxLength: 256);
 
             migrationBuilder.AlterColumn<string>(
-                name: "password_salt",
+                name: "password_hash",
                 schema: "auth",
                 table: "users",
                 type: "character varying(256)",
@@ -50,7 +50,7 @@ namespace Persistence.Migrations
                 table: "users");
 
             migrationBuilder.AlterColumn<string>(
-                name: "password_hash",
+                name: "password_salt",
                 schema: "auth",
                 table: "users",
                 type: "character varying(256)",
@@ -63,7 +63,7 @@ namespace Persistence.Migrations
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<string>(
-                name: "password_salt",
+                name: "password_hash",
                 schema: "auth",
                 table: "users",
                 type: "character varying(256)",

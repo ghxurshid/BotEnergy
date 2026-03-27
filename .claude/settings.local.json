@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find d:/WorkPath/VisualStudio/22/BotEnergy/Infrastructure/External -type f -name *.cs)"
+    ]
+  }
+}
