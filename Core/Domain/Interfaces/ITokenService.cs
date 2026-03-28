@@ -1,10 +1,10 @@
-﻿using Domain.Entities;
+using Domain.Entities;
 
 namespace Domain.Interfaces
 {
     public interface ITokenService
     {
-        string GenerateAccessToken(UserEntity user);
+        string GenerateAccessToken(UserEntity user, IEnumerable<string> permissions);
         string GenerateRefreshToken();
     }
 }

@@ -1,5 +1,4 @@
 using Domain.Entities.BaseEntity;
-using Domain.Enums;
 
 namespace Domain.Entities
 {
@@ -9,6 +8,6 @@ namespace Domain.Entities
 
         public RoleEntity? Role { get; set; }
 
-        public Permission Permission { get; set; }
+        public required string Permission { get; set; }
     }
 }

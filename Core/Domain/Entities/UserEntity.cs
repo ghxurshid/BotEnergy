@@ -1,4 +1,4 @@
-﻿using Domain.Entities.BaseEntity;
+using Domain.Entities.BaseEntity;
 using Domain.Enums;
 
 namespace Domain.Entities
@@ -17,5 +17,7 @@ namespace Domain.Entities
         public DateTime LastActiveDate { get; set; } = DateTime.Now;
         public string? PasswordHash { get; set; }
         public string? PasswordSalt { get; set; }
+        public long? RoleId { get; set; }
+        public RoleEntity? Role { get; set; }
     }
 }

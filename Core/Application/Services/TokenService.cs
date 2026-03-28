@@ -1,12 +1,9 @@
-﻿using Domain.Entities;
+using Domain.Entities;
 using Domain.Interfaces;
-using System.Security.Claims;
-using System.Text;
+using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.IdentityModel.Tokens;
-
 
 namespace Application.Services
 {
@@ -14,15 +11,17 @@ namespace Application.Services
     {
         private const string SECRET = "3f1e2d4c5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d";
 
-        public string GenerateAccessToken(UserEntity user)
+        public string GenerateAccessToken(UserEntity user, IEnumerable<string> permissions)
         {
-            var claims = new[]
+            var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.Name, user.PhoneNumber),                          
+                new Claim(ClaimTypes.Name, user.PhoneNumber),
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SECRET));
+            foreach (var permission in permissions)
+                claims.Add(new Claim("Permission", permission));
 
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SECRET));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(

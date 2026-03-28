@@ -29,6 +29,8 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<IOtpService, OtpService>();
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IRoleRepository, RoleRepository>();
+            services.AddScoped<IRoleService, RoleService>();
 
             return services;
         }

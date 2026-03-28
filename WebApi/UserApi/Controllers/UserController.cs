@@ -1,3 +1,4 @@
+using CommonConfiguration.Attributes;
 using Domain.Dtos;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -14,6 +15,7 @@ namespace UserApi.Controllers
         private readonly IUserService _userService = userService;
 
         [HttpGet]
+        [SkipPermissionCheck]
         public async Task<IActionResult> Me()
         {
             var phoneNumber = User.Identity?.Name;
@@ -28,6 +30,7 @@ namespace UserApi.Controllers
         }
 
         [HttpPut]
+        [SkipPermissionCheck]
         public async Task<IActionResult> UpdateMe([FromBody] UpdateMeRequest request)
         {
             var phoneNumber = User.Identity?.Name;

@@ -13,15 +13,18 @@ namespace Application.Services
         private readonly IUserRepository _userRepository;
         private readonly IOtpService _otpService;
         private readonly ITokenService _tokenService;
+        private readonly IRoleRepository _roleRepository;
 
         public AuthService(
             IUserRepository userRepository,
             IOtpService otpService,
-            ITokenService tokenService)
+            ITokenService tokenService,
+            IRoleRepository roleRepository)
         {
             _userRepository = userRepository;
             _otpService = otpService;
             _tokenService = tokenService;
+            _roleRepository = roleRepository;
         }
 
         public async Task<GenericDto<RegisterResultDto>> RegisterAsync(RegisterDto request)
@@ -91,7 +94,8 @@ namespace Application.Services
             user.LastLoginDate = DateTime.Now;
             await _userRepository.UpdateUserAsync(user);
 
-            var accessToken = _tokenService.GenerateAccessToken(user);
+            var permissions = await _roleRepository.GetUserPermissionsAsync(user.RoleId);
+            var accessToken = _tokenService.GenerateAccessToken(user, permissions);
             var refreshToken = _tokenService.GenerateRefreshToken();
 
             return GenericDto<SetPasswordResultDto>.Success(new SetPasswordResultDto
@@ -129,7 +133,8 @@ namespace Application.Services
             user.LastActiveDate = DateTime.Now;
             await _userRepository.UpdateUserAsync(user);
 
-            var accessToken = _tokenService.GenerateAccessToken(user);
+            var permissions = await _roleRepository.GetUserPermissionsAsync(user.RoleId);
+            var accessToken = _tokenService.GenerateAccessToken(user, permissions);
             var refreshToken = _tokenService.GenerateRefreshToken();
 
             return GenericDto<LoginResultDto>.Success(new LoginResultDto
