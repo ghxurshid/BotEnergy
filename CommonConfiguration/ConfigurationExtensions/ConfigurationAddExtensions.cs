@@ -1,3 +1,4 @@
+using Application.BackgroundServices;
 using Application.Services;
 using Domain.Interfaces;
 using Domain.Repositories;
@@ -31,6 +32,10 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IRoleRepository, RoleRepository>();
             services.AddScoped<IRoleService, RoleService>();
+            services.AddScoped<ISessionRepository, SessionRepository>();
+            services.AddScoped<ISessionProgressRepository, SessionProgressRepository>();
+            services.AddScoped<ISessionService, SessionService>();
+            services.AddHostedService<IdleSessionCleanerService>();
 
             return services;
         }
