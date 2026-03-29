@@ -7,6 +7,7 @@ namespace Persistence.Seed
 {
     public static class DataSeeder
     {
+        private const string DefaultOrganizationName = "BotEnergy System";
         private const string DefaultRoleName = "SuperAdmin";
         private const string DefaultPhoneNumber = "+998901234567";
         private const string DefaultPassword = "Admin@123";
@@ -42,12 +43,33 @@ namespace Persistence.Seed
         {
             await context.Database.MigrateAsync();
 
-            var role = await SeedDefaultRoleAsync(context);
+            var organization = await SeedDefaultOrganizationAsync(context);
+            var role = await SeedDefaultRoleAsync(context, organization.Id);
             await SeedRolePermissionsAsync(context, role);
             await SeedDefaultUserAsync(context, role.Id);
         }
 
-        private static async Task<RoleEntity> SeedDefaultRoleAsync(AppDbContext context)
+        private static async Task<OrganizationEntity> SeedDefaultOrganizationAsync(AppDbContext context)
+        {
+            var organization = await context.Organizations
+                .FirstOrDefaultAsync(o => o.Name == DefaultOrganizationName && !o.IsDeleted);
+
+            if (organization is not null)
+                return organization;
+
+            organization = new OrganizationEntity
+            {
+                Name = DefaultOrganizationName,
+                IsActive = true
+            };
+
+            await context.Organizations.AddAsync(organization);
+            await context.SaveChangesAsync();
+
+            return organization;
+        }
+
+        private static async Task<RoleEntity> SeedDefaultRoleAsync(AppDbContext context, long organizationId)
         {
             var role = await context.Roles
                 .FirstOrDefaultAsync(r => r.Name == DefaultRoleName && !r.IsDeleted);
@@ -60,7 +82,7 @@ namespace Persistence.Seed
                 Name = DefaultRoleName,
                 Description = "Barcha huquqlarga ega administrator roli.",
                 IsActive = true,
-                OrganizationId = 0
+                OrganizationId = organizationId
             };
 
             await context.Roles.AddAsync(role);
