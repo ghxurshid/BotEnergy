@@ -12,6 +12,12 @@ namespace Persistence.Repositories
         public UserRepository(AppDbContext context)
             => _context = context;
 
+        public async Task<UserEntity?> GetByIdAsync(long userId)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted);
+        }
+
         public async Task<UserEntity?> GetByPhoneNumberAsync(string phoneNumber)
         {
             return await _context.Users

@@ -3,26 +3,40 @@ using Domain.Dtos.Session;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using UserApi.Models.Requests;
 
 namespace UserApi.Controllers
 {
-    // HTTP fallback — MQTT ishlamagan holatlarda device to'g'ridan-to'g'ri shu endpointlarga murojaat qiladi.
-    [Route("api/[controller]/[action]")]
+    // DeviceApi tomonidan chaqiriladigan ichki endpoint.
+    // JWT autentifikatsiya yo'q — uning o'rniga X-Internal-Secret header tekshiriladi.
+    [Route("api/internal/session")]
     [ApiController]
     [AllowAnonymous]
     [SkipPermissionCheck]
-    public class DeviceSessionController : ControllerBase
+    public class InternalSessionController : ControllerBase
     {
         private readonly ISessionService _sessionService;
+        private readonly IConfiguration _configuration;
 
-        public DeviceSessionController(ISessionService sessionService)
+        public InternalSessionController(ISessionService sessionService, IConfiguration configuration)
         {
             _sessionService = sessionService;
+            _configuration = configuration;
         }
 
-        [HttpPost]
-        public async Task<IActionResult> Connect([FromBody] DeviceConnectBody request)
+        private bool IsAuthorized()
         {
+            var expected = _configuration["InternalApi:SharedSecret"];
+            var received = Request.Headers["X-Internal-Secret"].FirstOrDefault();
+            return !string.IsNullOrEmpty(expected) && expected == received;
+        }
+
+        [HttpPost("connect")]
+        public async Task<IActionResult> Connect([FromBody] InternalDeviceConnectRequest request)
+        {
+            if (!IsAuthorized())
+                return Unauthorized(new { message = "Ichki secret noto'g'ri." });
+
             var result = await _sessionService.DeviceConnectAsync(new DeviceConnectedDto
             {
                 SessionToken = request.SessionToken,
@@ -36,9 +50,12 @@ namespace UserApi.Controllers
             return Ok(new { session_id = result.Result!.SessionId, message = result.Result.ResultMessage });
         }
 
-        [HttpPost]
-        public async Task<IActionResult> ReportProgress([FromBody] SessionProgressBody request)
+        [HttpPost("progress")]
+        public async Task<IActionResult> Progress([FromBody] InternalDeviceProgressRequest request)
         {
+            if (!IsAuthorized())
+                return Unauthorized(new { message = "Ichki secret noto'g'ri." });
+
             var result = await _sessionService.ReportProgressAsync(new SessionProgressDto
             {
                 SessionToken = request.SessionToken,
@@ -53,9 +70,12 @@ namespace UserApi.Controllers
             return Ok(new { message = result.Result!.ResultMessage });
         }
 
-        [HttpPost]
-        public async Task<IActionResult> Finish([FromBody] DeviceFinishBody request)
+        [HttpPost("finish")]
+        public async Task<IActionResult> Finish([FromBody] InternalDeviceFinishRequest request)
         {
+            if (!IsAuthorized())
+                return Unauthorized(new { message = "Ichki secret noto'g'ri." });
+
             var result = await _sessionService.DeviceFinishAsync(new DeviceFinishDto
             {
                 SessionToken = request.SessionToken,
@@ -66,29 +86,11 @@ namespace UserApi.Controllers
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
-            return Ok(new { total_delivered = result.Result!.TotalDelivered, message = result.Result.ResultMessage });
+            return Ok(new
+            {
+                total_delivered = result.Result!.TotalDelivered,
+                message = result.Result.ResultMessage
+            });
         }
-    }
-
-    public class DeviceConnectBody
-    {
-        public string SessionToken { get; set; } = string.Empty;
-        public string SerialNumber { get; set; } = string.Empty;
-        public string ProductType { get; set; } = string.Empty;
-    }
-
-    public class SessionProgressBody
-    {
-        public string SessionToken { get; set; } = string.Empty;
-        public string SerialNumber { get; set; } = string.Empty;
-        public decimal Quantity { get; set; }
-        public decimal TotalQuantity { get; set; }
-    }
-
-    public class DeviceFinishBody
-    {
-        public string SessionToken { get; set; } = string.Empty;
-        public string SerialNumber { get; set; } = string.Empty;
-        public decimal FinalQuantity { get; set; }
     }
 }

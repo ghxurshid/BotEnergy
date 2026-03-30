@@ -38,6 +38,8 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IRoleRepository, RoleRepository>();
             services.AddScoped<IRoleService, RoleService>();
+            services.AddScoped<IDeviceRepository, DeviceRepository>();
+            services.AddScoped<IProductRepository, ProductRepository>();
             services.AddScoped<ISessionRepository, SessionRepository>();
             services.AddScoped<ISessionProgressRepository, SessionProgressRepository>();
             services.AddScoped<ISessionService, SessionService>();

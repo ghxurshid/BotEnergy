@@ -1,5 +1,16 @@
 {
   "ConnectionStrings": {
     "DefaultConnection": "Host=51.38.127.221;Port=5432;Database=botenergy_db;Username=botenergy_user;Password=WsfR5sDcVfABT2F1"
+  },
+  "Mqtt": {
+    "BrokerHost": "localhost",
+    "BrokerPort": 1883,
+    "Username": "",
+    "Password": "",
+    "ClientId": "botenergy-device-api"
+  },
+  "InternalApi": {
+    "SharedSecret": "botenergy-internal-secret-2026",
+    "UserApiBaseUrl": "http://localhost:5006"
   }
 }
