@@ -12,6 +12,8 @@ namespace Domain.Entities
 
         public string? PhoneNumber { get; set; }
 
+        public decimal Balance { get; set; } = 0;
+
         public bool IsActive { get; set; } = true;
     }
 }

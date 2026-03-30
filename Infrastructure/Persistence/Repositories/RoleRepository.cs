@@ -31,7 +31,8 @@ namespace Persistence.Repositories
         public async Task<List<string>> GetPermissionsByRoleIdAsync(long roleId)
             => await _context.RolePermissions
                 .Where(rp => rp.RoleId == roleId && !rp.IsDeleted)
-                .Select(rp => rp.Permission)
+                .Include(rp => rp.Permission)
+                .Select(rp => rp.Permission!.Name)
                 .ToListAsync();
 
         public async Task AddPermissionAsync(RolePermissionEntity permission)
@@ -40,10 +41,14 @@ namespace Persistence.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task RemovePermissionAsync(long roleId, string permission)
+        public async Task<PermissionEntity?> GetPermissionByNameAsync(string name)
+            => await _context.Permissions
+                .FirstOrDefaultAsync(p => p.Name == name && !p.IsDeleted);
+
+        public async Task RemovePermissionAsync(long roleId, long permissionId)
         {
             var entity = await _context.RolePermissions
-                .FirstOrDefaultAsync(rp => rp.RoleId == roleId && rp.Permission == permission && !rp.IsDeleted);
+                .FirstOrDefaultAsync(rp => rp.RoleId == roleId && rp.PermissionId == permissionId && !rp.IsDeleted);
 
             if (entity is null)
                 return;

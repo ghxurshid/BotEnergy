@@ -81,8 +81,7 @@ namespace Persistence.Seed
             {
                 Name = DefaultRoleName,
                 Description = "Barcha huquqlarga ega administrator roli.",
-                IsActive = true,
-                OrganizationId = organizationId
+                IsActive = true
             };
 
             await context.Roles.AddAsync(role);
@@ -93,25 +92,44 @@ namespace Persistence.Seed
 
         private static async Task SeedRolePermissionsAsync(AppDbContext context, RoleEntity role)
         {
-            var existingPermissions = await context.RolePermissions
+            var existingPermissionNames = await context.RolePermissions
                 .Where(rp => rp.RoleId == role.Id && !rp.IsDeleted)
-                .Select(rp => rp.Permission)
+                .Include(rp => rp.Permission)
+                .Select(rp => rp.Permission!.Name)
                 .ToListAsync();
 
-            var missing = AllPermissions
-                .Where(p => !existingPermissions.Contains(p))
+            var missingNames = AllPermissions
+                .Where(p => !existingPermissionNames.Contains(p))
                 .ToList();
 
-            if (missing.Count == 0)
+            if (missingNames.Count == 0)
                 return;
 
-            var newPermissions = missing.Select(p => new RolePermissionEntity
+            foreach (var name in missingNames)
             {
-                RoleId = role.Id,
-                Permission = p
-            });
+                var permission = await context.Permissions
+                    .FirstOrDefaultAsync(p => p.Name == name && !p.IsDeleted);
 
-            await context.RolePermissions.AddRangeAsync(newPermissions);
+                if (permission is null)
+                {
+                    permission = new PermissionEntity { Name = name };
+                    await context.Permissions.AddAsync(permission);
+                    await context.SaveChangesAsync();
+                }
+
+                var alreadyLinked = await context.RolePermissions
+                    .AnyAsync(rp => rp.RoleId == role.Id && rp.PermissionId == permission.Id && !rp.IsDeleted);
+
+                if (!alreadyLinked)
+                {
+                    await context.RolePermissions.AddAsync(new RolePermissionEntity
+                    {
+                        RoleId = role.Id,
+                        PermissionId = permission.Id
+                    });
+                }
+            }
+
             await context.SaveChangesAsync();
         }
 
@@ -124,7 +142,7 @@ namespace Persistence.Seed
             {
                 var (hash, salt) = PasswordHelper.CreatePassword(DefaultPassword);
 
-                user = new UserEntity
+                user = new NaturalUserEntity
                 {
                     PhoneId = DefaultPhoneId,
                     PhoneNumber = DefaultPhoneNumber,

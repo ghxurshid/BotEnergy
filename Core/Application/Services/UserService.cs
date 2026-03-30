@@ -24,7 +24,6 @@ namespace Application.Services
                 PhoneId = user.PhoneId,
                 Mail = user.Mail,
                 PhoneNumber = user.PhoneNumber,
-                Balance = user.Balance,
                 IsVerified = user.IsVerified,
                 IsBlocked = user.IsBlocked,
                 LastLoginDate = user.LastLoginDate,

@@ -1,4 +1,5 @@
 using Domain.Entities;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Persistence.Context
@@ -16,12 +17,16 @@ namespace Persistence.Context
         {
             base.OnModelCreating(modelBuilder);
 
+            modelBuilder.HasPostgresEnum<UserType>("auth", "user_type");
+
             modelBuilder.HasDefaultSchema(AppSchema);
 
             ConfigureUser(modelBuilder);
             ConfigureOrganization(modelBuilder);
             ConfigureRole(modelBuilder);
+            ConfigurePermission(modelBuilder);
             ConfigureRolePermission(modelBuilder);
+            ConfigureUserRole(modelBuilder);
             ConfigureStation(modelBuilder);
             ConfigureDevice(modelBuilder);
             ConfigureProduct(modelBuilder);
@@ -38,6 +43,10 @@ namespace Persistence.Context
             {
                 b.ToTable("users", AuthSchema);
 
+                b.HasDiscriminator<UserType>("user_type")
+                    .HasValue<NaturalUserEntity>(UserType.NaturalPerson)
+                    .HasValue<LegalUserEntity>(UserType.LegalEntity);
+
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
 
@@ -48,7 +57,6 @@ namespace Persistence.Context
                 b.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(256);
                 b.Property(x => x.PasswordSalt).HasColumnName("password_salt").HasMaxLength(256);
 
-                b.Property(x => x.Balance).HasColumnName("balance").HasColumnType("numeric(18,2)").HasDefaultValue(0m);
                 b.Property(x => x.IsBlocked).HasColumnName("is_blocked").HasDefaultValue(false);
                 b.Property(x => x.IsVerified).HasColumnName("is_verified").HasDefaultValue(false);
                 b.Property(x => x.IsOtpVerified).HasColumnName("is_otp_verified").HasDefaultValue(false);
@@ -69,6 +77,23 @@ namespace Persistence.Context
                 b.HasIndex(x => x.Mail).IsUnique();
                 b.HasIndex(x => x.PhoneId);
             });
+
+            modelBuilder.Entity<NaturalUserEntity>(b =>
+            {
+                b.Property(x => x.Balance)
+                    .HasColumnName("balance")
+                    .HasColumnType("numeric(18,2)")
+                    .HasDefaultValue(0m);
+            });
+
+            modelBuilder.Entity<LegalUserEntity>(b =>
+            {
+                b.Property(x => x.OrganizationId).HasColumnName("organization_id");
+                b.HasOne(x => x.Organization)
+                    .WithMany()
+                    .HasForeignKey(x => x.OrganizationId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
         }
 
         private static void ConfigureOrganization(ModelBuilder modelBuilder)
@@ -85,6 +110,7 @@ namespace Persistence.Context
                 b.Property(x => x.Address).HasColumnName("address").HasMaxLength(300);
                 b.Property(x => x.PhoneNumber).HasColumnName("phone_number").HasMaxLength(32);
 
+                b.Property(x => x.Balance).HasColumnName("balance").HasColumnType("numeric(18,2)").HasDefaultValue(0m);
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
@@ -106,11 +132,28 @@ namespace Persistence.Context
                 b.Property(x => x.Name).HasColumnName("name").IsRequired().HasMaxLength(100);
                 b.Property(x => x.Description).HasColumnName("description").HasMaxLength(300);
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
-                b.Property(x => x.OrganizationId).HasColumnName("organization_id");
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
 
                 b.HasIndex(x => x.Name);
+            });
+        }
+
+        private static void ConfigurePermission(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<PermissionEntity>(b =>
+            {
+                b.ToTable("permissions", AuthSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.Name).HasColumnName("name").IsRequired().HasMaxLength(100);
+                b.Property(x => x.Description).HasColumnName("description").HasMaxLength(300);
+                b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+
+                b.HasIndex(x => x.Name).IsUnique();
             });
         }
 
@@ -124,16 +167,49 @@ namespace Persistence.Context
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
 
                 b.Property(x => x.RoleId).HasColumnName("role_id").IsRequired();
-                b.Property(x => x.Permission).HasColumnName("permission").IsRequired().HasMaxLength(100);
+                b.Property(x => x.PermissionId).HasColumnName("permission_id").IsRequired();
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
 
                 b.HasOne(x => x.Role)
-                    .WithMany()
+                    .WithMany(x => x.RolePermissions)
                     .HasForeignKey(x => x.RoleId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                b.HasIndex(x => new { x.RoleId, x.Permission }).IsUnique();
+                b.HasOne(x => x.Permission)
+                    .WithMany(x => x.RolePermissions)
+                    .HasForeignKey(x => x.PermissionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => new { x.RoleId, x.PermissionId }).IsUnique();
+            });
+        }
+
+        private static void ConfigureUserRole(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<UserRoleEntity>(b =>
+            {
+                b.ToTable("user_roles", AuthSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
+                b.Property(x => x.RoleId).HasColumnName("role_id").IsRequired();
+                b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+
+                b.HasOne(x => x.User)
+                    .WithMany()
+                    .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasOne(x => x.Role)
+                    .WithMany(x => x.UserRoles)
+                    .HasForeignKey(x => x.RoleId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => new { x.UserId, x.RoleId }).IsUnique();
             });
         }
 

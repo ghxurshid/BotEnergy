@@ -41,7 +41,7 @@ namespace Application.Services
                     new RegisterResultDto { ResultMessage = "OTP kod qayta yuborildi." });
             }
 
-            var newUser = new UserEntity
+            var newUser = new NaturalUserEntity
             {
                 PhoneId = request.PhoneId,
                 PhoneNumber = request.PhoneNumber,

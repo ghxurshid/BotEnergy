@@ -8,6 +8,8 @@ namespace Domain.Entities
 
         public RoleEntity? Role { get; set; }
 
-        public required string Permission { get; set; }
+        public long PermissionId { get; set; }
+        
+        public PermissionEntity? Permission { get; set; }
     }
 }

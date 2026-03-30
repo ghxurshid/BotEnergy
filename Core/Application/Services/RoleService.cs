@@ -23,8 +23,7 @@ namespace Application.Services
             {
                 Name = dto.Name,
                 Description = dto.Description,
-                IsActive = true,
-                OrganizationId = dto.OrganizationId
+                IsActive = true
             };
 
             var created = await _roleRepository.CreateAsync(role);
@@ -67,10 +66,14 @@ namespace Application.Services
             if (existing.Contains(dto.Permission))
                 return GenericDto<AddPermissionResultDto>.Error(400, "Bu permission allaqachon berilgan.");
 
+            var permission = await _roleRepository.GetPermissionByNameAsync(dto.Permission);
+            if (permission is null)
+                return GenericDto<AddPermissionResultDto>.Error(404, "Permission topilmadi.");
+
             await _roleRepository.AddPermissionAsync(new RolePermissionEntity
             {
                 RoleId = dto.RoleId,
-                Permission = dto.Permission
+                PermissionId = permission.Id
             });
 
             return GenericDto<AddPermissionResultDto>.Success(new AddPermissionResultDto
@@ -85,7 +88,11 @@ namespace Application.Services
             if (role is null)
                 return GenericDto<RemovePermissionResultDto>.Error(404, "Rol topilmadi.");
 
-            await _roleRepository.RemovePermissionAsync(dto.RoleId, dto.Permission);
+            var permission = await _roleRepository.GetPermissionByNameAsync(dto.Permission);
+            if (permission is null)
+                return GenericDto<RemovePermissionResultDto>.Error(404, "Permission topilmadi.");
+
+            await _roleRepository.RemovePermissionAsync(dto.RoleId, permission.Id);
 
             return GenericDto<RemovePermissionResultDto>.Success(new RemovePermissionResultDto
             {

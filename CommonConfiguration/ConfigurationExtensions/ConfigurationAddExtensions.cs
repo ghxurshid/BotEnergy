@@ -1,10 +1,12 @@
 using Application.BackgroundServices;
 using Application.Services;
+using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Persistence.Context;
 using Persistence.Repositories;
 
@@ -16,8 +18,12 @@ namespace CommonConfiguration.ConfigurationExtensions
         {
             var connectionString = config.GetConnectionString("DefaultConnection");
 
+            var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+            dataSourceBuilder.MapEnum<UserType>("auth.user_type");
+            var dataSource = dataSourceBuilder.Build();
+
             services.AddDbContext<AppDbContext>(options =>
-                options.UseNpgsql(connectionString, npgsql =>
+                options.UseNpgsql(dataSource, npgsql =>
                     npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public")));
 
             return services;

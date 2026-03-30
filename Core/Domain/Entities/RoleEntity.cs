@@ -8,10 +8,10 @@ namespace Domain.Entities
 
         public string? Description { get; set; }
 
-        public bool IsActive { get; set; } = true;
+        public bool IsActive { get; set; } = true; 
 
-        public long OrganizationId { get; set; }
+        public ICollection<RolePermissionEntity>? RolePermissions { get; set; }
 
-        public OrganizationEntity? Organization { get; set; }
+        public ICollection<UserRoleEntity>? UserRoles { get; set; }
     }
 }
