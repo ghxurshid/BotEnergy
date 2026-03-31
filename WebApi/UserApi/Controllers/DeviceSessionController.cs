@@ -43,8 +43,7 @@ namespace UserApi.Controllers
             {
                 SessionToken = request.SessionToken,
                 SerialNumber = request.SerialNumber,
-                Quantity = request.Quantity,
-                TotalQuantity = request.TotalQuantity
+                Quantity = request.Quantity
             });
 
             if (!result.IsSuccess)
@@ -82,7 +81,6 @@ namespace UserApi.Controllers
         public string SessionToken { get; set; } = string.Empty;
         public string SerialNumber { get; set; } = string.Empty;
         public decimal Quantity { get; set; }
-        public decimal TotalQuantity { get; set; }
     }
 
     public class DeviceFinishBody

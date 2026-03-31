@@ -60,8 +60,7 @@ namespace UserApi.Controllers
             {
                 SessionToken = request.SessionToken,
                 SerialNumber = request.SerialNumber,
-                Quantity = request.Quantity,
-                TotalQuantity = request.TotalQuantity
+                Quantity = request.Quantity
             });
 
             if (!result.IsSuccess)

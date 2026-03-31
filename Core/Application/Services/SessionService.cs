@@ -12,7 +12,6 @@ namespace Application.Services
     public class SessionService : ISessionService
     {
         private readonly ISessionRepository _sessionRepository;
-        private readonly ISessionProgressRepository _progressRepository;
         private readonly IDeviceRepository _deviceRepository;
         private readonly IProductRepository _productRepository;
         private readonly IUserRepository _userRepository;
@@ -22,14 +21,12 @@ namespace Application.Services
 
         public SessionService(
             ISessionRepository sessionRepository,
-            ISessionProgressRepository progressRepository,
             IDeviceRepository deviceRepository,
             IProductRepository productRepository,
             IUserRepository userRepository,
             IHubContext<SessionHub> hubContext)
         {
             _sessionRepository = sessionRepository;
-            _progressRepository = progressRepository;
             _deviceRepository = deviceRepository;
             _productRepository = productRepository;
             _userRepository = userRepository;
@@ -120,16 +117,7 @@ namespace Application.Services
             if (session.Status != SessionStatus.InProgress)
                 return GenericDto<SessionProgressResultDto>.Error(400, "Sessiya aktiv holatda emas.");
 
-            var progress = new SessionProgressEntity
-            {
-                SessionId = session.Id,
-                Quantity = dto.Quantity,
-                TotalQuantity = dto.TotalQuantity,
-                ReportedAt = DateTime.Now
-            };
-            await _progressRepository.CreateAsync(progress);
-
-            session.DeliveredQuantity = dto.TotalQuantity;
+            session.DeliveredQuantity += dto.Quantity;
             session.LastActivityAt = DateTime.Now;
             await _sessionRepository.UpdateAsync(session);
 
@@ -138,10 +126,10 @@ namespace Application.Services
                 .SendAsync("ProgressUpdate", new
                 {
                     quantity = dto.Quantity,
-                    total_quantity = dto.TotalQuantity,
+                    total_quantity = session.DeliveredQuantity,
                     product_type = session.ProductType,
                     price_per_unit = session.Price,
-                    current_cost = dto.TotalQuantity * session.Price
+                    current_cost = session.DeliveredQuantity * session.Price
                 });
 
             return GenericDto<SessionProgressResultDto>.Success(new SessionProgressResultDto

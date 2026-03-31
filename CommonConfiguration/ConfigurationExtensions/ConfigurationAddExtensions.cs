@@ -41,7 +41,6 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<IDeviceRepository, DeviceRepository>();
             services.AddScoped<IProductRepository, ProductRepository>();
             services.AddScoped<ISessionRepository, SessionRepository>();
-            services.AddScoped<ISessionProgressRepository, SessionProgressRepository>();
             services.AddScoped<ISessionService, SessionService>();
             services.AddHostedService<IdleSessionCleanerService>();
 

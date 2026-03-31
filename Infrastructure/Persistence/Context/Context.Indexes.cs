@@ -31,7 +31,6 @@ namespace Persistence.Context
             ConfigureDevice(modelBuilder);
             ConfigureProduct(modelBuilder);
             ConfigureUsageSession(modelBuilder);
-            ConfigureSessionProgress(modelBuilder);
             ConfigureClient(modelBuilder);
 
             OnModelCreatingPartial(modelBuilder);
@@ -340,35 +339,6 @@ namespace Persistence.Context
                 b.HasIndex(x => x.SessionToken).IsUnique();
                 b.HasIndex(x => new { x.UserId, x.Status });
                 b.HasIndex(x => x.LastActivityAt);
-            });
-        }
-
-        private static void ConfigureSessionProgress(ModelBuilder modelBuilder)
-        {
-            modelBuilder.Entity<SessionProgressEntity>(b =>
-            {
-                b.ToTable("session_progresses", AppSchema);
-
-                b.HasKey(x => x.Id);
-                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
-
-                b.Property(x => x.SessionId).HasColumnName("session_id").IsRequired();
-                b.Property(x => x.Quantity).HasColumnName("quantity").HasColumnType("numeric(18,4)");
-                b.Property(x => x.TotalQuantity).HasColumnName("total_quantity").HasColumnType("numeric(18,4)");
-                b.Property(x => x.ReportedAt).HasColumnName("reported_at")
-                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
-                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
-                b.Property(x => x.CreatedDate).HasColumnName("created_date")
-                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
-                b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
-                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
-
-                b.HasOne(x => x.Session)
-                    .WithMany()
-                    .HasForeignKey(x => x.SessionId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                b.HasIndex(x => x.SessionId);
             });
         }
 
