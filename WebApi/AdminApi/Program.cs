@@ -73,6 +73,6 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-await app.SeedDataAsync();
+//await app.SeedDataAsync();
 
 app.Run("http://*:5001");

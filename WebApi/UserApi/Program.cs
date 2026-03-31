@@ -89,6 +89,6 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<SessionHub>("/hubs/session");
 
-await app.SeedDataAsync();
+//await app.SeedDataAsync();
 
 app.Run("http://*:5006");
