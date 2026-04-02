@@ -14,8 +14,13 @@ namespace Persistence.Repositories
 
         public async Task<UserEntity?> GetByIdAsync(long userId)
         {
-            return await _context.Users
+            var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted);
+
+            if (user is LegalUserEntity legalUser)
+                await _context.Entry(legalUser).Reference(l => l.Organization).LoadAsync();
+
+            return user;
         }
 
         public async Task<UserEntity?> GetByPhoneNumberAsync(string phoneNumber)

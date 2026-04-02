@@ -40,8 +40,22 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<IRoleService, RoleService>();
             services.AddScoped<IDeviceRepository, DeviceRepository>();
             services.AddScoped<IProductRepository, ProductRepository>();
+
+            return services;
+        }
+
+        /// <summary>
+        /// UsageSessionApi uchun sessiya bilan bog'liq servislar.
+        /// Boshqa API lar bu servislarni ishlatmaydi — mustaqil deploy.
+        /// </summary>
+        public static IServiceCollection RegisterSessionServices(this IServiceCollection services)
+        {
+            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IDeviceRepository, DeviceRepository>();
+            services.AddScoped<IProductRepository, ProductRepository>();
             services.AddScoped<ISessionRepository, SessionRepository>();
             services.AddScoped<ISessionService, SessionService>();
+            // ISessionNotifier — UsageSessionApi Program.cs da ro'yxatdan o'tkaziladi
             services.AddHostedService<IdleSessionCleanerService>();
 
             return services;

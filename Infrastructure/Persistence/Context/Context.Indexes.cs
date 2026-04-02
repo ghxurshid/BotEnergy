@@ -247,6 +247,8 @@ namespace Persistence.Context
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
 
                 b.Property(x => x.SerialNumber).HasColumnName("serial_number").IsRequired().HasMaxLength(100);
+                b.Property(x => x.DeviceType).HasColumnName("device_type").HasConversion<int>();
+                b.Property(x => x.FunctionCount).HasColumnName("function_count").HasDefaultValue(1);
                 b.Property(x => x.Model).HasColumnName("model").HasMaxLength(100);
                 b.Property(x => x.FirmwareVersion).HasColumnName("firmware_version").HasMaxLength(50);
                 b.Property(x => x.StationId).HasColumnName("station_id").IsRequired();
@@ -304,13 +306,15 @@ namespace Persistence.Context
                 b.Property(x => x.Status).HasColumnName("status")
                     .HasConversion<string>().HasMaxLength(30);
 
-                b.Property(x => x.ProductType).HasColumnName("product_type").HasMaxLength(64);
+                b.Property(x => x.ProductId).HasColumnName("product_id");
+                b.Property(x => x.Unit).HasColumnName("unit").HasConversion<int?>();
                 b.Property(x => x.RequestedQuantity).HasColumnName("requested_quantity")
                     .HasColumnType("numeric(18,4)");
                 b.Property(x => x.DeliveredQuantity).HasColumnName("delivered_quantity")
                     .HasColumnType("numeric(18,4)").HasDefaultValue(0m);
                 b.Property(x => x.Price).HasColumnName("price")
                     .HasColumnType("numeric(18,2)").HasDefaultValue(0m);
+                b.Property(x => x.EndReason).HasColumnName("end_reason").HasMaxLength(50);
 
                 b.Property(x => x.StartedAt).HasColumnName("started_at")
                     .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
@@ -334,6 +338,11 @@ namespace Persistence.Context
                 b.HasOne(x => x.Device)
                     .WithMany()
                     .HasForeignKey(x => x.DeviceId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasOne(x => x.Product)
+                    .WithMany()
+                    .HasForeignKey(x => x.ProductId)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 b.HasIndex(x => x.SessionToken).IsUnique();

@@ -1,4 +1,5 @@
 using Domain.Entities.BaseEntity;
+using Domain.Enums;
 
 namespace Domain.Entities
 {
@@ -20,13 +21,18 @@ namespace Domain.Entities
         public long? DeviceId { get; set; }
         public DeviceEntity? Device { get; set; }
 
+        public long? ProductId { get; set; }
+        public ProductEntity? Product { get; set; }
+
         public string SessionToken { get; set; } = string.Empty;
         public SessionStatus Status { get; set; } = SessionStatus.Pending;
 
-        public string ProductType { get; set; } = string.Empty;
+        public UnitType? Unit { get; set; }
         public decimal? RequestedQuantity { get; set; }
         public decimal DeliveredQuantity { get; set; } = 0;
         public decimal Price { get; set; } = 0;
+
+        public string? EndReason { get; set; }
 
         public DateTime StartedAt { get; set; } = DateTime.Now;
         public DateTime? DeviceConnectedAt { get; set; }

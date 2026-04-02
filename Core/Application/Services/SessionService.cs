@@ -1,11 +1,9 @@
-using Application.Hubs;
 using Domain.Dtos.Base;
 using Domain.Dtos.Session;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
-using Microsoft.AspNetCore.SignalR;
 
 namespace Application.Services
 {
@@ -15,7 +13,7 @@ namespace Application.Services
         private readonly IDeviceRepository _deviceRepository;
         private readonly IProductRepository _productRepository;
         private readonly IUserRepository _userRepository;
-        private readonly IHubContext<SessionHub> _hubContext;
+        private readonly ISessionNotifier _notifier;
 
         private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
 
@@ -24,20 +22,38 @@ namespace Application.Services
             IDeviceRepository deviceRepository,
             IProductRepository productRepository,
             IUserRepository userRepository,
-            IHubContext<SessionHub> hubContext)
+            ISessionNotifier notifier)
         {
             _sessionRepository = sessionRepository;
             _deviceRepository = deviceRepository;
             _productRepository = productRepository;
             _userRepository = userRepository;
-            _hubContext = hubContext;
+            _notifier = notifier;
         }
 
         public async Task<GenericDto<CreateSessionResultDto>> CreateSessionAsync(CreateSessionDto dto)
         {
+            var product = await _productRepository.GetByIdAsync(dto.ProductId);
+            if (product is null)
+                return GenericDto<CreateSessionResultDto>.Error(404, "Mahsulot topilmadi.");
+
+            // User balansini tekshirish
+            var user = await _userRepository.GetByIdAsync(dto.UserId);
+            if (user is null)
+                return GenericDto<CreateSessionResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+
+            decimal availableBalance = GetUserBalance(user);
+            decimal limit = dto.RequestedQuantity.HasValue
+                ? Math.Min(dto.RequestedQuantity.Value, availableBalance / product.Price)
+                : availableBalance / product.Price;
+
             var session = new UsageSessionEntity
             {
                 UserId = dto.UserId,
+                ProductId = product.Id,
+                Unit = product.Unit,
+                Price = product.Price,
+                RequestedQuantity = limit,
                 SessionToken = Guid.NewGuid().ToString("N"),
                 Status = SessionStatus.Pending,
                 StartedAt = DateTime.Now,
@@ -50,6 +66,10 @@ namespace Application.Services
             {
                 SessionId = created.Id,
                 SessionToken = created.SessionToken,
+                LimitQuantity = limit,
+                ProductName = product.Name,
+                Unit = product.Unit.ToString(),
+                PricePerUnit = product.Price,
                 ExpiresAt = created.StartedAt.Add(IdleTimeout),
                 ResultMessage = "Sessiya muvaffaqiyatli yaratildi."
             });
@@ -68,32 +88,22 @@ namespace Application.Services
             if (device is null)
                 return GenericDto<DeviceConnectedResultDto>.Error(404, "Qurilma topilmadi yoki faol emas.");
 
-            decimal price = 0;
-            if (Enum.TryParse<ProductType>(dto.ProductType, ignoreCase: true, out var productType))
-            {
-                var product = await _productRepository.GetByTypeAsync(productType);
-                price = product?.Price ?? 0;
-            }
-
             session.DeviceId = device.Id;
-            session.ProductType = dto.ProductType;
-            session.Price = price;
             session.Status = SessionStatus.DeviceConnected;
             session.DeviceConnectedAt = DateTime.Now;
             session.LastActivityAt = DateTime.Now;
 
             await _sessionRepository.UpdateAsync(session);
 
-            await _hubContext.Clients
-                .Group(session.SessionToken)
-                .SendAsync("DeviceConnected", new
-                {
-                    device_id = device.Id,
-                    serial_number = device.SerialNumber,
-                    product_type = dto.ProductType,
-                    price_per_unit = price,
-                    connected_at = session.DeviceConnectedAt
-                });
+            await _notifier.NotifyDeviceConnectedAsync(session.SessionToken, new
+            {
+                device_id = device.Id,
+                serial_number = device.SerialNumber,
+                product_id = session.ProductId,
+                price_per_unit = session.Price,
+                limit_quantity = session.RequestedQuantity,
+                connected_at = session.DeviceConnectedAt
+            });
 
             return GenericDto<DeviceConnectedResultDto>.Success(new DeviceConnectedResultDto
             {
@@ -121,16 +131,15 @@ namespace Application.Services
             session.LastActivityAt = DateTime.Now;
             await _sessionRepository.UpdateAsync(session);
 
-            await _hubContext.Clients
-                .Group(session.SessionToken)
-                .SendAsync("ProgressUpdate", new
-                {
-                    quantity = dto.Quantity,
-                    total_quantity = session.DeliveredQuantity,
-                    product_type = session.ProductType,
-                    price_per_unit = session.Price,
-                    current_cost = session.DeliveredQuantity * session.Price
-                });
+            await _notifier.NotifyProgressUpdateAsync(session.SessionToken, new
+            {
+                quantity = dto.Quantity,
+                total_quantity = session.DeliveredQuantity,
+                product_id = session.ProductId,
+                unit = session.Unit?.ToString(),
+                price_per_unit = session.Price,
+                current_cost = session.DeliveredQuantity * session.Price
+            });
 
             return GenericDto<SessionProgressResultDto>.Success(new SessionProgressResultDto
             {
@@ -152,22 +161,22 @@ namespace Application.Services
 
             session.Status = SessionStatus.Completed;
             session.DeliveredQuantity = dto.FinalQuantity;
+            session.EndReason = dto.EndReason;
             session.EndedAt = DateTime.Now;
             session.LastActivityAt = DateTime.Now;
 
             await _sessionRepository.UpdateAsync(session);
             await DeductUserBalanceAsync(session);
 
-            await _hubContext.Clients
-                .Group(session.SessionToken)
-                .SendAsync("SessionCompleted", new
-                {
-                    total_delivered = session.DeliveredQuantity,
-                    product_type = session.ProductType,
-                    price_per_unit = session.Price,
-                    total_cost = session.DeliveredQuantity * session.Price,
-                    ended_at = session.EndedAt
-                });
+            await _notifier.NotifySessionCompletedAsync(session.SessionToken, new
+            {
+                total_delivered = session.DeliveredQuantity,
+                product_id = session.ProductId,
+                price_per_unit = session.Price,
+                total_cost = session.DeliveredQuantity * session.Price,
+                end_reason = session.EndReason,
+                ended_at = session.EndedAt
+            });
 
             return GenericDto<DeviceFinishResultDto>.Success(new DeviceFinishResultDto
             {
@@ -191,21 +200,20 @@ namespace Application.Services
                 return GenericDto<CloseSessionResultDto>.Error(400, "Sessiya allaqachon yopilgan.");
 
             session.Status = SessionStatus.ClosedByUser;
+            session.EndReason = "closed_by_user";
             session.EndedAt = DateTime.Now;
             session.LastActivityAt = DateTime.Now;
 
             await _sessionRepository.UpdateAsync(session);
             await DeductUserBalanceAsync(session);
 
-            await _hubContext.Clients
-                .Group(session.SessionToken)
-                .SendAsync("SessionClosed", new
-                {
-                    reason = "closed_by_user",
-                    total_delivered = session.DeliveredQuantity,
-                    total_cost = session.DeliveredQuantity * session.Price,
-                    ended_at = session.EndedAt
-                });
+            await _notifier.NotifySessionClosedAsync(session.SessionToken, new
+            {
+                reason = "closed_by_user",
+                total_delivered = session.DeliveredQuantity,
+                total_cost = session.DeliveredQuantity * session.Price,
+                ended_at = session.EndedAt
+            });
 
             return GenericDto<CloseSessionResultDto>.Success(new CloseSessionResultDto
             {
@@ -222,21 +230,31 @@ namespace Application.Services
             foreach (var session in idleSessions)
             {
                 session.Status = SessionStatus.TimedOut;
+                session.EndReason = "timed_out";
                 session.EndedAt = DateTime.Now;
 
                 await _sessionRepository.UpdateAsync(session);
                 await DeductUserBalanceAsync(session);
 
-                await _hubContext.Clients
-                    .Group(session.SessionToken)
-                    .SendAsync("SessionClosed", new
-                    {
-                        reason = "timed_out",
-                        total_delivered = session.DeliveredQuantity,
-                        total_cost = session.DeliveredQuantity * session.Price,
-                        ended_at = session.EndedAt
-                    });
+                await _notifier.NotifySessionClosedAsync(session.SessionToken, new
+                {
+                    reason = "timed_out",
+                    total_delivered = session.DeliveredQuantity,
+                    total_cost = session.DeliveredQuantity * session.Price,
+                    ended_at = session.EndedAt
+                });
             }
+        }
+
+        private decimal GetUserBalance(UserEntity user)
+        {
+            if (user is NaturalUserEntity natural)
+                return natural.Balance;
+
+            if (user is LegalUserEntity legal && legal.Organization is not null)
+                return legal.Organization.Balance;
+
+            return 0;
         }
 
         private async Task DeductUserBalanceAsync(UsageSessionEntity session)
@@ -244,16 +262,27 @@ namespace Application.Services
             if (session.DeliveredQuantity <= 0 || session.Price <= 0)
                 return;
 
-            var user = await _userRepository.GetByIdAsync(session.UserId);
-            if (user is not NaturalUserEntity naturalUser)
-                return; // LegalEntity: tashkilot orqali hisob-kitob, to'g'ridan-to'g'ri balansdan ushlanmaydi
-
             var cost = session.DeliveredQuantity * session.Price;
-            naturalUser.Balance = naturalUser.Balance >= cost
-                ? naturalUser.Balance - cost
-                : 0;
+            var user = await _userRepository.GetByIdAsync(session.UserId);
 
-            await _userRepository.UpdateUserAsync(naturalUser);
+            if (user is NaturalUserEntity naturalUser)
+            {
+                naturalUser.Balance = naturalUser.Balance >= cost
+                    ? naturalUser.Balance - cost
+                    : 0;
+                await _userRepository.UpdateUserAsync(naturalUser);
+            }
+            else if (user is LegalUserEntity legalUser)
+            {
+                var organization = legalUser.Organization;
+                if (organization is null)
+                    return;
+
+                organization.Balance = organization.Balance >= cost
+                    ? organization.Balance - cost
+                    : 0;
+                await _userRepository.UpdateUserAsync(legalUser);
+            }
         }
     }
 }

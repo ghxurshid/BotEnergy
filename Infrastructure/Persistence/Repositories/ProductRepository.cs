@@ -13,6 +13,12 @@ namespace Persistence.Repositories
         public ProductRepository(AppDbContext context)
             => _context = context;
 
+        public async Task<ProductEntity?> GetByIdAsync(long id)
+        {
+            return await _context.Products
+                .FirstOrDefaultAsync(p => p.Id == id && p.IsActive && !p.IsDeleted);
+        }
+
         public async Task<ProductEntity?> GetByTypeAsync(ProductType type)
         {
             return await _context.Products
