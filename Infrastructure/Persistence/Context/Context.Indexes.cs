@@ -279,14 +279,23 @@ namespace Persistence.Context
                 b.Property(x => x.Name).HasColumnName("name").IsRequired().HasMaxLength(200);
                 b.HasIndex(x => x.Name);
 
+                b.Property(x => x.Description).HasColumnName("description").HasMaxLength(500);
+
                 b.Property(x => x.Type).HasColumnName("type").HasConversion<int>();
                 b.Property(x => x.Unit).HasColumnName("unit").HasConversion<int>();
 
                 b.Property(x => x.Price).HasColumnName("price").HasColumnType("numeric(18,2)");
-                b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
-                b.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+
+                b.Property(x => x.DeviceId).HasColumnName("device_id").IsRequired();
+                b.HasOne(x => x.Device)
+                    .WithMany()
+                    .HasForeignKey(x => x.DeviceId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+
+                b.HasIndex(x => x.DeviceId);
             });
         }
 

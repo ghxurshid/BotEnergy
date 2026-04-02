@@ -16,13 +16,15 @@ namespace Persistence.Repositories
         public async Task<ProductEntity?> GetByIdAsync(long id)
         {
             return await _context.Products
-                .FirstOrDefaultAsync(p => p.Id == id && p.IsActive && !p.IsDeleted);
+                .Include(p => p.Device)
+                .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
         }
 
         public async Task<ProductEntity?> GetByTypeAsync(ProductType type)
         {
             return await _context.Products
-                .FirstOrDefaultAsync(p => p.Type == type && p.IsActive && !p.IsDeleted);
+                .Include(p => p.Device)
+                .FirstOrDefaultAsync(p => p.Type == type && !p.IsDeleted);
         }
     }
 }
