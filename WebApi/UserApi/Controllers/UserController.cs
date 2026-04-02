@@ -3,6 +3,7 @@ using Domain.Dtos;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using UserApi.Models.Requests;
 
 namespace UserApi.Controllers
@@ -18,11 +19,10 @@ namespace UserApi.Controllers
         [SkipPermissionCheck]
         public async Task<IActionResult> Me()
         {
-            var phoneNumber = User.Identity?.Name;
-            if (string.IsNullOrEmpty(phoneNumber))
+            if (!TryGetUserId(out var userId))
                 return Unauthorized();
 
-            var result = await _userService.GetCurrentUserAsync(phoneNumber);
+            var result = await _userService.GetCurrentUserAsync(userId);
             if (!result.IsSuccess)
                 return NotFound(result);
 
@@ -33,8 +33,7 @@ namespace UserApi.Controllers
         [SkipPermissionCheck]
         public async Task<IActionResult> UpdateMe([FromBody] UpdateMeRequest request)
         {
-            var phoneNumber = User.Identity?.Name;
-            if (string.IsNullOrEmpty(phoneNumber))
+            if (!TryGetUserId(out var userId))
                 return Unauthorized();
 
             var dto = new UpdateUserDto
@@ -43,11 +42,17 @@ namespace UserApi.Controllers
                 PhoneId = request.PhoneId
             };
 
-            var result = await _userService.UpdateCurrentUserAsync(phoneNumber, dto);
+            var result = await _userService.UpdateCurrentUserAsync(userId, dto);
             if (!result.IsSuccess)
                 return NotFound(result);
 
             return Ok(result);
+        }
+
+        private bool TryGetUserId(out long userId)
+        {
+            var raw = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return long.TryParse(raw, out userId);
         }
     }
 }

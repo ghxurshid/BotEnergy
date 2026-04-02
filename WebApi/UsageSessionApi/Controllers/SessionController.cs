@@ -1,8 +1,8 @@
 using Domain.Dtos.Session;
 using Domain.Interfaces;
-using Domain.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using UsageSessionApi.Mqtt;
 
 namespace UsageSessionApi.Controllers
@@ -17,16 +17,11 @@ namespace UsageSessionApi.Controllers
     public class SessionController : ControllerBase
     {
         private readonly ISessionService _sessionService;
-        private readonly IUserRepository _userRepository;
         private readonly MqttSessionBridge _mqttBridge;
 
-        public SessionController(
-            ISessionService sessionService,
-            IUserRepository userRepository,
-            MqttSessionBridge mqttBridge)
+        public SessionController(ISessionService sessionService, MqttSessionBridge mqttBridge)
         {
             _sessionService = sessionService;
-            _userRepository = userRepository;
             _mqttBridge = mqttBridge;
         }
 
@@ -37,17 +32,12 @@ namespace UsageSessionApi.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateSessionRequest request)
         {
-            var phoneNumber = User.Identity?.Name;
-            if (string.IsNullOrEmpty(phoneNumber))
-                return Unauthorized();
-
-            var user = await _userRepository.GetByPhoneNumberAsync(phoneNumber);
-            if (user is null)
+            if (!TryGetUserId(out var userId))
                 return Unauthorized();
 
             var result = await _sessionService.CreateSessionAsync(new CreateSessionDto
             {
-                UserId = user.Id,
+                UserId = userId,
                 ProductId = request.ProductId,
                 RequestedQuantity = request.RequestedQuantity
             });
@@ -90,18 +80,13 @@ namespace UsageSessionApi.Controllers
         [HttpPost]
         public async Task<IActionResult> Close([FromBody] CloseSessionRequest request)
         {
-            var phoneNumber = User.Identity?.Name;
-            if (string.IsNullOrEmpty(phoneNumber))
-                return Unauthorized();
-
-            var user = await _userRepository.GetByPhoneNumberAsync(phoneNumber);
-            if (user is null)
+            if (!TryGetUserId(out var userId))
                 return Unauthorized();
 
             var result = await _sessionService.CloseSessionByUserAsync(new CloseSessionDto
             {
                 SessionId = request.SessionId,
-                UserId = user.Id
+                UserId = userId
             });
 
             if (!result.IsSuccess)
@@ -112,6 +97,12 @@ namespace UsageSessionApi.Controllers
                 message = result.Result!.ResultMessage,
                 total_delivered = result.Result.TotalDelivered
             });
+        }
+
+        private bool TryGetUserId(out long userId)
+        {
+            var raw = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return long.TryParse(raw, out userId);
         }
     }
 

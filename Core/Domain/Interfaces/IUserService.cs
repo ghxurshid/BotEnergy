@@ -5,7 +5,7 @@ namespace Domain.Interfaces
 {
     public interface IUserService
     {
-        Task<GenericDto<GetUserDto>> GetCurrentUserAsync(string phoneNumber);
-        Task<GenericDto<UpdateUserResultDto>> UpdateCurrentUserAsync(string phoneNumber, UpdateUserDto dto);
+        Task<GenericDto<GetUserDto>> GetCurrentUserAsync(long userId);
+        Task<GenericDto<UpdateUserResultDto>> UpdateCurrentUserAsync(long userId, UpdateUserDto dto);
     }
 }

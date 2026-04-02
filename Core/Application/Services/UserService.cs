@@ -12,9 +12,9 @@ namespace Application.Services
         public UserService(IUserRepository userRepository)
             => _userRepository = userRepository;
 
-        public async Task<GenericDto<GetUserDto>> GetCurrentUserAsync(string phoneNumber)
+        public async Task<GenericDto<GetUserDto>> GetCurrentUserAsync(long userId)
         {
-            var user = await _userRepository.GetByPhoneNumberAsync(phoneNumber);
+            var user = await _userRepository.GetByIdAsync(userId);
             if (user is null)
                 return GenericDto<GetUserDto>.Error(404, "Foydalanuvchi topilmadi.");
 
@@ -32,9 +32,9 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<UpdateUserResultDto>> UpdateCurrentUserAsync(string phoneNumber, UpdateUserDto dto)
+        public async Task<GenericDto<UpdateUserResultDto>> UpdateCurrentUserAsync(long userId, UpdateUserDto dto)
         {
-            var user = await _userRepository.GetByPhoneNumberAsync(phoneNumber);
+            var user = await _userRepository.GetByIdAsync(userId);
             if (user is null)
                 return GenericDto<UpdateUserResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
