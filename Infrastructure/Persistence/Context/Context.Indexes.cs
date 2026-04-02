@@ -285,6 +285,7 @@ namespace Persistence.Context
                 b.Property(x => x.Unit).HasColumnName("unit").HasConversion<int>();
 
                 b.Property(x => x.Price).HasColumnName("price").HasColumnType("numeric(18,2)");
+                b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
 
                 b.Property(x => x.DeviceId).HasColumnName("device_id").IsRequired();
                 b.HasOne(x => x.Device)

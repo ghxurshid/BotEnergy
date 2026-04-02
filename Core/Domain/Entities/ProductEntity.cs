@@ -15,6 +15,8 @@ namespace Domain.Entities
 
         public decimal Price { get; set; }
 
+        public bool IsActive { get; set; } = true;
+
         public long DeviceId { get; set; }
 
         public DeviceEntity? Device { get; set; }

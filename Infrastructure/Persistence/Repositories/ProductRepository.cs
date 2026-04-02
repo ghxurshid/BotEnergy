@@ -17,14 +17,14 @@ namespace Persistence.Repositories
         {
             return await _context.Products
                 .Include(p => p.Device)
-                .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
+                .FirstOrDefaultAsync(p => p.Id == id && p.IsActive && !p.IsDeleted);
         }
 
         public async Task<ProductEntity?> GetByTypeAsync(ProductType type)
         {
             return await _context.Products
                 .Include(p => p.Device)
-                .FirstOrDefaultAsync(p => p.Type == type && !p.IsDeleted);
+                .FirstOrDefaultAsync(p => p.Type == type && p.IsActive && !p.IsDeleted);
         }
     }
 }
