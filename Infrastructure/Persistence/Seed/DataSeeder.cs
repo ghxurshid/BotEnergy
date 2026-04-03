@@ -24,15 +24,50 @@ namespace Persistence.Seed
             "Role.AssignToUser",
             "Role.GetPermissions",
 
-            // AdminApi — Admin boshqaruvi
-            "ClientAdmin.Register",
-            "DeviceAdmin.Register",
-            "DeviceAdmin.ChangeStatus",
-            "YuridikAdmin.Create",
+            // AdminApi — Tashkilot boshqaruvi
+            "OrganizationAdmin.Create",
+            "OrganizationAdmin.GetAll",
+            "OrganizationAdmin.GetById",
+            "OrganizationAdmin.Update",
+            "OrganizationAdmin.Delete",
 
-            // UserApi — Qurilma ulanish
-            "DeviceConnection.Connect",
-            "DeviceConnection.Disconnect",
+            // AdminApi — Stansiya boshqaruvi
+            "StationAdmin.Create",
+            "StationAdmin.GetAll",
+            "StationAdmin.GetById",
+            "StationAdmin.GetByOrganization",
+            "StationAdmin.Update",
+            "StationAdmin.Delete",
+
+            // AdminApi — Qurilma boshqaruvi
+            "DeviceAdmin.Register",
+            "DeviceAdmin.GetAll",
+            "DeviceAdmin.GetById",
+            "DeviceAdmin.GetByStation",
+            "DeviceAdmin.Update",
+            "DeviceAdmin.Delete",
+
+            // AdminApi — Mahsulot boshqaruvi
+            "ProductAdmin.Create",
+            "ProductAdmin.GetAllowedTypes",
+
+            // AdminApi — Foydalanuvchi boshqaruvi
+            "UserAdmin.GetAll",
+            "UserAdmin.GetById",
+            "UserAdmin.Block",
+            "UserAdmin.Unblock",
+            "UserAdmin.Delete",
+
+            // AdminApi — Mijoz boshqaruvi
+            "ClientAdmin.Register",
+            "ClientAdmin.GetAll",
+            "ClientAdmin.GetById",
+            "ClientAdmin.Update",
+            "ClientAdmin.Delete",
+
+            // BillingApi — Balans boshqaruvi
+            "Balance.GetMyBalance",
+            "Balance.TopUp",
 
             // UserApi — Foydalanuvchi profili (SkipPermissionCheck bo'lsa ham qo'shiladi)
             "User.Me",

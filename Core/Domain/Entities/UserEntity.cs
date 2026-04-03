@@ -18,5 +18,9 @@ namespace Domain.Entities
         public DateTime LastActiveDate { get; set; } = DateTime.Now;
         public string? PasswordHash { get; set; }
         public string? PasswordSalt { get; set; }
+
+        public ICollection<UserRoleEntity>? UserRoles { get; set; }
+
+        public ICollection<UsageSessionEntity>? UsageSessions { get; set; }
     }
 }

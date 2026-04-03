@@ -41,8 +41,7 @@ builder.Configuration.AddCommonConfiguration();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterSessionServices();
 
-builder.Services.Configure<MqttSessionOptions>(
-    builder.Configuration.GetSection("Mqtt"));
+builder.Services.Configure<MqttSessionOptions>(builder.Configuration.GetSection("Mqtt"));
 builder.Services.AddSingleton<MqttSessionBridge>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MqttSessionBridge>());
 builder.Services.AddScoped<ISessionNotifier, SignalRSessionNotifier>();

@@ -13,5 +13,7 @@ namespace Domain.Entities
         public OrganizationEntity? Organization { get; set; }
 
         public bool IsActive { get; set; } = true;
+
+        public ICollection<DeviceEntity>? Devices { get; set; }
     }
 }

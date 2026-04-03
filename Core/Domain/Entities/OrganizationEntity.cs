@@ -15,5 +15,9 @@ namespace Domain.Entities
         public decimal Balance { get; set; } = 0;
 
         public bool IsActive { get; set; } = true;
+
+        public ICollection<StationEntity>? Stations { get; set; }
+
+        public ICollection<LegalUserEntity>? LegalUsers { get; set; }
     }
 }

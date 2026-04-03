@@ -7,5 +7,6 @@ namespace Domain.Repositories
     {
         Task<ProductEntity?> GetByIdAsync(long id);
         Task<ProductEntity?> GetByTypeAsync(ProductType type);
+        Task CreateAsync(ProductEntity product);
     }
 }

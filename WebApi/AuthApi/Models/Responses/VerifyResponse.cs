@@ -2,5 +2,6 @@
 {
     public class VerifyResponse
     {
+        public required string ResultMessage { get; set; }
     }
 }

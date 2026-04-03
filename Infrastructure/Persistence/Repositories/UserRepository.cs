@@ -29,6 +29,13 @@ namespace Persistence.Repositories
                 .FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
         }
 
+        public async Task<List<UserEntity>> GetAllAsync()
+            => await _context.Users
+                .Include(u => u.Role)
+                .Where(u => !u.IsDeleted)
+                .OrderBy(u => u.PhoneNumber)
+                .ToListAsync();
+
         public async Task<UserEntity> CreateUserAsync(UserEntity user)
         {
             await _context.Users.AddAsync(user);

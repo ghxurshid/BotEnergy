@@ -1,4 +1,5 @@
-﻿using AuthApi.Models.Requests;
+using AuthApi.Models.Requests;
+using CommonConfiguration.Validators;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -9,12 +10,13 @@ namespace AuthApi.Filters
         public void OnActionExecuting(ActionExecutingContext context)
         {
             var request = context.ActionArguments["request"] as LoginRequest;
+            if (request is null) { context.Result = new BadRequestObjectResult(new { message = "So'rov ma'lumotlari noto'g'ri." }); return; }
 
-            if (string.IsNullOrEmpty(request?.PhoneNumber))
-                context.Result = new BadRequestObjectResult("Phone required");
+            if (!PhoneValidator.IsValid(request.PhoneNumber))
+            { context.Result = new BadRequestObjectResult(new { message = PhoneValidator.ErrorMessage }); return; }
 
-            if (string.IsNullOrEmpty(request?.Password))
-                context.Result = new BadRequestObjectResult("Password required");
+            if (string.IsNullOrWhiteSpace(request.Password))
+            { context.Result = new BadRequestObjectResult(new { message = "Parol kiritilishi shart." }); return; }
         }
 
         public void OnActionExecuted(ActionExecutedContext context) { }

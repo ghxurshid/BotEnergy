@@ -46,6 +46,10 @@ namespace Persistence.Context
                     .HasValue<NaturalUserEntity>(UserType.NaturalPerson)
                     .HasValue<LegalUserEntity>(UserType.LegalEntity);
 
+                b.Property<UserType>("user_type")
+                    .HasColumnType("auth.user_type")
+                    .HasColumnName("user_type");
+
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
 
@@ -89,7 +93,7 @@ namespace Persistence.Context
             {
                 b.Property(x => x.OrganizationId).HasColumnName("organization_id");
                 b.HasOne(x => x.Organization)
-                    .WithMany()
+                    .WithMany(x => x.LegalUsers)
                     .HasForeignKey(x => x.OrganizationId)
                     .OnDelete(DeleteBehavior.SetNull);
             });
@@ -199,7 +203,7 @@ namespace Persistence.Context
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
 
                 b.HasOne(x => x.User)
-                    .WithMany()
+                    .WithMany(x => x.UserRoles)
                     .HasForeignKey(x => x.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
 
@@ -229,7 +233,7 @@ namespace Persistence.Context
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
 
                 b.HasOne(x => x.Organization)
-                    .WithMany()
+                    .WithMany(x => x.Stations)
                     .HasForeignKey(x => x.OrganizationId)
                     .OnDelete(DeleteBehavior.Restrict);
 
@@ -258,7 +262,7 @@ namespace Persistence.Context
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
 
                 b.HasOne(x => x.Station)
-                    .WithMany()
+                    .WithMany(x => x.Devices)
                     .HasForeignKey(x => x.StationId)
                     .OnDelete(DeleteBehavior.Restrict);
 
@@ -289,9 +293,9 @@ namespace Persistence.Context
 
                 b.Property(x => x.DeviceId).HasColumnName("device_id").IsRequired();
                 b.HasOne(x => x.Device)
-                    .WithMany()
+                    .WithMany(x => x.Products)
                     .HasForeignKey(x => x.DeviceId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                    .OnDelete(DeleteBehavior.NoAction);
 
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
@@ -341,17 +345,17 @@ namespace Persistence.Context
                     .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
 
                 b.HasOne(x => x.User)
-                    .WithMany()
+                    .WithMany(x => x.UsageSessions)
                     .HasForeignKey(x => x.UserId)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 b.HasOne(x => x.Device)
-                    .WithMany()
+                    .WithMany(x => x.UsageSessions)
                     .HasForeignKey(x => x.DeviceId)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 b.HasOne(x => x.Product)
-                    .WithMany()
+                    .WithMany(x => x.UsageSessions)
                     .HasForeignKey(x => x.ProductId)
                     .OnDelete(DeleteBehavior.Restrict);
 

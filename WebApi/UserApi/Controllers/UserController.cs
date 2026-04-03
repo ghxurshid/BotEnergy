@@ -1,9 +1,9 @@
 using CommonConfiguration.Attributes;
-using Domain.Dtos;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using UserApi.Extensions;
 using UserApi.Models.Requests;
 
 namespace UserApi.Controllers
@@ -36,13 +36,7 @@ namespace UserApi.Controllers
             if (!TryGetUserId(out var userId))
                 return Unauthorized();
 
-            var dto = new UpdateUserDto
-            {
-                Mail = request.Mail,
-                PhoneId = request.PhoneId
-            };
-
-            var result = await _userService.UpdateCurrentUserAsync(userId, dto);
+            var result = await _userService.UpdateCurrentUserAsync(userId, request.ToDto());
             if (!result.IsSuccess)
                 return NotFound(result);
 

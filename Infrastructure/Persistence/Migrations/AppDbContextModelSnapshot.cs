@@ -714,8 +714,9 @@ namespace Persistence.Migrations
                         .HasColumnName("updated_date")
                         .HasDefaultValueSql("LOCALTIMESTAMP");
 
-                    b.Property<int>("user_type")
-                        .HasColumnType("integer");
+                    b.Property<Domain.Enums.UserType>("user_type")
+                        .HasColumnType("auth.user_type")
+                        .HasColumnName("user_type");
 
                     b.HasKey("Id");
 
@@ -731,7 +732,7 @@ namespace Persistence.Migrations
 
                     b.ToTable("users", "auth");
 
-                    b.HasDiscriminator<int>("user_type");
+                    b.HasDiscriminator<Domain.Enums.UserType>("user_type");
 
                     b.UseTphMappingStrategy();
                 });
@@ -788,7 +789,7 @@ namespace Persistence.Migrations
 
                     b.HasIndex("OrganizationId");
 
-                    b.HasDiscriminator().HasValue(1);
+                    b.HasDiscriminator().HasValue(Domain.Enums.UserType.LegalEntity);
                 });
 
             modelBuilder.Entity("Domain.Entities.NaturalUserEntity", b =>
@@ -801,7 +802,7 @@ namespace Persistence.Migrations
                         .HasDefaultValue(0m)
                         .HasColumnName("balance");
 
-                    b.HasDiscriminator().HasValue(0);
+                    b.HasDiscriminator().HasValue(Domain.Enums.UserType.NaturalPerson);
                 });
 
             modelBuilder.Entity("Domain.Entities.DeviceEntity", b =>

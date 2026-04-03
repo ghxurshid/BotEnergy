@@ -26,5 +26,11 @@ namespace Persistence.Repositories
                 .Include(p => p.Device)
                 .FirstOrDefaultAsync(p => p.Type == type && p.IsActive && !p.IsDeleted);
         }
+
+        public async Task CreateAsync(ProductEntity product)
+        {
+            await _context.Products.AddAsync(product);
+            await _context.SaveChangesAsync();
+        }
     }
 }

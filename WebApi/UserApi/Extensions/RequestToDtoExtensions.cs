@@ -1,10 +1,15 @@
-﻿using Domain.Dtos;
+using Domain.Dtos;
+using UserApi.Models.Requests;
 
-
-namespace AuthApi.Extensions
+namespace UserApi.Extensions
 {
     public static class RequestToDtoExtensions
     {
-       
+        public static UpdateUserDto ToDto(this UpdateMeRequest request)
+            => new UpdateUserDto
+            {
+                Mail = request.Mail,
+                PhoneId = request.PhoneId
+            };
     }
 }

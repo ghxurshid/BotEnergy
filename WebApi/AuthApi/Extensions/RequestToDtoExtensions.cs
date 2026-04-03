@@ -1,7 +1,7 @@
 using AuthApi.Models.Requests;
 using Domain.Dtos;
 
-namespace UserApi.Extensions
+namespace AuthApi.Extensions
 {
     public static class RequestToDtoExtensions
     {

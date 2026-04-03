@@ -22,5 +22,9 @@ namespace Domain.Entities
         public bool IsOnline { get; set; } = false;
 
         public bool IsActive { get; set; } = true;
+
+        public ICollection<ProductEntity>? Products { get; set; }
+
+        public ICollection<UsageSessionEntity>? UsageSessions { get; set; }
     }
 }

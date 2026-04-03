@@ -1,8 +1,9 @@
-using Domain.Dtos.Session;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using UsageSessionApi.Extensions;
+using UsageSessionApi.Models.Requests;
 using UsageSessionApi.Mqtt;
 
 namespace UsageSessionApi.Controllers
@@ -35,28 +36,11 @@ namespace UsageSessionApi.Controllers
             if (!TryGetUserId(out var userId))
                 return Unauthorized();
 
-            var result = await _sessionService.CreateSessionAsync(new CreateSessionDto
-            {
-                UserId = userId,
-                ProductId = request.ProductId,
-                RequestedQuantity = request.RequestedQuantity
-            });
-
+            var result = await _sessionService.CreateSessionAsync(request.ToDto(userId));
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
-            var data = result.Result!;
-            return Ok(new
-            {
-                session_id = data.SessionId,
-                session_token = data.SessionToken,
-                limit_quantity = data.LimitQuantity,
-                product_name = data.ProductName,
-                unit = data.Unit,
-                price_per_unit = data.PricePerUnit,
-                expires_at = data.ExpiresAt,
-                message = data.ResultMessage
-            });
+            return Ok(result.Result!.ToResponse());
         }
 
         /// <summary>
@@ -83,20 +67,11 @@ namespace UsageSessionApi.Controllers
             if (!TryGetUserId(out var userId))
                 return Unauthorized();
 
-            var result = await _sessionService.CloseSessionByUserAsync(new CloseSessionDto
-            {
-                SessionId = request.SessionId,
-                UserId = userId
-            });
-
+            var result = await _sessionService.CloseSessionByUserAsync(request.ToDto(userId));
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
-            return Ok(new
-            {
-                message = result.Result!.ResultMessage,
-                total_delivered = result.Result.TotalDelivered
-            });
+            return Ok(result.Result!.ToResponse());
         }
 
         private bool TryGetUserId(out long userId)
@@ -104,25 +79,5 @@ namespace UsageSessionApi.Controllers
             var raw = User.FindFirstValue(ClaimTypes.NameIdentifier);
             return long.TryParse(raw, out userId);
         }
-    }
-
-    // ── Request modellari ──────────────────────────────────────────────
-
-    public class CreateSessionRequest
-    {
-        public long ProductId { get; set; }
-        public decimal? RequestedQuantity { get; set; }
-    }
-
-    public class StartSessionRequest
-    {
-        public string DeviceSerialNumber { get; set; } = string.Empty;
-        public long ProductId { get; set; }
-        public decimal Amount { get; set; }
-    }
-
-    public class CloseSessionRequest
-    {
-        public long SessionId { get; set; }
     }
 }

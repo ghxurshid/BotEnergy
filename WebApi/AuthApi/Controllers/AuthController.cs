@@ -1,8 +1,8 @@
+using AuthApi.Extensions;
 using AuthApi.Filters;
 using AuthApi.Models.Requests;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Mvc;
-using UserApi.Extensions;
 
 namespace UserApi.Controllers
 {
@@ -25,7 +25,7 @@ namespace UserApi.Controllers
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
-            return Ok(result.Result);
+            return Ok(result.Result!.ToResponse());
         }
 
         [HttpPost]
@@ -36,7 +36,7 @@ namespace UserApi.Controllers
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
-            return Ok(result.Result);
+            return Ok(result.Result!.ToResponse());
         }
 
         [HttpPost]
@@ -47,7 +47,7 @@ namespace UserApi.Controllers
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
-            return Ok(result.Result);
+            return Ok(result.Result!.ToResponse());
         }
 
         [HttpPost]
@@ -58,7 +58,7 @@ namespace UserApi.Controllers
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
-            return Ok(result.Result);
+            return Ok(result.Result!.ToResponse());
         }
 
         [HttpPost]
@@ -69,7 +69,7 @@ namespace UserApi.Controllers
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
-            return Ok(result.Result);
+            return Ok(result.Result!.ToResponse());
         }
 
         [HttpPost]
@@ -80,7 +80,7 @@ namespace UserApi.Controllers
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
-            return Ok(result.Result);
+            return Ok(result.Result!.ToResponse());
         }
 
         [HttpPost]
@@ -91,7 +91,7 @@ namespace UserApi.Controllers
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
-            return Ok(result.Result);
+            return Ok(result.Result!.ToResponse());
         }
 
         [HttpPost]
@@ -102,7 +102,7 @@ namespace UserApi.Controllers
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
-            return Ok(result.Result);
+            return Ok(result.Result!.ToResponse());
         }
     }
 }

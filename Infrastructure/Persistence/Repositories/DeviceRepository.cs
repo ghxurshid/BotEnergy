@@ -12,11 +12,54 @@ namespace Persistence.Repositories
         public DeviceRepository(AppDbContext context)
             => _context = context;
 
+        public async Task<DeviceEntity?> GetByIdAsync(long id)
+        {
+            return await _context.Devices
+                .FirstOrDefaultAsync(d => d.Id == id && d.IsActive && !d.IsDeleted);
+        }
+
         public async Task<DeviceEntity?> GetBySerialNumberAsync(string serialNumber)
         {
             return await _context.Devices
                 .Include(d => d.Station)
                 .FirstOrDefaultAsync(d => d.SerialNumber == serialNumber && d.IsActive && !d.IsDeleted);
+        }
+
+        public async Task<List<DeviceEntity>> GetAllAsync()
+            => await _context.Devices
+                .Include(d => d.Station)
+                .Where(d => !d.IsDeleted)
+                .OrderBy(d => d.SerialNumber)
+                .ToListAsync();
+
+        public async Task<List<DeviceEntity>> GetByStationIdAsync(long stationId)
+            => await _context.Devices
+                .Include(d => d.Station)
+                .Where(d => d.StationId == stationId && !d.IsDeleted)
+                .OrderBy(d => d.SerialNumber)
+                .ToListAsync();
+
+        public async Task<DeviceEntity> CreateAsync(DeviceEntity device)
+        {
+            await _context.Devices.AddAsync(device);
+            await _context.SaveChangesAsync();
+            return device;
+        }
+
+        public async Task<DeviceEntity> UpdateAsync(DeviceEntity device)
+        {
+            _context.Devices.Update(device);
+            await _context.SaveChangesAsync();
+            return device;
+        }
+
+        public async Task DeleteAsync(long id)
+        {
+            var device = await _context.Devices.FirstOrDefaultAsync(d => d.Id == id);
+            if (device is null) return;
+            device.IsDeleted = true;
+            device.IsActive = false;
+            await _context.SaveChangesAsync();
         }
     }
 }

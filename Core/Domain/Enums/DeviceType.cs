@@ -8,10 +8,11 @@ namespace Domain.Enums
 {
     public enum DeviceType
     {
-        FUEL_DISPENSER,   // Zapravka
+        FUEL_DISPENSER,   // Zapravka (benzin, dizel, metan, propan)
         WASH_BOX,         // Moyka
         CHARGER,          // Elektr zaryadkasi
-        METHANE_PUMP,     // Metan
-        PROPANE_PUMP      // Propan
+        WATER_DISPENSER,  // Suv avtomati
+        VACUUM_CLEANER,   // Avto changyutgich
+        VENDING_MACHINE,  // Vending avtomati
     }
 }

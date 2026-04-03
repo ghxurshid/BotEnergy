@@ -20,5 +20,7 @@ namespace Domain.Entities
         public long DeviceId { get; set; }
 
         public DeviceEntity? Device { get; set; }
+
+        public ICollection<UsageSessionEntity>? UsageSessions { get; set; }
     }
 }

@@ -31,15 +31,42 @@ namespace CommonConfiguration.ConfigurationExtensions
 
         public static IServiceCollection RegisterServices(this IServiceCollection services)
         {
+            // Auth
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IOtpService, OtpService>();
+
+            // User
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IUserAdminService, UserAdminService>();
+
+            // Role
             services.AddScoped<IRoleRepository, RoleRepository>();
             services.AddScoped<IRoleService, RoleService>();
+
+            // Organization
+            services.AddScoped<IOrganizationRepository, OrganizationRepository>();
+            services.AddScoped<IOrganizationService, OrganizationService>();
+
+            // Station
+            services.AddScoped<IStationRepository, StationRepository>();
+            services.AddScoped<IStationService, StationService>();
+
+            // Device
             services.AddScoped<IDeviceRepository, DeviceRepository>();
+            services.AddScoped<IDeviceService, DeviceService>();
+
+            // Product
             services.AddScoped<IProductRepository, ProductRepository>();
+            services.AddScoped<IProductService, ProductService>();
+
+            // Client
+            services.AddScoped<IClientRepository, ClientRepository>();
+            services.AddScoped<IClientService, ClientService>();
+
+            // Billing
+            services.AddScoped<IBillingService, BillingService>();
 
             return services;
         }
