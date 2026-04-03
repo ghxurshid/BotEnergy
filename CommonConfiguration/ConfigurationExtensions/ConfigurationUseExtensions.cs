@@ -9,7 +9,7 @@ namespace CommonConfiguration.ConfigurationExtensions
     {
         public static IServiceCollection AddDBConfigurationExtension()
         {
-            return default;
+            return default!;
         }
 
         public static IApplicationBuilder UseCustomExceptionMiddleware(this IApplicationBuilder app)

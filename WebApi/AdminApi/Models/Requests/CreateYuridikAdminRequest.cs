@@ -2,7 +2,7 @@
 {
     public class CreateYuridikAdminRequest
     {
-        public string PhoneNumber { get; set; }
-        public string Inn { get; set; }
+        public required string PhoneNumber { get; set; }
+        public required string Inn { get; set; }
     }
 }

@@ -25,9 +25,22 @@ namespace CommonConfiguration.Filters
                 return;
             }
 
-            var controller = context.RouteData.Values["controller"]?.ToString();
-            var action = context.RouteData.Values["action"]?.ToString();
-            var requiredPermission = $"{controller}.{action}";
+            var requireAttr = context.ActionDescriptor.EndpointMetadata
+                .OfType<RequirePermissionAttribute>()
+                .FirstOrDefault();
+
+            string requiredPermission;
+
+            if (requireAttr != null)
+            {
+                requiredPermission = requireAttr.Permission;
+            }
+            else
+            {
+                var controller = context.RouteData.Values["controller"]?.ToString();
+                var action = context.RouteData.Values["action"]?.ToString();
+                requiredPermission = $"{controller}.{action}";
+            }
 
             var userPermissions = context.HttpContext.User.Claims
                 .Where(c => c.Type == "Permission")

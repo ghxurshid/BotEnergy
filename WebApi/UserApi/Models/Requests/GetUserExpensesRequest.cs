@@ -2,6 +2,6 @@
 {
     public class GetUserExpensesRequest
     {
-        public string UserId { get; set; }
+        public required string UserId { get; set; }
     }
 }

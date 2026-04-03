@@ -2,7 +2,7 @@
 {
     public class ChangeDeviceStatusRequest
     {
-        public string DeviceId { get; set; }
-        public string Status { get; set; }
+        public required string DeviceId { get; set; }
+        public required string Status { get; set; }
     }
 }

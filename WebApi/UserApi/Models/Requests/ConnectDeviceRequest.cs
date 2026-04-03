@@ -2,7 +2,7 @@
 {
     public class ConnectDeviceRequest
     {
-        public string PhoneId { get; set; }
-        public string DeviceId { get; set; }
+        public required string PhoneId { get; set; }
+        public required string DeviceId { get; set; }
     }
 }

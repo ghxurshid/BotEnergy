@@ -2,7 +2,7 @@
 {
     public class AddBalanceRequest
     {
-        public string UserId { get; set; }
+        public required string UserId { get; set; }
         public decimal Amount { get; set; }
     }
 }

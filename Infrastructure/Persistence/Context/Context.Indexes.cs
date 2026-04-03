@@ -326,9 +326,14 @@ namespace Persistence.Context
                     .HasColumnType("numeric(18,4)");
                 b.Property(x => x.DeliveredQuantity).HasColumnName("delivered_quantity")
                     .HasColumnType("numeric(18,4)").HasDefaultValue(0m);
-                b.Property(x => x.Price).HasColumnName("price")
+                b.Property(x => x.PricePerUnit).HasColumnName("price_per_unit")
                     .HasColumnType("numeric(18,2)").HasDefaultValue(0m);
                 b.Property(x => x.EndReason).HasColumnName("end_reason").HasMaxLength(50);
+
+                // Snapshot maydonlar
+                b.Property(x => x.UserPhoneNumber).HasColumnName("user_phone_number").HasMaxLength(20);
+                b.Property(x => x.DeviceSerialNumber).HasColumnName("device_serial_number").HasMaxLength(100);
+                b.Property(x => x.ProductName).HasColumnName("product_name").HasMaxLength(200);
 
                 b.Property(x => x.StartedAt).HasColumnName("started_at")
                     .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);

@@ -65,13 +65,22 @@ namespace Persistence.Seed
             "ClientAdmin.Update",
             "ClientAdmin.Delete",
 
+            // AdminApi — Yuridik foydalanuvchi
+            "YuridikAdmin.Create",
+
             // BillingApi — Balans boshqaruvi
             "Balance.GetMyBalance",
             "Balance.TopUp",
 
-            // UserApi — Foydalanuvchi profili (SkipPermissionCheck bo'lsa ham qo'shiladi)
+            // UsageSessionApi — Sessiya boshqaruvi
+            "Session.Create",
+            "Session.Start",
+            "Session.Close",
+
+            // UserApi — Foydalanuvchi profili
             "User.Me",
             "User.UpdateMe",
+            "DeviceConnection.GetProducts",
         };
 
         public static async Task SeedAsync(AppDbContext context)

@@ -15,6 +15,7 @@ namespace Domain.Entities
 
     public class UsageSessionEntity : Entity
     {
+        // ── FK lar ──────────────────────────────────────────────────────
         public long UserId { get; set; }
         public UserEntity? User { get; set; }
 
@@ -24,13 +25,19 @@ namespace Domain.Entities
         public long? ProductId { get; set; }
         public ProductEntity? Product { get; set; }
 
+        // ── Snapshot maydonlar (tarixiy ma'lumot saqlanishi uchun) ─────
+        public string UserPhoneNumber { get; set; } = string.Empty;
+        public string DeviceSerialNumber { get; set; } = string.Empty;
+        public string ProductName { get; set; } = string.Empty;
+        public decimal PricePerUnit { get; set; }
+
+        // ── Sessiya holati ────────────────────────────────────────────
         public string SessionToken { get; set; } = string.Empty;
         public SessionStatus Status { get; set; } = SessionStatus.Pending;
 
         public UnitType? Unit { get; set; }
         public decimal? RequestedQuantity { get; set; }
         public decimal DeliveredQuantity { get; set; } = 0;
-        public decimal Price { get; set; } = 0;
 
         public string? EndReason { get; set; }
 

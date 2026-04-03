@@ -2,6 +2,6 @@
 {
     public class ConnectDeviceResponse
     {
-        public string QrCode { get; set; }
+        public string QrCode { get; set; } = string.Empty;
     }
 }

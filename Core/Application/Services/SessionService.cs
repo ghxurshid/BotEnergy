@@ -52,12 +52,16 @@ namespace Application.Services
                 UserId = dto.UserId,
                 ProductId = product.Id,
                 Unit = product.Unit,
-                Price = product.Price,
+                PricePerUnit = product.Price,
                 RequestedQuantity = limit,
                 SessionToken = Guid.NewGuid().ToString("N"),
                 Status = SessionStatus.Pending,
                 StartedAt = DateTime.Now,
-                LastActivityAt = DateTime.Now
+                LastActivityAt = DateTime.Now,
+
+                // Snapshot — tarixiy ma'lumot saqlanishi uchun
+                UserPhoneNumber = user.PhoneNumber,
+                ProductName = product.Name,
             };
 
             var created = await _sessionRepository.CreateAsync(session);
@@ -89,6 +93,7 @@ namespace Application.Services
                 return GenericDto<DeviceConnectedResultDto>.Error(404, "Qurilma topilmadi yoki faol emas.");
 
             session.DeviceId = device.Id;
+            session.DeviceSerialNumber = device.SerialNumber;
             session.Status = SessionStatus.DeviceConnected;
             session.DeviceConnectedAt = DateTime.Now;
             session.LastActivityAt = DateTime.Now;
@@ -100,7 +105,7 @@ namespace Application.Services
                 device_id = device.Id,
                 serial_number = device.SerialNumber,
                 product_id = session.ProductId,
-                price_per_unit = session.Price,
+                price_per_unit = session.PricePerUnit,
                 limit_quantity = session.RequestedQuantity,
                 connected_at = session.DeviceConnectedAt
             });
@@ -137,8 +142,8 @@ namespace Application.Services
                 total_quantity = session.DeliveredQuantity,
                 product_id = session.ProductId,
                 unit = session.Unit?.ToString(),
-                price_per_unit = session.Price,
-                current_cost = session.DeliveredQuantity * session.Price
+                price_per_unit = session.PricePerUnit,
+                current_cost = session.DeliveredQuantity * session.PricePerUnit
             });
 
             return GenericDto<SessionProgressResultDto>.Success(new SessionProgressResultDto
@@ -172,8 +177,8 @@ namespace Application.Services
             {
                 total_delivered = session.DeliveredQuantity,
                 product_id = session.ProductId,
-                price_per_unit = session.Price,
-                total_cost = session.DeliveredQuantity * session.Price,
+                price_per_unit = session.PricePerUnit,
+                total_cost = session.DeliveredQuantity * session.PricePerUnit,
                 end_reason = session.EndReason,
                 ended_at = session.EndedAt
             });
@@ -211,7 +216,7 @@ namespace Application.Services
             {
                 reason = "closed_by_user",
                 total_delivered = session.DeliveredQuantity,
-                total_cost = session.DeliveredQuantity * session.Price,
+                total_cost = session.DeliveredQuantity * session.PricePerUnit,
                 ended_at = session.EndedAt
             });
 
@@ -240,7 +245,7 @@ namespace Application.Services
                 {
                     reason = "timed_out",
                     total_delivered = session.DeliveredQuantity,
-                    total_cost = session.DeliveredQuantity * session.Price,
+                    total_cost = session.DeliveredQuantity * session.PricePerUnit,
                     ended_at = session.EndedAt
                 });
             }
@@ -259,10 +264,10 @@ namespace Application.Services
 
         private async Task DeductUserBalanceAsync(UsageSessionEntity session)
         {
-            if (session.DeliveredQuantity <= 0 || session.Price <= 0)
+            if (session.DeliveredQuantity <= 0 || session.PricePerUnit <= 0)
                 return;
 
-            var cost = session.DeliveredQuantity * session.Price;
+            var cost = session.DeliveredQuantity * session.PricePerUnit;
             var user = await _userRepository.GetByIdAsync(session.UserId);
 
             if (user is NaturalUserEntity naturalUser)

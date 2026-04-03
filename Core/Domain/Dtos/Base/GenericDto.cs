@@ -8,7 +8,7 @@ namespace Domain.Dtos.Base
 {
     public class Error
     {
-        public string ErrorMessage { get; set; }
+        public string ErrorMessage { get; set; } = string.Empty;
         public int Code { get; set; }
     }
     public class GenericDto<TResult>

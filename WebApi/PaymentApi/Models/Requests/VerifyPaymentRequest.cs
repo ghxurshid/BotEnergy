@@ -2,6 +2,6 @@
 {
     public class VerifyPaymentRequest
     {
-        public string PaymentId { get; set; }
+        public required string PaymentId { get; set; }
     }
 }

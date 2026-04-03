@@ -2,12 +2,12 @@
 {
     public class DeviceProcessRequest
     {
-        public string DeviceId { get; set; }
-        public string ProductId { get; set; }
-        public string UnitType { get; set; }
+        public required string DeviceId { get; set; }
+        public required string ProductId { get; set; }
+        public required string UnitType { get; set; }
         public decimal Amount { get; set; }
-        public string UserAppId { get; set; }
-        public string BeginEnd { get; set; }
-        public string EndReason { get; set; }
+        public required string UserAppId { get; set; }
+        public required string BeginEnd { get; set; }
+        public string? EndReason { get; set; }
     }
 }

@@ -2,6 +2,6 @@
 {
     public class DisconnectDeviceRequest
     {
-        public string PhoneId { get; set; }
+        public required string PhoneId { get; set; }
     }
 }

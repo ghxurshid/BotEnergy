@@ -2,8 +2,8 @@
 {
     public class StartProductRequest
     {
-        public string PhoneId { get; set; }
-        public string ProductId { get; set; }
+        public required string PhoneId { get; set; }
+        public required string ProductId { get; set; }
         public decimal MaxAmount { get; set; }
     }
 }
