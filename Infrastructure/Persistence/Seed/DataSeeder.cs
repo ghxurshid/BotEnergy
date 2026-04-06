@@ -85,8 +85,6 @@ namespace Persistence.Seed
 
         public static async Task SeedAsync(AppDbContext context)
         {
-            await context.Database.MigrateAsync();
-
             var organization = await SeedDefaultOrganizationAsync(context);
             var role = await SeedDefaultRoleAsync(context, organization.Id);
             await SeedRolePermissionsAsync(context, role);

@@ -4,6 +4,7 @@ using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -24,7 +25,9 @@ namespace CommonConfiguration.ConfigurationExtensions
 
             services.AddDbContext<AppDbContext>(options =>
                 options.UseNpgsql(dataSource, npgsql =>
-                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public")));
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"))
+                .ConfigureWarnings(w =>
+                    w.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
             return services;
         }

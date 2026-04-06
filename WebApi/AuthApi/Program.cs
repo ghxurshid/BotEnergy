@@ -30,6 +30,8 @@ builder.Services.RegisterServices();
 
 var app = builder.Build();
 
+await app.ApplyMigrationsAsync();
+
 app.UseCustomExceptionMiddleware();
 
 // Configure the HTTP request pipeline.
@@ -41,7 +43,5 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
-
-//await app.SeedDataAsync();
 
 app.Run("http://*:5002");

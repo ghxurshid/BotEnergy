@@ -3,7 +3,12 @@
     "allow": [
       "Bash(find d:/WorkPath/VisualStudio/22/BotEnergy/Infrastructure/External -type f -name *.cs)",
       "Bash(dotnet build:*)",
-      "Bash(grep -E \"Controller\\\\.cs$\")"
+      "Bash(grep -E \"Controller\\\\.cs$\")",
+      "Bash(grep -oP '[^\\\\\\\\]+\\\\.cs')",
+      "Bash(sed -i 's/using AdminApi\\\\.Filters;/using AdminApi.Filters.ValidationFilters;/' WebApi/AdminApi/Controllers/YuridikAdminController.cs WebApi/AdminApi/Controllers/ClientAdminController.cs WebApi/AdminApi/Controllers/DeviceAdminController.cs WebApi/AdminApi/Controllers/StationAdminController.cs WebApi/AdminApi/Controllers/OrganizationAdminController.cs WebApi/AdminApi/Controllers/RoleController.cs)",
+      "Bash(sed -i 's/using AuthApi\\\\.Filters;/using AuthApi.Filters.ValidationFilters;/' WebApi/AuthApi/Controllers/AuthController.cs)",
+      "Bash(sed -i 's/using BillingApi\\\\.Filters;/using BillingApi.Filters.ValidationFilters;/' WebApi/BillingApi/Controllers/BalanceController.cs)",
+      "Bash(grep -E \"^d:\\\\\\\\|\\\\.cs$|^$\")"
     ]
   }
 }

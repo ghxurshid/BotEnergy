@@ -69,6 +69,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 var app = builder.Build();
 
+await app.ApplyMigrationsAsync();
+
 app.UseCustomExceptionMiddleware();
 
 app.UseSwagger();
@@ -80,7 +82,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-
-//await app.SeedDataAsync();
 
 app.Run("http://*:5006");
