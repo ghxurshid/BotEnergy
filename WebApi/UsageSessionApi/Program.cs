@@ -98,4 +98,4 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<UsageSessionHub>("/hubs/session");
 
-app.Run("http://*:5003");
+app.Run("http://*:5007");
