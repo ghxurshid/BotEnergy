@@ -34,12 +34,12 @@ namespace UsageSessionApi.Controllers
     [Route("api/[controller]/[action]")]
     [ApiController]
     [Authorize]
-    public class SessionController : ControllerBase
+    public class UsageSessionController : ControllerBase
     {
         private readonly ISessionService _sessionService;
         private readonly MqttSessionBridge _mqttBridge;
 
-        public SessionController(ISessionService sessionService, MqttSessionBridge mqttBridge)
+        public UsageSessionController(ISessionService sessionService, MqttSessionBridge mqttBridge)
         {
             _sessionService = sessionService;
             _mqttBridge = mqttBridge;
