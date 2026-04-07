@@ -33,7 +33,7 @@ namespace AdminApi.Controllers
         ///
         ///     POST /api/YuridikAdmin/Create
         ///     {
-        ///         "phoneNumber": "+998901234567",
+        ///         "phoneNumber": "998901234567",
         ///         "inn": "123456789"
         ///     }
         /// </remarks>

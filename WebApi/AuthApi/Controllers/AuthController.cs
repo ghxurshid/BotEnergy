@@ -49,7 +49,7 @@ namespace UserApi.Controllers
         ///     POST /api/Auth/Register
         ///     {
         ///         "phoneId": "device-uuid-12345",
-        ///         "phoneNumber": "+998901234567",
+        ///         "phoneNumber": "998901234567",
         ///         "mail": "user@example.com"
         ///     }
         ///
@@ -82,7 +82,7 @@ namespace UserApi.Controllers
         ///
         ///     POST /api/Auth/Verify
         ///     {
-        ///         "phoneNumber": "+998901234567",
+        ///         "phoneNumber": "998901234567",
         ///         "otpCode": "123456"
         ///     }
         ///
@@ -115,7 +115,7 @@ namespace UserApi.Controllers
         ///
         ///     POST /api/Auth/SetPassword
         ///     {
-        ///         "phoneNumber": "+998901234567",
+        ///         "phoneNumber": "998901234567",
         ///         "password": "MyStr0ngP@ss"
         ///     }
         ///
@@ -148,7 +148,7 @@ namespace UserApi.Controllers
         ///
         ///     POST /api/Auth/Login
         ///     {
-        ///         "phoneNumber": "+998901234567",
+        ///         "phoneNumber": "998901234567",
         ///         "password": "MyStr0ngP@ss"
         ///     }
         ///
@@ -217,7 +217,7 @@ namespace UserApi.Controllers
         ///
         ///     POST /api/Auth/ResetPasswordRequest
         ///     {
-        ///         "phoneNumber": "+998901234567"
+        ///         "phoneNumber": "998901234567"
         ///     }
         ///
         /// Keyingi qadam: ResetPasswordVerify → ResetPasswordSet
@@ -247,7 +247,7 @@ namespace UserApi.Controllers
         ///
         ///     POST /api/Auth/ResetPasswordVerify
         ///     {
-        ///         "phoneNumber": "+998901234567",
+        ///         "phoneNumber": "998901234567",
         ///         "otpCode": "123456"
         ///     }
         /// </remarks>
@@ -276,7 +276,7 @@ namespace UserApi.Controllers
         ///
         ///     POST /api/Auth/ResetPasswordSet
         ///     {
-        ///         "phoneNumber": "+998901234567",
+        ///         "phoneNumber": "998901234567",
         ///         "newPassword": "MyNewStr0ngP@ss"
         ///     }
         /// </remarks>

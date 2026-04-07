@@ -140,7 +140,7 @@ namespace AdminApi.Controllers
         ///
         ///     POST /api/Role/AssignToUser
         ///     {
-        ///         "phoneNumber": "+998901234567",
+        ///         "phoneNumber": "998901234567",
         ///         "roleId": 1
         ///     }
         /// </remarks>

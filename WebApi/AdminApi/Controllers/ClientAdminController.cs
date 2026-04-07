@@ -38,7 +38,7 @@ namespace AdminApi.Controllers
         ///
         ///     POST /api/ClientAdmin/Register
         ///     {
-        ///         "phoneNumber": "+998901234567",
+        ///         "phoneNumber": "998901234567",
         ///         "inn": "123456789",
         ///         "bankAccount": "20208000900100001001",
         ///         "companyName": "Tech Solutions LLC"
@@ -93,7 +93,7 @@ namespace AdminApi.Controllers
         ///
         ///     PUT /api/ClientAdmin/Update/1
         ///     {
-        ///         "phoneNumber": "+998909876543",
+        ///         "phoneNumber": "998909876543",
         ///         "companyName": "Tech Solutions Group"
         ///     }
         ///

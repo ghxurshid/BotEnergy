@@ -9,7 +9,7 @@ namespace Persistence.Seed
     {
         private const string DefaultOrganizationName = "BotEnergy System";
         private const string DefaultRoleName = "SuperAdmin";
-        private const string DefaultPhoneNumber = "+998901234567";
+        private const string DefaultPhoneNumber = "998901234567";
         private const string DefaultPassword = "Admin@123";
         private const string DefaultMail = "admin@botenergy.uz";
         private const string DefaultPhoneId = "default-admin-device";

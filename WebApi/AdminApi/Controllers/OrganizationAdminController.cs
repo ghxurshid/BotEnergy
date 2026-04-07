@@ -41,7 +41,7 @@ namespace AdminApi.Controllers
         ///         "name": "BotEnergy LLC",
         ///         "inn": "123456789",
         ///         "address": "Tashkent, Amir Temur 1",
-        ///         "phoneNumber": "+998712345678"
+        ///         "phoneNumber": "998712345678"
         ///     }
         /// </remarks>
         /// <param name="request">Tashkilot ma'lumotlari</param>
