@@ -7,12 +7,13 @@ namespace Domain.Dtos
 
     public class ResetPasswordRequestResultDto
     {
+        public required long UserId { get; set; }
         public required string ResultMessage { get; set; }
     }
 
     public class ResetPasswordVerifyDto
     {
-        public required string PhoneNumber { get; set; }
+        public required long UserId { get; set; }
         public required string OtpCode { get; set; }
     }
 
@@ -23,7 +24,7 @@ namespace Domain.Dtos
 
     public class ResetPasswordSetDto
     {
-        public required string PhoneNumber { get; set; }
+        public required long UserId { get; set; }
         public required string NewPassword { get; set; }
     }
 

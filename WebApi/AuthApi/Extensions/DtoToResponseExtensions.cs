@@ -6,7 +6,7 @@ namespace AuthApi.Extensions
     public static class DtoToResponseExtensions
     {
         public static RegisterResponse ToResponse(this RegisterResultDto dto)
-            => new RegisterResponse { Message = dto.ResultMessage };
+            => new RegisterResponse { UserId = dto.UserId, Message = dto.ResultMessage };
 
         public static VerifyResponse ToResponse(this VerifyResultDto dto)
             => new VerifyResponse { ResultMessage = dto.ResultMessage };
@@ -37,7 +37,7 @@ namespace AuthApi.Extensions
             };
 
         public static ResetPasswordRequestResponse ToResponse(this ResetPasswordRequestResultDto dto)
-            => new ResetPasswordRequestResponse { ResultMessage = dto.ResultMessage };
+            => new ResetPasswordRequestResponse { UserId = dto.UserId, ResultMessage = dto.ResultMessage };
 
         public static ResetPasswordVerifyResponse ToResponse(this ResetPasswordVerifyResultDto dto)
             => new ResetPasswordVerifyResponse { ResultMessage = dto.ResultMessage };

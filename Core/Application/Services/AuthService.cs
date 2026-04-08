@@ -33,12 +33,20 @@ namespace Application.Services
 
             if (existingUser is not null)
             {
+                if (existingUser.IsVerified)
+                    return GenericDto<RegisterResultDto>.Success(
+                        new RegisterResultDto { UserId = existingUser.Id, ResultMessage = "Bu telefon raqam allaqachon ro'yxatdan o'tgan. Login qiling." });
+
+                if (existingUser.IsOtpVerified)
+                    return GenericDto<RegisterResultDto>.Success(
+                        new RegisterResultDto { UserId = existingUser.Id, ResultMessage = "OTP allaqachon tasdiqlangan. Parol o'rnatish uchun /SetPassword ga murojaat qiling." });
+
                 existingUser.IsOtpVerified = false;
                 await _userRepository.UpdateUserAsync(existingUser);
                 await _otpService.GenerateOtpAsync(existingUser.PhoneNumber, OtpPurpose.Register);
 
                 return GenericDto<RegisterResultDto>.Success(
-                    new RegisterResultDto { ResultMessage = "OTP kod qayta yuborildi." });
+                    new RegisterResultDto { UserId = existingUser.Id, ResultMessage = "OTP kod qayta yuborildi." });
             }
 
             var newUser = new NaturalUserEntity
@@ -54,14 +62,18 @@ namespace Application.Services
             await _otpService.GenerateOtpAsync(newUser.PhoneNumber, OtpPurpose.Register);
 
             return GenericDto<RegisterResultDto>.Success(
-                new RegisterResultDto { ResultMessage = "Ro'yxatdan o'tdingiz. OTP kod yuborildi." });
+                new RegisterResultDto { UserId = newUser.Id, ResultMessage = "Ro'yxatdan o'tdingiz. OTP kod yuborildi." });
         }
 
         public async Task<GenericDto<VerifyResultDto>> VerifyAsync(VerifyDto request)
         {
-            var user = await _userRepository.GetByPhoneNumberAsync(request.PhoneNumber);
+            var user = await _userRepository.GetByIdAsync(request.UserId);
             if (user is null)
-                return GenericDto<VerifyResultDto>.Error(404, "Bu telefon raqam ro'yxatdan o'tmagan.");
+                return GenericDto<VerifyResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+
+            if (user.IsOtpVerified)
+                return GenericDto<VerifyResultDto>.Success(
+                    new VerifyResultDto { ResultMessage = "OTP allaqachon tasdiqlangan. Parol o'rnatish uchun /SetPassword ga murojaat qiling." });
 
             var isOtpValid = await _otpService.VerifyOtpAsync(user.PhoneNumber, request.OtpCode, OtpPurpose.Register);
             if (!isOtpValid)
@@ -76,15 +88,15 @@ namespace Application.Services
 
         public async Task<GenericDto<SetPasswordResultDto>> SetPasswordAsync(SetPasswordDto request)
         {
-            var user = await _userRepository.GetByPhoneNumberAsync(request.PhoneNumber);
+            var user = await _userRepository.GetByIdAsync(request.UserId);
             if (user is null)
-                return GenericDto<SetPasswordResultDto>.Error(404, "Bu telefon raqam ro'yxatdan o'tmagan.");
+                return GenericDto<SetPasswordResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
             if (!user.IsOtpVerified)
                 return GenericDto<SetPasswordResultDto>.Error(403, "OTP tasdiqlanmagan. Avval /Verify ga murojaat qiling.");
 
             if (user.IsVerified)
-                return GenericDto<SetPasswordResultDto>.Error(400, "Foydalanuvchi allaqachon ro'yxatdan o'tgan.");
+                return GenericDto<SetPasswordResultDto>.Error(400, "Parol allaqachon o'rnatilgan. Tizimga kirish uchun /Login dan foydalaning.");
 
             var (hash, salt) = PasswordHelper.CreatePassword(request.Password);
 
@@ -162,14 +174,14 @@ namespace Application.Services
             await _otpService.GenerateOtpAsync(user.PhoneNumber, OtpPurpose.ResetPassword);
 
             return GenericDto<ResetPasswordRequestResultDto>.Success(
-                new ResetPasswordRequestResultDto { ResultMessage = "Parolni tiklash uchun OTP kod yuborildi." });
+                new ResetPasswordRequestResultDto { UserId = user.Id, ResultMessage = "Parolni tiklash uchun OTP kod yuborildi." });
         }
 
         public async Task<GenericDto<ResetPasswordVerifyResultDto>> ResetPasswordVerifyAsync(ResetPasswordVerifyDto request)
         {
-            var user = await _userRepository.GetByPhoneNumberAsync(request.PhoneNumber);
+            var user = await _userRepository.GetByIdAsync(request.UserId);
             if (user is null)
-                return GenericDto<ResetPasswordVerifyResultDto>.Error(404, "Bu telefon raqam ro'yxatdan o'tmagan.");
+                return GenericDto<ResetPasswordVerifyResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
             if (!user.IsVerified)
                 return GenericDto<ResetPasswordVerifyResultDto>.Error(403, "Faqat to'liq ro'yxatdan o'tgan foydalanuvchilar parolni tiklashi mumkin.");
@@ -184,9 +196,9 @@ namespace Application.Services
 
         public async Task<GenericDto<ResetPasswordSetResultDto>> ResetPasswordSetAsync(ResetPasswordSetDto request)
         {
-            var user = await _userRepository.GetByPhoneNumberAsync(request.PhoneNumber);
+            var user = await _userRepository.GetByIdAsync(request.UserId);
             if (user is null)
-                return GenericDto<ResetPasswordSetResultDto>.Error(404, "Bu telefon raqam ro'yxatdan o'tmagan.");
+                return GenericDto<ResetPasswordSetResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
             if (!user.IsVerified)
                 return GenericDto<ResetPasswordSetResultDto>.Error(403, "Faqat to'liq ro'yxatdan o'tgan foydalanuvchilar parolni tiklashi mumkin.");

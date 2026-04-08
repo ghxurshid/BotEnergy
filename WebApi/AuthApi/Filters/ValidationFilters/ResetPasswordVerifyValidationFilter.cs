@@ -1,5 +1,4 @@
 using AuthApi.Models.Requests;
-using CommonConfiguration.Validators;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -12,8 +11,8 @@ namespace AuthApi.Filters.ValidationFilters
             var request = context.ActionArguments["request"] as ResetPasswordVerifyRequest;
             if (request is null) { context.Result = new BadRequestObjectResult(new { message = "So'rov ma'lumotlari noto'g'ri." }); return; }
 
-            if (!PhoneValidator.IsValid(request.PhoneNumber))
-            { context.Result = new BadRequestObjectResult(new { message = PhoneValidator.ErrorMessage }); return; }
+            if (request.UserId <= 0)
+            { context.Result = new BadRequestObjectResult(new { message = "UserId noto'g'ri." }); return; }
 
             if (string.IsNullOrWhiteSpace(request.OtpCode) || request.OtpCode.Length != 6)
             { context.Result = new BadRequestObjectResult(new { message = "OTP kodi 6 ta raqamdan iborat bo'lishi kerak." }); return; }

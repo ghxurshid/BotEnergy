@@ -12,20 +12,20 @@ namespace UserApi.Controllers
     /// Ro'yxatdan o'tish, OTP tasdiqlash, parol o'rnatish, login va parol tiklash jarayonlarini boshqaradi.
     ///
     /// **Jarayon ketma-ketligi (yangi foydalanuvchi):**
-    /// 1. Register → telefon raqam bilan ro'yxatdan o'tish, OTP kodi SMS orqali yuboriladi
-    /// 2. Verify → OTP kodni tasdiqlash
-    /// 3. SetPassword → parolni o'rnatish
+    /// 1. Register → telefon raqam bilan ro'yxatdan o'tish, OTP kodi SMS orqali yuboriladi, userId qaytariladi
+    /// 2. Verify → userId va OTP kodni tasdiqlash
+    /// 3. SetPassword → userId bilan parolni o'rnatish
     /// 4. Login → tizimga kirish (JWT token qaytariladi)
     ///
     /// **Parol tiklash jarayoni:**
-    /// 1. ResetPasswordRequest → telefon raqamga OTP yuboriladi
-    /// 2. ResetPasswordVerify → OTP kodni tasdiqlash
-    /// 3. ResetPasswordSet → yangi parolni o'rnatish
+    /// 1. ResetPasswordRequest → telefon raqam kiritiladi, userId qaytariladi
+    /// 2. ResetPasswordVerify → userId va OTP kodni tasdiqlash
+    /// 3. ResetPasswordSet → userId bilan yangi parolni o'rnatish
     ///
     /// **Cheklovlar:**
     /// - OTP kodi 5 daqiqa amal qiladi
     /// - Login paytida noto'g'ri parol kiritilsa 401 qaytadi
-    /// - Ro'yxatdan o'tgan lekin tasdiqlanmagan raqam qayta ro'yxatdan o'ta olmaydi
+    /// - Har bir qadam allaqachon bajarilgan bo'lsa, tegishli xabar qaytariladi
     /// </summary>
     [Route("api/[controller]/[action]")]
     [ApiController]
@@ -41,7 +41,7 @@ namespace UserApi.Controllers
 
         /// <summary>
         /// Yangi foydalanuvchi ro'yxatdan o'tkazish.
-        /// Telefon raqamga OTP kod yuboriladi.
+        /// Telefon raqamga OTP kod yuboriladi, javobda userId qaytariladi.
         /// </summary>
         /// <remarks>
         /// Namuna so'rov:
@@ -53,17 +53,23 @@ namespace UserApi.Controllers
         ///         "mail": "user@example.com"
         ///     }
         ///
+        /// **Javobda qaytadi:**
+        /// - `userId` — keyingi qadamlar uchun (Verify, SetPassword)
+        /// - `message` — natija xabari
+        ///
         /// **Xatoliklar:**
-        /// - 409: Bu telefon raqam allaqachon ro'yxatdan o'tgan
         /// - 400: Telefon raqam formati noto'g'ri
+        ///
+        /// **Idempotentlik:**
+        /// - Agar raqam allaqachon to'liq ro'yxatdan o'tgan bo'lsa — tegishli xabar qaytariladi
+        /// - Agar OTP tasdiqlangan bo'lsa — parol o'rnatishga yo'naltiriladi
+        /// - Agar faqat register qilingan bo'lsa — OTP qayta yuboriladi
         /// </remarks>
         /// <param name="request">Ro'yxatdan o'tish ma'lumotlari</param>
-        /// <response code="200">Muvaffaqiyatli. OTP kod yuborildi</response>
-        /// <response code="409">Telefon raqam allaqachon mavjud</response>
+        /// <response code="200">Muvaffaqiyatli. userId va xabar qaytarildi</response>
         [HttpPost]
         [TypeFilter(typeof(RegisterValidationFilter))]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
             var result = await _authService.RegisterAsync(request.ToDto());
@@ -75,22 +81,25 @@ namespace UserApi.Controllers
 
         /// <summary>
         /// OTP kodni tasdiqlash.
-        /// Register yoki ResetPasswordRequest dan keyin yuborilgan SMS kodini tasdiqlaydi.
+        /// Register dan keyin olingan userId va SMS kodini yuborish.
         /// </summary>
         /// <remarks>
         /// Namuna so'rov:
         ///
         ///     POST /api/Auth/Verify
         ///     {
-        ///         "phoneNumber": "998901234567",
+        ///         "userId": 1,
         ///         "otpCode": "123456"
         ///     }
+        ///
+        /// **Idempotentlik:**
+        /// - OTP allaqachon tasdiqlangan bo'lsa — tegishli xabar qaytariladi
         ///
         /// **Xatoliklar:**
         /// - 400: OTP kod noto'g'ri yoki muddati o'tgan
         /// - 404: Foydalanuvchi topilmadi
         /// </remarks>
-        /// <param name="request">Telefon raqam va OTP kod</param>
+        /// <param name="request">UserId va OTP kod</param>
         /// <response code="200">OTP tasdiqlandi</response>
         /// <response code="400">Noto'g'ri yoki eskirgan OTP</response>
         [HttpPost]
@@ -115,17 +124,21 @@ namespace UserApi.Controllers
         ///
         ///     POST /api/Auth/SetPassword
         ///     {
-        ///         "phoneNumber": "998901234567",
+        ///         "userId": 1,
         ///         "password": "MyStr0ngP@ss"
         ///     }
+        ///
+        /// **Idempotentlik:**
+        /// - Parol allaqachon o'rnatilgan bo'lsa — Login ga yo'naltiriladi
         ///
         /// **Cheklovlar:**
         /// - OTP avval tasdiqlanishi shart
         /// - Parol kamida 6 belgidan iborat bo'lishi kerak
         /// </remarks>
-        /// <param name="request">Telefon raqam va yangi parol</param>
-        /// <response code="200">Parol muvaffaqiyatli o'rnatildi</response>
-        /// <response code="400">OTP tasdiqlanmagan yoki parol talablarga mos emas</response>
+        /// <param name="request">UserId va yangi parol</param>
+        /// <response code="200">Parol muvaffaqiyatli o'rnatildi, JWT tokenlar qaytarildi</response>
+        /// <response code="400">Parol allaqachon o'rnatilgan</response>
+        /// <response code="403">OTP tasdiqlanmagan</response>
         [HttpPost]
         [TypeFilter(typeof(SetPasswordValidationFilter))]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -159,7 +172,7 @@ namespace UserApi.Controllers
         /// **Xatoliklar:**
         /// - 401: Noto'g'ri parol
         /// - 404: Foydalanuvchi topilmadi
-        /// - 403: Foydalanuvchi bloklangan
+        /// - 403: Foydalanuvchi bloklangan yoki ro'yxatdan o'tish tugallanmagan
         /// </remarks>
         /// <param name="request">Telefon raqam va parol</param>
         /// <response code="200">JWT tokenlar qaytarildi</response>
@@ -210,7 +223,7 @@ namespace UserApi.Controllers
 
         /// <summary>
         /// Parol tiklash so'rovi.
-        /// Telefon raqamga OTP kod yuboriladi.
+        /// Telefon raqamga OTP kod yuboriladi, javobda userId qaytariladi.
         /// </summary>
         /// <remarks>
         /// Namuna so'rov:
@@ -220,10 +233,14 @@ namespace UserApi.Controllers
         ///         "phoneNumber": "998901234567"
         ///     }
         ///
+        /// **Javobda qaytadi:**
+        /// - `userId` — keyingi qadamlar uchun (ResetPasswordVerify, ResetPasswordSet)
+        /// - `resultMessage` — natija xabari
+        ///
         /// Keyingi qadam: ResetPasswordVerify → ResetPasswordSet
         /// </remarks>
         /// <param name="request">Telefon raqam</param>
-        /// <response code="200">OTP kod yuborildi</response>
+        /// <response code="200">OTP kod yuborildi, userId qaytarildi</response>
         /// <response code="404">Foydalanuvchi topilmadi</response>
         [HttpPost]
         [TypeFilter(typeof(ResetPasswordRequestValidationFilter))]
@@ -240,18 +257,18 @@ namespace UserApi.Controllers
 
         /// <summary>
         /// Parol tiklash — OTP tasdiqlash.
-        /// ResetPasswordRequest dan keyin kelgan kodni tasdiqlaydi.
+        /// ResetPasswordRequest dan olingan userId va SMS kodni tasdiqlaydi.
         /// </summary>
         /// <remarks>
         /// Namuna so'rov:
         ///
         ///     POST /api/Auth/ResetPasswordVerify
         ///     {
-        ///         "phoneNumber": "998901234567",
+        ///         "userId": 1,
         ///         "otpCode": "123456"
         ///     }
         /// </remarks>
-        /// <param name="request">Telefon raqam va OTP kod</param>
+        /// <param name="request">UserId va OTP kod</param>
         /// <response code="200">OTP tasdiqlandi, endi ResetPasswordSet chaqiring</response>
         /// <response code="400">Noto'g'ri OTP</response>
         [HttpPost]
@@ -276,11 +293,11 @@ namespace UserApi.Controllers
         ///
         ///     POST /api/Auth/ResetPasswordSet
         ///     {
-        ///         "phoneNumber": "998901234567",
+        ///         "userId": 1,
         ///         "newPassword": "MyNewStr0ngP@ss"
         ///     }
         /// </remarks>
-        /// <param name="request">Telefon raqam va yangi parol</param>
+        /// <param name="request">UserId va yangi parol</param>
         /// <response code="200">Parol muvaffaqiyatli o'zgartirildi</response>
         /// <response code="400">OTP tasdiqlanmagan</response>
         [HttpPost]

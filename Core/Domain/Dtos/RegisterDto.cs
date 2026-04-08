@@ -1,4 +1,4 @@
-﻿namespace Domain.Dtos
+namespace Domain.Dtos
 {
     public class RegisterDto
     {
@@ -9,6 +9,7 @@
 
     public class RegisterResultDto
     {
+        public required long UserId { get; set; }
         public required string ResultMessage { get; set; }
     }
 }

@@ -1,8 +1,8 @@
-﻿namespace Domain.Dtos
+namespace Domain.Dtos
 {
     public class VerifyDto
     {
-        public required string PhoneNumber { get; set; }
+        public required long UserId { get; set; }
         public required string OtpCode { get; set; }
     }
 

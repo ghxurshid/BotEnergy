@@ -19,7 +19,7 @@ namespace AuthApi.Extensions
         {
             return new VerifyDto
             {
-                PhoneNumber = request.PhoneNumber,
+                UserId = request.UserId,
                 OtpCode = request.OtpCode
             };
         }
@@ -28,7 +28,7 @@ namespace AuthApi.Extensions
         {
             return new SetPasswordDto
             {
-                PhoneNumber = request.PhoneNumber,
+                UserId = request.UserId,
                 Password = request.Password
             };
         }
@@ -62,7 +62,7 @@ namespace AuthApi.Extensions
         {
             return new ResetPasswordVerifyDto
             {
-                PhoneNumber = request.PhoneNumber,
+                UserId = request.UserId,
                 OtpCode = request.OtpCode
             };
         }
@@ -71,7 +71,7 @@ namespace AuthApi.Extensions
         {
             return new ResetPasswordSetDto
             {
-                PhoneNumber = request.PhoneNumber,
+                UserId = request.UserId,
                 NewPassword = request.NewPassword
             };
         }
