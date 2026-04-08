@@ -7,6 +7,8 @@ namespace Domain.Entities
     {
         public required string SerialNumber { get; set; }
 
+        public string SecretKey { get; set; } = Guid.NewGuid().ToString("N");
+
         public DeviceType DeviceType { get; set; }
 
         public int FunctionCount { get; set; } = 1;

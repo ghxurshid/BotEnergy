@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Domain.Dtos.Session;
 using Domain.Interfaces;
+using Domain.Repositories;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -139,6 +140,28 @@ namespace UsageSessionApi.Mqtt
             {
                 var action = string.Join("/", parts[2..]);
 
+                // status topicda device_token talab qilinmaydi
+                if (action != "status")
+                {
+                    var basePayload = JsonSerializer.Deserialize<DeviceAuthPayload>(payload, JsonOpts);
+                    if (string.IsNullOrEmpty(basePayload?.DeviceToken))
+                    {
+                        _logger.LogWarning("MQTT xabar rad etildi — device_token yo'q. Topic: {Topic}", topic);
+                        return;
+                    }
+
+                    using var authScope = _scopeFactory.CreateScope();
+                    var deviceRepo = authScope.ServiceProvider.GetRequiredService<IDeviceRepository>();
+                    var isValid = await deviceRepo.ValidateDeviceAsync(serialNumber, basePayload.DeviceToken);
+                    if (!isValid)
+                    {
+                        _logger.LogWarning(
+                            "MQTT xabar rad etildi — noto'g'ri device_token. Serial: {Serial}, Topic: {Topic}",
+                            serialNumber, topic);
+                        return;
+                    }
+                }
+
                 switch (action)
                 {
                     case "session/connected":
@@ -265,18 +288,23 @@ namespace UsageSessionApi.Mqtt
 
     // ── MQTT Payload modellari ─────────────────────────────────────────
 
-    internal sealed class DeviceConnectedPayload
+    internal class DeviceAuthPayload
+    {
+        public string? DeviceToken { get; set; }
+    }
+
+    internal sealed class DeviceConnectedPayload : DeviceAuthPayload
     {
         public string SessionToken { get; set; } = string.Empty;
     }
 
-    internal sealed class TelemetryPayload
+    internal sealed class TelemetryPayload : DeviceAuthPayload
     {
         public string SessionToken { get; set; } = string.Empty;
         public decimal Quantity { get; set; }
     }
 
-    internal sealed class SessionCompletedPayload
+    internal sealed class SessionCompletedPayload : DeviceAuthPayload
     {
         public string SessionToken { get; set; } = string.Empty;
         public decimal FinalQuantity { get; set; }

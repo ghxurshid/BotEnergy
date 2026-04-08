@@ -251,6 +251,7 @@ namespace Persistence.Context
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
 
                 b.Property(x => x.SerialNumber).HasColumnName("serial_number").IsRequired().HasMaxLength(100);
+                b.Property(x => x.SecretKey).HasColumnName("secret_key").IsRequired().HasMaxLength(64);
                 b.Property(x => x.DeviceType).HasColumnName("device_type").HasConversion<int>();
                 b.Property(x => x.FunctionCount).HasColumnName("function_count").HasDefaultValue(1);
                 b.Property(x => x.Model).HasColumnName("model").HasMaxLength(100);

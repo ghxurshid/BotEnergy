@@ -25,6 +25,15 @@ namespace Persistence.Repositories
                 .FirstOrDefaultAsync(d => d.SerialNumber == serialNumber && d.IsActive && !d.IsDeleted);
         }
 
+        public async Task<bool> ValidateDeviceAsync(string serialNumber, string secretKey)
+        {
+            return await _context.Devices
+                .AnyAsync(d => d.SerialNumber == serialNumber
+                            && d.SecretKey == secretKey
+                            && d.IsActive
+                            && !d.IsDeleted);
+        }
+
         public async Task<List<DeviceEntity>> GetAllAsync()
             => await _context.Devices
                 .Include(d => d.Station)

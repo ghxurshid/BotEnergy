@@ -1,3 +1,4 @@
+using CommonConfiguration.ConfigurationExtensions;
 using CommonConfiguration.ConfigurationServices;
 using CommonConfiguration.Filters;
 
@@ -14,15 +15,19 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Device API",
         Version = "v1",
-        Description = "IoT qurilmalar boshqaruvi — qurilma holati, to'lov va jarayon boshqarish"
+        Description = "IoT qurilmalar boshqaruvi — qurilma autentifikatsiyasi, holat, to'lov va jarayon boshqarish"
     });
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
     options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFile));
 });
 
 builder.Configuration.AddCommonConfiguration();
+builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.RegisterServices();
 
 var app = builder.Build();
+
+await app.ApplyMigrationsAsync();
 
 app.UseSwagger();
 app.UseSwaggerUI();

@@ -6,6 +6,7 @@ namespace Domain.Repositories
     {
         Task<DeviceEntity?> GetByIdAsync(long id);
         Task<DeviceEntity?> GetBySerialNumberAsync(string serialNumber);
+        Task<bool> ValidateDeviceAsync(string serialNumber, string secretKey);
         Task<List<DeviceEntity>> GetAllAsync();
         Task<List<DeviceEntity>> GetByStationIdAsync(long stationId);
         Task<DeviceEntity> CreateAsync(DeviceEntity device);
