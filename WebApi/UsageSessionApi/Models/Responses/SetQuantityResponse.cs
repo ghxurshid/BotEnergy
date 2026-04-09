@@ -1,13 +1,11 @@
 namespace UsageSessionApi.Models.Responses
 {
-    public class DeviceConnectResponse
+    public class SetQuantityResponse
     {
-        public long SessionId { get; set; }
-        public long ProductId { get; set; }
+        public decimal LimitQuantity { get; set; }
         public string ProductName { get; set; } = string.Empty;
         public string Unit { get; set; } = string.Empty;
         public decimal PricePerUnit { get; set; }
-        public string DeviceSerialNumber { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
     }
 }

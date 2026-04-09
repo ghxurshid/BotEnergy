@@ -10,11 +10,29 @@ namespace UsageSessionApi.Extensions
             {
                 SessionId = dto.SessionId,
                 SessionToken = dto.SessionToken,
+                ExpiresAt = dto.ExpiresAt,
+                Message = dto.ResultMessage
+            };
+
+        public static DeviceConnectResponse ToResponse(this DeviceConnectedResultDto dto)
+            => new DeviceConnectResponse
+            {
+                SessionId = dto.SessionId,
+                ProductId = dto.ProductId,
+                ProductName = dto.ProductName,
+                Unit = dto.Unit,
+                PricePerUnit = dto.PricePerUnit,
+                DeviceSerialNumber = dto.DeviceSerialNumber,
+                Message = dto.ResultMessage
+            };
+
+        public static SetQuantityResponse ToResponse(this SetQuantityResultDto dto)
+            => new SetQuantityResponse
+            {
                 LimitQuantity = dto.LimitQuantity,
                 ProductName = dto.ProductName,
                 Unit = dto.Unit,
                 PricePerUnit = dto.PricePerUnit,
-                ExpiresAt = dto.ExpiresAt,
                 Message = dto.ResultMessage
             };
 
@@ -23,13 +41,6 @@ namespace UsageSessionApi.Extensions
             {
                 Message = dto.ResultMessage,
                 TotalDelivered = dto.TotalDelivered
-            };
-
-        public static DeviceConnectResponse ToResponse(this DeviceConnectedResultDto dto)
-            => new DeviceConnectResponse
-            {
-                SessionId = dto.SessionId,
-                Message = dto.ResultMessage
             };
 
         public static DeviceProgressResponse ToResponse(this SessionProgressResultDto dto)

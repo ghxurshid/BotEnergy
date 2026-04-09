@@ -12,24 +12,19 @@ namespace UsageSessionApi.Controllers
 {
     /// <summary>
     /// Foydalanuvchi (Android/iOS) tomonidan chaqiriladigan sessiya endpointlari.
-    /// Mahsulot berish sessiyasini yaratish, qurilmaga start buyruq berish va sessiyani yopish.
     ///
-    /// **Sessiya jarayoni:**
-    /// 1. Foydalanuvchi QR kodni skanerlaydi → UserApi/DeviceConnection/GetProducts → mahsulotlarni ko'radi
-    /// 2. **Create** → sessiya yaratiladi, session_token va limit qaytariladi
-    /// 3. **Start** → qurilmaga MQTT orqali "start" buyrug'i yuboriladi
-    /// 4. Qurilma mahsulot berishni boshlaydi → SignalR orqali real-time yangilanishlar keladi
-    /// 5. **Close** → foydalanuvchi tomonidan to'xtatish (yoki qurilma o'zi tugallaydi)
+    /// **Yangi sessiya jarayoni:**
+    /// 1. **Create** → bo'sh sessiya yaratiladi, session_token qaytariladi (QR kod sifatida ko'rsatiladi)
+    /// 2. Qurilma QR kodni skanerlaydi → MQTT orqali sessiyaga ulanadi, mahsulot avtomatik to'ldiriladi
+    /// 3. SignalR orqali `DeviceConnected` event keladi — product info bilan
+    /// 4. **SetQuantity** → foydalanuvchi miqdor belgilaydi, balans tekshiriladi, qurilmaga start buyrug'i yuboriladi
+    /// 5. Qurilma mahsulot berishni boshlaydi → SignalR orqali real-time yangilanishlar
+    /// 6. **Close** → foydalanuvchi tomonidan to'xtatish (yoki qurilma o'zi tugallaydi)
     ///
     /// **Real-time kuzatish (SignalR):**
     /// Hub URL: `ws://host:5003/hubs/session?access_token={jwt}`
     /// - `JoinSession(sessionToken)` — sessiya guruhiga qo'shilish
     /// - Server → Client eventlar: DeviceConnected, ProgressUpdate, SessionCompleted, SessionClosed
-    ///
-    /// **Cheklovlar:**
-    /// - JWT token talab qilinadi
-    /// - Sessiya yaratilganda balans tekshiriladi — yetarli bo'lmasa limit mos ravishda kamaytiriladi
-    /// - Sessiya 30 daqiqa harakatsiz qolsa avtomatik yopiladi (TimedOut)
     /// </summary>
     [Route("api/[controller]/[action]")]
     [ApiController]
@@ -46,38 +41,26 @@ namespace UsageSessionApi.Controllers
         }
 
         /// <summary>
-        /// Yangi sessiya yaratish.
-        /// Foydalanuvchi QR kodni skanerlab, mahsulot tanlaydi — sessiya yaratiladi.
-        /// Balans asosida limit hisoblanadi.
+        /// Bo'sh sessiya yaratish.
+        /// Faqat foydalanuvchi ma'lumotlari bilan yaratiladi. Mahsulot qurilma ulanganida avtomatik to'ldiriladi.
         /// </summary>
         /// <remarks>
         /// Namuna so'rov:
         ///
-        ///     POST /api/Session/Create
+        ///     POST /api/UsageSession/Create
         ///     Headers: Authorization: Bearer eyJhbGciOiJI...
-        ///     {
-        ///         "productId": 5,
-        ///         "requestedQuantity": 20.0
-        ///     }
-        ///
-        /// **requestedQuantity** ixtiyoriy — berilmasa balansga mos maksimal miqdor hisoblanadi.
+        ///     { }
         ///
         /// **Javobda qaytadi:**
-        /// - `session_id` — sessiya ID
-        /// - `session_token` — sessiya tokeni (SignalR va qurilma aloqasi uchun)
-        /// - `limit_quantity` — ruxsat berilgan maksimal miqdor
-        /// - `product_name` — mahsulot nomi
-        /// - `unit` — o'lchov birligi (Litr, KWh, Kubometr)
-        /// - `price_per_unit` — birlik narxi
-        /// - `expires_at` — sessiya amal qilish muddati
+        /// - `sessionId` — sessiya ID
+        /// - `sessionToken` — QR kod sifatida qurilmaga ko'rsatiladi
+        /// - `expiresAt` — sessiya amal qilish muddati (30 daqiqa)
         ///
-        /// **Xatoliklar:**
-        /// - 404: Mahsulot topilmadi
-        /// - 404: Foydalanuvchi topilmadi
+        /// Keyingi qadam: sessionToken ni QR kod qilib qurilmaga ko'rsating.
+        /// Qurilma skanerlagandan keyin SignalR orqali `DeviceConnected` event keladi.
         /// </remarks>
-        /// <param name="request">Mahsulot ID va ixtiyoriy miqdor</param>
-        /// <response code="200">Sessiya yaratildi — token va limit qaytarildi</response>
-        /// <response code="404">Mahsulot yoki foydalanuvchi topilmadi</response>
+        /// <response code="200">Sessiya yaratildi</response>
+        /// <response code="404">Foydalanuvchi topilmadi</response>
         [HttpPost]
         [RequirePermission(Permissions.SessionCreate)]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -95,38 +78,56 @@ namespace UsageSessionApi.Controllers
         }
 
         /// <summary>
-        /// Qurilmaga start buyrug'ini yuborish (MQTT orqali).
-        /// Sessiya yaratilganidan keyin qurilmaga "ishni boshlash" buyrug'i beriladi.
+        /// Miqdor belgilash va qurilmani ishga tushirish.
+        /// Qurilma ulangandan keyin chaqiriladi. Balans tekshiriladi, limit hisoblanadi,
+        /// qurilmaga MQTT orqali start buyrug'i yuboriladi.
         /// </summary>
         /// <remarks>
         /// Namuna so'rov:
         ///
-        ///     POST /api/Session/Start
+        ///     POST /api/UsageSession/SetQuantity
         ///     Headers: Authorization: Bearer eyJhbGciOiJI...
         ///     {
-        ///         "deviceSerialNumber": "SN-2024-001",
-        ///         "productId": 5,
-        ///         "amount": 20.0
+        ///         "sessionId": 42,
+        ///         "requestedQuantity": 20.0
         ///     }
         ///
-        /// **MQTT topic:** `station/{serialNumber}/command/start`
+        /// **requestedQuantity** ixtiyoriy — berilmasa balansga mos maksimal miqdor hisoblanadi.
         ///
-        /// **Eslatma:** Bu endpoint faqat qurilmaga buyruq yuboradi.
-        /// Qurilma ulanganda SignalR orqali `DeviceConnected` event keladi.
+        /// **Javobda qaytadi:**
+        /// - `limitQuantity` — ruxsat berilgan miqdor
+        /// - `productName` — mahsulot nomi
+        /// - `unit` — o'lchov birligi
+        /// - `pricePerUnit` — birlik narxi
+        ///
+        /// **Xatoliklar:**
+        /// - 400: Qurilma hali ulanmagan
+        /// - 400: Balans yetarli emas
+        /// - 403: Sessiya sizga tegishli emas
         /// </remarks>
-        /// <param name="request">Qurilma serial raqami, mahsulot va miqdor</param>
-        /// <response code="200">Start buyrug'i qurilmaga yuborildi</response>
+        /// <param name="request">Sessiya ID va ixtiyoriy miqdor</param>
+        /// <response code="200">Miqdor belgilandi, qurilmaga start yuborildi</response>
+        /// <response code="400">Qurilma ulanmagan yoki balans yetarli emas</response>
         [HttpPost]
-        [RequirePermission(Permissions.SessionStart)]
+        [RequirePermission(Permissions.SessionSetQuantity)]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<IActionResult> Start([FromBody] StartSessionRequest request)
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> SetQuantity([FromBody] SetQuantityRequest request)
         {
-            await _mqttBridge.PublishStartCommandAsync(
-                request.DeviceSerialNumber,
-                request.ProductId,
-                request.Amount);
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
 
-            return Ok(new { message = "Start buyrug'i qurilmaga yuborildi." });
+            var result = await _sessionService.SetQuantityAsync(request.ToDto(userId));
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            // Qurilmaga MQTT orqali start buyrug'i yuborish
+            await _mqttBridge.PublishStartCommandAsync(
+                result.Result!.DeviceSerialNumber,
+                result.Result.ProductId,
+                result.Result.LimitQuantity);
+
+            return Ok(result.Result.ToResponse());
         }
 
         /// <summary>
@@ -136,7 +137,7 @@ namespace UsageSessionApi.Controllers
         /// <remarks>
         /// Namuna so'rov:
         ///
-        ///     POST /api/Session/Close
+        ///     POST /api/UsageSession/Close
         ///     Headers: Authorization: Bearer eyJhbGciOiJI...
         ///     {
         ///         "sessionId": 42
@@ -144,7 +145,7 @@ namespace UsageSessionApi.Controllers
         ///
         /// **Javobda qaytadi:**
         /// - `message` — natija xabari
-        /// - `total_delivered` — jami yetkazilgan miqdor
+        /// - `totalDelivered` — jami yetkazilgan miqdor
         ///
         /// **Xatoliklar:**
         /// - 403: Sessiya sizga tegishli emas

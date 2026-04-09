@@ -1,8 +1,10 @@
 namespace UsageSessionApi.Models.Requests
 {
+    /// <summary>
+    /// Sessiya yaratish — bo'sh sessiya. Product va miqdor keyinroq belgilanadi.
+    /// UserId JWT tokendan olinadi.
+    /// </summary>
     public class CreateSessionRequest
     {
-        public long ProductId { get; set; }
-        public decimal? RequestedQuantity { get; set; }
     }
 }

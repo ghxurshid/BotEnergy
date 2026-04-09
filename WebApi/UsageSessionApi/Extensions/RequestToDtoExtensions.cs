@@ -8,8 +8,14 @@ namespace UsageSessionApi.Extensions
         public static CreateSessionDto ToDto(this CreateSessionRequest request, long userId)
             => new CreateSessionDto
             {
+                UserId = userId
+            };
+
+        public static SetQuantityDto ToDto(this SetQuantityRequest request, long userId)
+            => new SetQuantityDto
+            {
+                SessionId = request.SessionId,
                 UserId = userId,
-                ProductId = request.ProductId,
                 RequestedQuantity = request.RequestedQuantity
             };
 

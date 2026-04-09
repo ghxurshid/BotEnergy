@@ -22,6 +22,7 @@ namespace Persistence.Repositories
         {
             return await _context.Devices
                 .Include(d => d.Station)
+                .Include(d => d.Products!.Where(p => p.IsActive && !p.IsDeleted))
                 .FirstOrDefaultAsync(d => d.SerialNumber == serialNumber && d.IsActive && !d.IsDeleted);
         }
 

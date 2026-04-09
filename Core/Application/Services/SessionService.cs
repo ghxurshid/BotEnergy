@@ -31,37 +31,24 @@ namespace Application.Services
             _notifier = notifier;
         }
 
+        /// <summary>
+        /// 1-qadam: Bo'sh sessiya yaratish. Faqat user info bilan.
+        /// Product va miqdor keyinroq to'ldiriladi.
+        /// </summary>
         public async Task<GenericDto<CreateSessionResultDto>> CreateSessionAsync(CreateSessionDto dto)
         {
-            var product = await _productRepository.GetByIdAsync(dto.ProductId);
-            if (product is null)
-                return GenericDto<CreateSessionResultDto>.Error(404, "Mahsulot topilmadi.");
-
-            // User balansini tekshirish
             var user = await _userRepository.GetByIdAsync(dto.UserId);
             if (user is null)
                 return GenericDto<CreateSessionResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
-            decimal availableBalance = GetUserBalance(user);
-            decimal limit = dto.RequestedQuantity.HasValue
-                ? Math.Min(dto.RequestedQuantity.Value, availableBalance / product.Price)
-                : availableBalance / product.Price;
-
             var session = new UsageSessionEntity
             {
                 UserId = dto.UserId,
-                ProductId = product.Id,
-                Unit = product.Unit,
-                PricePerUnit = product.Price,
-                RequestedQuantity = limit,
                 SessionToken = Guid.NewGuid().ToString("N"),
                 Status = SessionStatus.Pending,
                 StartedAt = DateTime.Now,
                 LastActivityAt = DateTime.Now,
-
-                // Snapshot — tarixiy ma'lumot saqlanishi uchun
                 UserPhoneNumber = user.PhoneNumber,
-                ProductName = product.Name,
             };
 
             var created = await _sessionRepository.CreateAsync(session);
@@ -70,15 +57,15 @@ namespace Application.Services
             {
                 SessionId = created.Id,
                 SessionToken = created.SessionToken,
-                LimitQuantity = limit,
-                ProductName = product.Name,
-                Unit = product.Unit.ToString(),
-                PricePerUnit = product.Price,
                 ExpiresAt = created.StartedAt.Add(IdleTimeout),
-                ResultMessage = "Sessiya muvaffaqiyatli yaratildi."
+                ResultMessage = "Sessiya yaratildi. Qurilma QR kodni skanerlab ulanishini kuting."
             });
         }
 
+        /// <summary>
+        /// 2-qadam: Qurilma QR kodni skanerlab sessiyaga ulanadi.
+        /// Qurilmaning birinchi aktiv product i sessiyaga avtomatik yoziladi.
+        /// </summary>
         public async Task<GenericDto<DeviceConnectedResultDto>> DeviceConnectAsync(DeviceConnectedDto dto)
         {
             var session = await _sessionRepository.GetByTokenAsync(dto.SessionToken);
@@ -92,8 +79,16 @@ namespace Application.Services
             if (device is null)
                 return GenericDto<DeviceConnectedResultDto>.Error(404, "Qurilma topilmadi yoki faol emas.");
 
+            var product = device.Products?.FirstOrDefault();
+            if (product is null)
+                return GenericDto<DeviceConnectedResultDto>.Error(400, "Qurilmada aktiv mahsulot topilmadi.");
+
             session.DeviceId = device.Id;
             session.DeviceSerialNumber = device.SerialNumber;
+            session.ProductId = product.Id;
+            session.ProductName = product.Name;
+            session.PricePerUnit = product.Price;
+            session.Unit = product.Unit;
             session.Status = SessionStatus.DeviceConnected;
             session.DeviceConnectedAt = DateTime.Now;
             session.LastActivityAt = DateTime.Now;
@@ -104,16 +99,75 @@ namespace Application.Services
             {
                 device_id = device.Id,
                 serial_number = device.SerialNumber,
-                product_id = session.ProductId,
-                price_per_unit = session.PricePerUnit,
-                limit_quantity = session.RequestedQuantity,
+                product_id = product.Id,
+                product_name = product.Name,
+                unit = product.Unit.ToString(),
+                price_per_unit = product.Price,
                 connected_at = session.DeviceConnectedAt
             });
 
             return GenericDto<DeviceConnectedResultDto>.Success(new DeviceConnectedResultDto
             {
                 SessionId = session.Id,
-                ResultMessage = "Qurilma sessiyaga muvaffaqiyatli ulandi."
+                ProductId = product.Id,
+                ProductName = product.Name,
+                Unit = product.Unit.ToString(),
+                PricePerUnit = product.Price,
+                DeviceSerialNumber = device.SerialNumber,
+                ResultMessage = "Qurilma sessiyaga ulandi. Endi miqdor belgilash uchun /SetQuantity ga murojaat qiling."
+            });
+        }
+
+        /// <summary>
+        /// 3-qadam: Miqdor belgilash. Ikkala tomon ulangandan keyin user miqdor belgilaydi.
+        /// Balans tekshiriladi, limit hisoblanadi.
+        /// </summary>
+        public async Task<GenericDto<SetQuantityResultDto>> SetQuantityAsync(SetQuantityDto dto)
+        {
+            var session = await _sessionRepository.GetByIdAsync(dto.SessionId);
+            if (session is null)
+                return GenericDto<SetQuantityResultDto>.Error(404, "Sessiya topilmadi.");
+
+            if (session.UserId != dto.UserId)
+                return GenericDto<SetQuantityResultDto>.Error(403, "Bu sessiya sizga tegishli emas.");
+
+            if (session.Status != SessionStatus.DeviceConnected)
+                return GenericDto<SetQuantityResultDto>.Error(400, "Qurilma hali ulanmagan yoki sessiya allaqachon boshlangan.");
+
+            if (session.ProductId is null)
+                return GenericDto<SetQuantityResultDto>.Error(400, "Mahsulot hali belgilanmagan.");
+
+            var user = await _userRepository.GetByIdAsync(dto.UserId);
+            if (user is null)
+                return GenericDto<SetQuantityResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+
+            decimal availableBalance = GetUserBalance(user);
+            decimal maxQuantity = session.PricePerUnit > 0
+                ? availableBalance / session.PricePerUnit
+                : 0;
+
+            decimal limit = dto.RequestedQuantity.HasValue
+                ? Math.Min(dto.RequestedQuantity.Value, maxQuantity)
+                : maxQuantity;
+
+            if (limit <= 0)
+                return GenericDto<SetQuantityResultDto>.Error(400, "Balans yetarli emas.");
+
+            session.RequestedQuantity = limit;
+            session.Status = SessionStatus.InProgress;
+            session.LastActivityAt = DateTime.Now;
+
+            await _sessionRepository.UpdateAsync(session);
+
+            return GenericDto<SetQuantityResultDto>.Success(new SetQuantityResultDto
+            {
+                LimitQuantity = limit,
+                ProductName = session.ProductName,
+                Unit = session.Unit?.ToString() ?? string.Empty,
+                PricePerUnit = session.PricePerUnit,
+                DeviceSerialNumber = session.DeviceSerialNumber,
+                ProductId = session.ProductId ?? 0,
+                ResultMessage = "Miqdor belgilandi. Qurilmaga start buyrug'i yuborildi."
             });
         }
 
@@ -125,9 +179,6 @@ namespace Application.Services
 
             if (session.Device?.SerialNumber != dto.SerialNumber)
                 return GenericDto<SessionProgressResultDto>.Error(403, "Qurilma bu sessiyaga tegishli emas.");
-
-            if (session.Status == SessionStatus.DeviceConnected)
-                session.Status = SessionStatus.InProgress;
 
             if (session.Status != SessionStatus.InProgress)
                 return GenericDto<SessionProgressResultDto>.Error(400, "Sessiya aktiv holatda emas.");

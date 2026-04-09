@@ -74,7 +74,7 @@ namespace Persistence.Seed
 
             // UsageSessionApi — Sessiya boshqaruvi
             "Session.Create",
-            "Session.Start",
+            "Session.SetQuantity",
             "Session.Close",
 
             // UserApi — Foydalanuvchi profili
