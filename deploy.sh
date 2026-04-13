@@ -4,7 +4,7 @@ set -e
 echo "🚀 BotEnergy avtomatik deploy boshlandi – Hammasi bir joyda!"
 
 # Mikroservicelar
-SERVICES=("AdminApi" "AuthApi" "BillingApi" "DeviceApi" "PaymentApi" "UserApi" "UsageSessionApi")
+SERVICES=("AdminApi" "AuthApi" "BillingApi" "DeviceApi" "PaymentApi" "UserApi")
 
 for SERVICE in "${SERVICES[@]}"; do
   echo "🔨 $SERVICE ni build qilmoqda va /home/ubuntu/botenergy/$SERVICE ga joylashtirmoqda..."
