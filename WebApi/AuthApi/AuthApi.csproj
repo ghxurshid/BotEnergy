@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\CommonConfiguration\CommonConfiguration.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\CommonConfiguration\CommonConfiguration.csproj" />
     <ProjectReference Include="..\..\Infrastructure\Persistence\Persistence.csproj" />
   </ItemGroup>
 

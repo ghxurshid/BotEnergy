@@ -9,6 +9,16 @@
     "Password": "",
     "ClientId": "botenergy-device-api-dev"
   },
+  "RabbitMq": {
+    "HostName": "localhost",
+    "Port": 5672,
+    "UserName": "guest",
+    "Password": "guest",
+    "VirtualHost": "/"
+  },
+  "Redis": {
+    "ConnectionString": "localhost:6379"
+  },
   "InternalApi": {
     "SharedSecret": "botenergy-internal-secret-2026",
     "UserApiBaseUrl": "http://localhost:5006"
