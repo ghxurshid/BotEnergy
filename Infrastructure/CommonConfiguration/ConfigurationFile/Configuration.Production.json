@@ -1,4 +1,4 @@
- {
+{
   "ConnectionStrings": {
     "DefaultConnection": "Host=51.38.127.221;Port=5432;Database=botenergy_db;Username=botenergy_user;Password=WsfR5sDcVfABT2F1"
   },
@@ -8,6 +8,16 @@
     "Username": "",
     "Password": "",
     "ClientId": "botenergy-device-api"
+  },
+  "RabbitMq": {
+    "HostName": "localhost",
+    "Port": 5672,
+    "UserName": "guest",
+    "Password": "guest",
+    "VirtualHost": "/"
+  },
+  "Redis": {
+    "ConnectionString": "localhost:6379"
   },
   "InternalApi": {
     "SharedSecret": "botenergy-internal-secret-2026",
