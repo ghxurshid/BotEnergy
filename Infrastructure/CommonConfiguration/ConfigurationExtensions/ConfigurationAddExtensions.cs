@@ -53,7 +53,9 @@ namespace CommonConfiguration.ConfigurationExtensions
         public static IServiceCollection AddRedisServices(this IServiceCollection services, IConfiguration config)
         {
             var redisConnectionString = config.GetSection("Redis:ConnectionString").Value ?? "localhost:6379";
-            services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConnectionString));
+            var redisOptions = ConfigurationOptions.Parse(redisConnectionString);
+            redisOptions.AbortOnConnectFail = false; // Redis yo'q bo'lsa ham app crash qilmaydi
+            services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisOptions));
             services.AddSingleton<IDeviceLockService, RedisDeviceLockService>();
 
             return services;
