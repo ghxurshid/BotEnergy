@@ -5,19 +5,125 @@ using CommonConfiguration.Redis;
 using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Npgsql;
 using Persistence.Context;
 using Persistence.Repositories;
 using StackExchange.Redis;
+using Swashbuckle.AspNetCore.SwaggerGen;
+using System.Text;
 
 namespace CommonConfiguration.ConfigurationExtensions
 {
     public static class ConfigurationAddExtensions
     {
+        /// <summary>
+        /// Swagger + JWT Bearer auth konfiguratsiyasi.
+        /// <paramref name="includeJwtAuth"/> false bo'lsa, faqat Swagger doc va XML comments qo'shiladi (masalan, AuthApi).
+        /// </summary>
+        public static IServiceCollection AddSwaggerWithJwtAuth(
+            this IServiceCollection services,
+            string title,
+            string version,
+            string description,
+            bool includeJwtAuth = true)
+        {
+            services.AddEndpointsApiExplorer();
+            services.AddSwaggerGen(options =>
+            {
+                options.SwaggerDoc(version, new OpenApiInfo
+                {
+                    Title = title,
+                    Version = version,
+                    Description = description
+                });
+
+                var xmlFile = $"{System.Reflection.Assembly.GetEntryAssembly()!.GetName().Name}.xml";
+                var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+                if (File.Exists(xmlPath))
+                    options.IncludeXmlComments(xmlPath);
+
+                if (includeJwtAuth)
+                {
+                    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                    {
+                        Name = "Authorization",
+                        Type = SecuritySchemeType.Http,
+                        Scheme = "Bearer",
+                        BearerFormat = "JWT",
+                        In = ParameterLocation.Header,
+                        Description = "JWT tokenni kiriting"
+                    });
+                    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+                    {
+                        {
+                            new OpenApiSecurityScheme
+                            {
+                                Reference = new OpenApiReference
+                                {
+                                    Type = ReferenceType.SecurityScheme,
+                                    Id = "Bearer"
+                                }
+                            },
+                            Array.Empty<string>()
+                        }
+                    });
+                }
+            });
+
+            return services;
+        }
+
+        private const string DefaultJwtSecret = "3f1e2d4c5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d";
+
+        /// <summary>
+        /// JWT Bearer autentifikatsiya. SignalR ishlatadigan API lar uchun
+        /// <paramref name="signalRHubPath"/> ni ko'rsating (masalan, "/hubs").
+        /// </summary>
+        public static IServiceCollection AddJwtAuthentication(
+            this IServiceCollection services,
+            IConfiguration config,
+            string? signalRHubPath = null)
+        {
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer = false,
+                        ValidateAudience = false,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+                        IssuerSigningKey = new SymmetricSecurityKey(
+                            Encoding.UTF8.GetBytes(
+                                config["Jwt:Secret"] ?? DefaultJwtSecret))
+                    };
+
+                    if (signalRHubPath is not null)
+                    {
+                        options.Events = new JwtBearerEvents
+                        {
+                            OnMessageReceived = context =>
+                            {
+                                var accessToken = context.Request.Query["access_token"];
+                                var path = context.HttpContext.Request.Path;
+                                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments(signalRHubPath))
+                                    context.Token = accessToken;
+                                return Task.CompletedTask;
+                            }
+                        };
+                    }
+                });
+
+            return services;
+        }
+
         public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
         {
             var connectionString = config.GetConnectionString("DefaultConnection");

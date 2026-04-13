@@ -9,5 +9,16 @@
   "exclude": [
     "node_modules",
     "wwwroot"
-  ]
+  ],
+  "Hosting": {
+    "UseHttps": false,
+    "Ports": {
+      "AdminApi": 5001,
+      "AuthApi": 5002,
+      "BillingApi": 5003,
+      "DeviceApi": 5004,
+      "PaymentApi": 5005,
+      "UserApi": 5006
+    }
+  }
 }

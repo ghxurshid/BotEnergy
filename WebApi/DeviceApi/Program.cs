@@ -10,18 +10,11 @@ builder.Services.AddControllers(options =>
 {
     options.Filters.Add<PermissionFilter>();
 });
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
-    {
-        Title = "Device API",
-        Version = "v1",
-        Description = "IoT qurilmalar boshqaruvi — qurilma autentifikatsiyasi, MQTT bridge, RabbitMQ orqali UserApi bilan aloqa"
-    });
-    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFile));
-});
+
+builder.Services.AddSwaggerWithJwtAuth(
+    "Device API", "v1",
+    "IoT qurilmalar boshqaruvi — qurilma autentifikatsiyasi, MQTT bridge, RabbitMQ orqali UserApi bilan aloqa",
+    includeJwtAuth: false);
 
 builder.Configuration.AddCommonConfiguration();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -45,8 +38,8 @@ await app.ApplyMigrationsAsync();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseHttpsRedirection();
+app.UseHttpsIfEnabled();
 app.UseAuthorization();
 app.MapControllers();
 
-app.Run("http://*:5004");
+app.RunApi("DeviceApi", 5004);

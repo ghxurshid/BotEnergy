@@ -10,7 +10,10 @@
       "Bash(sed -i 's/using BillingApi\\\\.Filters;/using BillingApi.Filters.ValidationFilters;/' WebApi/BillingApi/Controllers/BalanceController.cs)",
       "Bash(grep -E \"^d:\\\\\\\\|\\\\.cs$|^$\")",
       "Bash(dotnet sln:*)",
-      "Bash(dotnet restore:*)"
+      "Bash(dotnet restore:*)",
+      "Bash(ls -d \"C:/Users/Dev/Desktop/Workpath/Visual Studio/22/BotEnergy/\"*/)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet clean:*)"
     ]
   }
 }

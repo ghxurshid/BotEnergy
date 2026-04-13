@@ -1,6 +1,7 @@
 ﻿using CommonConfiguration.Middlewares;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Persistence.Context;
@@ -39,6 +40,28 @@ namespace CommonConfiguration.ConfigurationExtensions
         public static IApplicationBuilder UseCustomExceptionMiddleware(this IApplicationBuilder app)
         {
             return app.UseMiddleware<ExceptionMiddleware>();
+        }
+
+        /// <summary>
+        /// Hosting:UseHttps true bo'lsagina UseHttpsRedirection qo'shadi.
+        /// </summary>
+        public static IApplicationBuilder UseHttpsIfEnabled(this WebApplication app)
+        {
+            if (app.Configuration.GetValue<bool>("Hosting:UseHttps"))
+                app.UseHttpsRedirection();
+            return app;
+        }
+
+        /// <summary>
+        /// Configuration dan portni o'qib, http yoki https rejimda ishga tushiradi.
+        /// Hosting:Ports:{apiName} — port, Hosting:UseHttps — protokol.
+        /// </summary>
+        public static void RunApi(this WebApplication app, string apiName, int defaultPort)
+        {
+            var config = app.Configuration;
+            var port = config[$"Hosting:Ports:{apiName}"] ?? defaultPort.ToString();
+            var scheme = config.GetValue<bool>("Hosting:UseHttps") ? "https" : "http";
+            app.Run($"{scheme}://*:{port}");
         }
     }
 }
