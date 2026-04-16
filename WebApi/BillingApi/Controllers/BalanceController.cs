@@ -1,5 +1,5 @@
 using BillingApi.Extensions;
-using BillingApi.Filters.PermissionFilters;
+using Permissions = Domain.Constants.Permissions;
 using BillingApi.Filters.ValidationFilters;
 using BillingApi.Models.Requests;
 using CommonConfiguration.Attributes;

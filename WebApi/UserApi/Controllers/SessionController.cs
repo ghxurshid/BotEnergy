@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using UserApi.Extensions;
-using UserApi.Filters.PermissionFilters;
+using Permissions = Domain.Constants.Permissions;
 using UserApi.Models.Requests;
 
 namespace UserApi.Controllers

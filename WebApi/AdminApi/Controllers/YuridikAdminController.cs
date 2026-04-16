@@ -1,4 +1,4 @@
-using AdminApi.Filters.PermissionFilters;
+using Permissions = Domain.Constants.Permissions;
 using AdminApi.Filters.ValidationFilters;
 using AdminApi.Models.Requests;
 using AdminApi.Models.Responses;

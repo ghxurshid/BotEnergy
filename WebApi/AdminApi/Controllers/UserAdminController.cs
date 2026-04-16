@@ -1,4 +1,4 @@
-using AdminApi.Filters.PermissionFilters;
+using Permissions = Domain.Constants.Permissions;
 using CommonConfiguration.Attributes;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;

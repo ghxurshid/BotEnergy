@@ -1,5 +1,5 @@
 using AdminApi.Extensions;
-using AdminApi.Filters.PermissionFilters;
+using Permissions = Domain.Constants.Permissions;
 using AdminApi.Models.Requests;
 using CommonConfiguration.Attributes;
 using Domain.Enums;
