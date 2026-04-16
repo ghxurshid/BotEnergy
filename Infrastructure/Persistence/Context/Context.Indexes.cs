@@ -31,7 +31,7 @@ namespace Persistence.Context
             ConfigureDevice(modelBuilder);
             ConfigureProduct(modelBuilder);
             ConfigureUsageSession(modelBuilder);
-            ConfigureClient(modelBuilder);
+            ConfigureMerchant(modelBuilder);
 
             OnModelCreatingPartial(modelBuilder);
         }
@@ -371,11 +371,11 @@ namespace Persistence.Context
             });
         }
 
-        private static void ConfigureClient(ModelBuilder modelBuilder)
+        private static void ConfigureMerchant(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<ClientEntity>(b =>
+            modelBuilder.Entity<MerchantEntity>(b =>
             {
-                b.ToTable("clients", AppSchema);
+                b.ToTable("merchants", AppSchema);
 
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();

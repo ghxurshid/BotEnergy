@@ -5,11 +5,11 @@ using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace AdminApi.Filters.ValidationFilters
 {
-    public class RegisterClientValidationFilter : IActionFilter
+    public class RegisterMerchantValidationFilter : IActionFilter
     {
         public void OnActionExecuting(ActionExecutingContext context)
         {
-            var request = context.ActionArguments["request"] as RegisterClientRequest;
+            var request = context.ActionArguments["request"] as RegisterMerchantRequest;
             if (request is null) { context.Result = new BadRequestObjectResult(new { message = "So'rov ma'lumotlari noto'g'ri." }); return; }
 
             if (!PhoneValidator.IsValid(request.PhoneNumber))

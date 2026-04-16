@@ -99,8 +99,8 @@ namespace AdminApi.Extensions
                 StationId = request.StationId
             };
 
-        public static CreateClientDto ToDto(this RegisterClientRequest request)
-            => new CreateClientDto
+        public static CreateMerchantDto ToDto(this RegisterMerchantRequest request)
+            => new CreateMerchantDto
             {
                 PhoneNumber = request.PhoneNumber,
                 Inn = request.Inn,
@@ -108,8 +108,8 @@ namespace AdminApi.Extensions
                 CompanyName = request.CompanyName
             };
 
-        public static UpdateClientDto ToDto(this UpdateClientRequest request)
-            => new UpdateClientDto
+        public static UpdateMerchantDto ToDto(this UpdateMerchantRequest request)
+            => new UpdateMerchantDto
             {
                 PhoneNumber = request.PhoneNumber,
                 BankAccount = request.BankAccount,

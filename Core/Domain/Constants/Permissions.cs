@@ -48,12 +48,12 @@ namespace Domain.Constants
         public const string UserAdminUnblock = "UserAdmin.Unblock";
         public const string UserAdminDelete = "UserAdmin.Delete";
 
-        // ── AdminApi — Mijoz boshqaruvi ──────────────────────────────
-        public const string ClientAdminRegister = "ClientAdmin.Register";
-        public const string ClientAdminGetAll = "ClientAdmin.GetAll";
-        public const string ClientAdminGetById = "ClientAdmin.GetById";
-        public const string ClientAdminUpdate = "ClientAdmin.Update";
-        public const string ClientAdminDelete = "ClientAdmin.Delete";
+        // ── AdminApi — Merchant boshqaruvi ──────────────────────────
+        public const string MerchantAdminRegister = "MerchantAdmin.Register";
+        public const string MerchantAdminGetAll = "MerchantAdmin.GetAll";
+        public const string MerchantAdminGetById = "MerchantAdmin.GetById";
+        public const string MerchantAdminUpdate = "MerchantAdmin.Update";
+        public const string MerchantAdminDelete = "MerchantAdmin.Delete";
 
         // ── AdminApi — Yuridik foydalanuvchi ─────────────────────────
         public const string YuridikAdminCreate = "YuridikAdmin.Create";
@@ -100,9 +100,9 @@ namespace Domain.Constants
             UserAdminGetAll, UserAdminGetById, UserAdminBlock,
             UserAdminUnblock, UserAdminDelete,
 
-            // Client
-            ClientAdminRegister, ClientAdminGetAll, ClientAdminGetById,
-            ClientAdminUpdate, ClientAdminDelete,
+            // Merchant
+            MerchantAdminRegister, MerchantAdminGetAll, MerchantAdminGetById,
+            MerchantAdminUpdate, MerchantAdminDelete,
 
             // Yuridik
             YuridikAdminCreate,

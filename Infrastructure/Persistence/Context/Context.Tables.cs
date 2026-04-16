@@ -15,6 +15,6 @@ namespace Persistence.Context
         public DbSet<ProductEntity> Products { get; set; }
         public DbSet<DeviceEntity> Devices { get; set; }
         public DbSet<UsageSessionEntity> UsageSessions { get; set; }
-        public DbSet<ClientEntity> Clients { get; set; }
+        public DbSet<MerchantEntity> Merchants { get; set; }
     }
 }

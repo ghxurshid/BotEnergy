@@ -1,6 +1,6 @@
 namespace AdminApi.Models.Requests
 {
-    public class RegisterClientRequest
+    public class RegisterMerchantRequest
     {
         public string PhoneNumber { get; set; } = string.Empty;
         public string Inn { get; set; } = string.Empty;

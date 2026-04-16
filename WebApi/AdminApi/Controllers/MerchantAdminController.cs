@@ -10,33 +10,33 @@ using Microsoft.AspNetCore.Mvc;
 namespace AdminApi.Controllers
 {
     /// <summary>
-    /// Klientlar (yuridik mijozlar) boshqaruvi.
-    /// Shartnoma asosida ishlayotgan kompaniya-klientlarni ro'yxatdan o'tkazish va boshqarish.
+    /// Merchantlar (yuridik mijozlar) boshqaruvi.
+    /// Shartnoma asosida ishlayotgan kompaniya-merchantlarni ro'yxatdan o'tkazish va boshqarish.
     ///
     /// **Imkoniyatlar:**
-    /// - Klient ro'yxatdan o'tkazish (INN, bank hisob raqami, kompaniya nomi)
-    /// - Barcha klientlarni ko'rish
-    /// - ID bo'yicha klient olish
-    /// - Klient ma'lumotlarini yangilash
-    /// - Klientni o'chirish
+    /// - Merchant ro'yxatdan o'tkazish (INN, bank hisob raqami, kompaniya nomi)
+    /// - Barcha merchantlarni ko'rish
+    /// - ID bo'yicha merchant olish
+    /// - Merchant ma'lumotlarini yangilash
+    /// - Merchantni o'chirish
     /// </summary>
     [Route("api/[controller]/[action]")]
     [ApiController]
     [Authorize]
-    public class ClientAdminController : ControllerBase
+    public class MerchantAdminController : ControllerBase
     {
-        private readonly IClientService _service;
+        private readonly IMerchantService _service;
 
-        public ClientAdminController(IClientService service)
+        public MerchantAdminController(IMerchantService service)
             => _service = service;
 
         /// <summary>
-        /// Yangi klient ro'yxatdan o'tkazish.
+        /// Yangi merchant ro'yxatdan o'tkazish.
         /// </summary>
         /// <remarks>
         /// Namuna so'rov:
         ///
-        ///     POST /api/ClientAdmin/Register
+        ///     POST /api/MerchantAdmin/Register
         ///     {
         ///         "phoneNumber": "998901234567",
         ///         "inn": "123456789",
@@ -44,24 +44,24 @@ namespace AdminApi.Controllers
         ///         "companyName": "Tech Solutions LLC"
         ///     }
         /// </remarks>
-        /// <param name="request">Klient ma'lumotlari</param>
-        /// <response code="200">Klient ro'yxatdan o'tkazildi</response>
+        /// <param name="request">Merchant ma'lumotlari</param>
+        /// <response code="200">Merchant ro'yxatdan o'tkazildi</response>
         [HttpPost]
-        [RequirePermission(Permissions.ClientAdminRegister)]
-        [TypeFilter(typeof(RegisterClientValidationFilter))]
+        [RequirePermission(Permissions.MerchantAdminRegister)]
+        [TypeFilter(typeof(RegisterMerchantValidationFilter))]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<IActionResult> Register([FromBody] RegisterClientRequest request)
+        public async Task<IActionResult> Register([FromBody] RegisterMerchantRequest request)
         {
             var result = await _service.CreateAsync(request.ToDto());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 
         /// <summary>
-        /// Barcha klientlar ro'yxati.
+        /// Barcha merchantlar ro'yxati.
         /// </summary>
-        /// <response code="200">Klientlar ro'yxati</response>
+        /// <response code="200">Merchantlar ro'yxati</response>
         [HttpGet]
-        [RequirePermission(Permissions.ClientAdminGetAll)]
+        [RequirePermission(Permissions.MerchantAdminGetAll)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         public async Task<IActionResult> GetAll()
         {
@@ -70,13 +70,13 @@ namespace AdminApi.Controllers
         }
 
         /// <summary>
-        /// Klientni ID bo'yicha olish.
+        /// Merchantni ID bo'yicha olish.
         /// </summary>
-        /// <param name="id">Klient ID. Masalan: 1</param>
-        /// <response code="200">Klient ma'lumotlari</response>
-        /// <response code="404">Klient topilmadi</response>
+        /// <param name="id">Merchant ID. Masalan: 1</param>
+        /// <response code="200">Merchant ma'lumotlari</response>
+        /// <response code="404">Merchant topilmadi</response>
         [HttpGet("{id}")]
-        [RequirePermission(Permissions.ClientAdminGetById)]
+        [RequirePermission(Permissions.MerchantAdminGetById)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(long id)
@@ -86,12 +86,12 @@ namespace AdminApi.Controllers
         }
 
         /// <summary>
-        /// Klient ma'lumotlarini yangilash.
+        /// Merchant ma'lumotlarini yangilash.
         /// </summary>
         /// <remarks>
         /// Namuna so'rov:
         ///
-        ///     PUT /api/ClientAdmin/Update/1
+        ///     PUT /api/MerchantAdmin/Update/1
         ///     {
         ///         "phoneNumber": "998909876543",
         ///         "companyName": "Tech Solutions Group"
@@ -99,25 +99,25 @@ namespace AdminApi.Controllers
         ///
         /// Faqat yuborilgan maydonlar yangilanadi. `null` qoldirilsa o'zgarmaydi.
         /// </remarks>
-        /// <param name="id">Yangilanadigan klient ID</param>
+        /// <param name="id">Yangilanadigan merchant ID</param>
         /// <param name="request">Yangilanadigan maydonlar</param>
-        /// <response code="200">Klient yangilandi</response>
+        /// <response code="200">Merchant yangilandi</response>
         [HttpPut("{id}")]
-        [RequirePermission(Permissions.ClientAdminUpdate)]
+        [RequirePermission(Permissions.MerchantAdminUpdate)]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<IActionResult> Update(long id, [FromBody] UpdateClientRequest request)
+        public async Task<IActionResult> Update(long id, [FromBody] UpdateMerchantRequest request)
         {
             var result = await _service.UpdateAsync(id, request.ToDto());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 
         /// <summary>
-        /// Klientni o'chirish (soft delete).
+        /// Merchantni o'chirish (soft delete).
         /// </summary>
-        /// <param name="id">O'chiriladigan klient ID. Masalan: 1</param>
-        /// <response code="200">Klient o'chirildi</response>
+        /// <param name="id">O'chiriladigan merchant ID. Masalan: 1</param>
+        /// <response code="200">Merchant o'chirildi</response>
         [HttpDelete("{id}")]
-        [RequirePermission(Permissions.ClientAdminDelete)]
+        [RequirePermission(Permissions.MerchantAdminDelete)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         public async Task<IActionResult> Delete(long id)
         {

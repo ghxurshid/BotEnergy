@@ -1,6 +1,6 @@
 namespace AdminApi.Models.Requests
 {
-    public class UpdateClientRequest
+    public class UpdateMerchantRequest
     {
         public string? PhoneNumber { get; set; }
         public string? BankAccount { get; set; }

@@ -199,9 +199,9 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<IProductRepository, ProductRepository>();
             services.AddScoped<IProductService, ProductService>();
 
-            // Client
-            services.AddScoped<IClientRepository, ClientRepository>();
-            services.AddScoped<IClientService, ClientService>();
+            // Merchant
+            services.AddScoped<IMerchantRepository, MerchantRepository>();
+            services.AddScoped<IMerchantService, MerchantService>();
 
             // Billing
             services.AddScoped<IBillingService, BillingService>();
