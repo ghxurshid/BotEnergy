@@ -18,7 +18,16 @@ namespace AdminApi.Filters.ValidationFilters
             if (request.Name.Length > 200)
             { context.Result = new BadRequestObjectResult(new { message = "Tashkilot nomi 200 ta belgidan oshmasligi kerak." }); return; }
 
-            if (!string.IsNullOrEmpty(request.PhoneNumber) && !PhoneValidator.IsValid(request.PhoneNumber))
+            if (string.IsNullOrWhiteSpace(request.Inn))
+            { context.Result = new BadRequestObjectResult(new { message = "INN kiritilishi shart." }); return; }
+
+            if (string.IsNullOrWhiteSpace(request.Address))
+            { context.Result = new BadRequestObjectResult(new { message = "Manzil kiritilishi shart." }); return; }
+
+            if (string.IsNullOrWhiteSpace(request.PhoneNumber))
+            { context.Result = new BadRequestObjectResult(new { message = "Telefon raqam kiritilishi shart." }); return; }
+
+            if (!PhoneValidator.IsValid(request.PhoneNumber))
             { context.Result = new BadRequestObjectResult(new { message = PhoneValidator.ErrorMessage }); return; }
         }
 

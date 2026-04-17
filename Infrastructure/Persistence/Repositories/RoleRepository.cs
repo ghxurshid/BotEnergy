@@ -18,7 +18,8 @@ namespace Persistence.Repositories
 
         public async Task<List<RoleEntity>> GetAllAsync()
             => await _context.Roles
-                .Where(r => !r.IsDeleted && r.IsActive)
+                .Where(r => !r.IsDeleted)
+                .OrderBy(r => r.Name)
                 .ToListAsync();
 
         public async Task<RoleEntity> CreateAsync(RoleEntity role)
@@ -26,6 +27,22 @@ namespace Persistence.Repositories
             await _context.Roles.AddAsync(role);
             await _context.SaveChangesAsync();
             return role;
+        }
+
+        public async Task<RoleEntity> UpdateAsync(RoleEntity role)
+        {
+            _context.Roles.Update(role);
+            await _context.SaveChangesAsync();
+            return role;
+        }
+
+        public async Task DeleteAsync(long id)
+        {
+            var role = await _context.Roles.FirstOrDefaultAsync(r => r.Id == id);
+            if (role is null) return;
+            role.IsDeleted = true;
+            role.IsActive = false;
+            await _context.SaveChangesAsync();
         }
 
         public async Task<List<string>> GetPermissionsByRoleIdAsync(long roleId)
@@ -44,6 +61,10 @@ namespace Persistence.Repositories
         public async Task<PermissionEntity?> GetPermissionByNameAsync(string name)
             => await _context.Permissions
                 .FirstOrDefaultAsync(p => p.Name == name && !p.IsDeleted);
+
+        public async Task<PermissionEntity?> GetPermissionByIdAsync(long id)
+            => await _context.Permissions
+                .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
 
         public async Task RemovePermissionAsync(long roleId, long permissionId)
         {

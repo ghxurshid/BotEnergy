@@ -12,6 +12,9 @@ namespace Domain.Constants
         public const string RoleAddPermission = "Role.AddPermission";
         public const string RoleRemovePermission = "Role.RemovePermission";
         public const string RoleAssignToUser = "Role.AssignToUser";
+        public const string RoleGetById = "Role.GetById";
+        public const string RoleUpdate = "Role.Update";
+        public const string RoleDelete = "Role.Delete";
         public const string RoleGetPermissions = "Role.GetPermissions";
 
         // ── AdminApi — Tashkilot boshqaruvi ──────────────────────────
@@ -39,11 +42,19 @@ namespace Domain.Constants
 
         // ── AdminApi — Mahsulot boshqaruvi ───────────────────────────
         public const string ProductAdminCreate = "ProductAdmin.Create";
+        public const string ProductAdminGetAll = "ProductAdmin.GetAll";
+        public const string ProductAdminGetByDevice = "ProductAdmin.GetByDevice";
+        public const string ProductAdminGetById = "ProductAdmin.GetById";
         public const string ProductAdminGetAllowedTypes = "ProductAdmin.GetAllowedTypes";
+        public const string ProductAdminUpdate = "ProductAdmin.Update";
+        public const string ProductAdminDelete = "ProductAdmin.Delete";
 
         // ── AdminApi — Foydalanuvchi boshqaruvi ──────────────────────
+        public const string UserAdminCreate = "UserAdmin.Create";
         public const string UserAdminGetAll = "UserAdmin.GetAll";
         public const string UserAdminGetById = "UserAdmin.GetById";
+        public const string UserAdminSetPassword = "UserAdmin.SetPassword";
+        public const string UserAdminResetPassword = "UserAdmin.ResetPassword";
         public const string UserAdminBlock = "UserAdmin.Block";
         public const string UserAdminUnblock = "UserAdmin.Unblock";
         public const string UserAdminDelete = "UserAdmin.Delete";
@@ -78,8 +89,8 @@ namespace Domain.Constants
         public static readonly List<string> All = new()
         {
             // Role
-            RoleCreateRole, RoleGetAll, RoleAddPermission,
-            RoleRemovePermission, RoleAssignToUser, RoleGetPermissions,
+            RoleCreateRole, RoleGetAll, RoleGetById, RoleUpdate, RoleDelete,
+            RoleAddPermission, RoleRemovePermission, RoleAssignToUser, RoleGetPermissions,
 
             // Organization
             OrganizationAdminCreate, OrganizationAdminGetAll, OrganizationAdminGetById,
@@ -94,11 +105,14 @@ namespace Domain.Constants
             DeviceAdminGetByStation, DeviceAdminUpdate, DeviceAdminDelete,
 
             // Product
-            ProductAdminCreate, ProductAdminGetAllowedTypes,
+            ProductAdminCreate, ProductAdminGetAll, ProductAdminGetByDevice,
+            ProductAdminGetById, ProductAdminGetAllowedTypes, ProductAdminUpdate,
+            ProductAdminDelete,
 
             // User Admin
-            UserAdminGetAll, UserAdminGetById, UserAdminBlock,
-            UserAdminUnblock, UserAdminDelete,
+            UserAdminCreate, UserAdminGetAll, UserAdminGetById,
+            UserAdminSetPassword, UserAdminResetPassword,
+            UserAdminBlock, UserAdminUnblock, UserAdminDelete,
 
             // Merchant
             MerchantAdminRegister, MerchantAdminGetAll, MerchantAdminGetById,

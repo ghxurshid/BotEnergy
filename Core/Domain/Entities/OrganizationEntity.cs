@@ -6,18 +6,18 @@ namespace Domain.Entities
     {
         public required string Name { get; set; }
 
-        public string? Inn { get; set; }
+        public required string Inn { get; set; }
 
-        public string? Address { get; set; }
+        public required string Address { get; set; }
 
-        public string? PhoneNumber { get; set; }
+        public required string PhoneNumber { get; set; }
 
         public decimal Balance { get; set; } = 0;
 
         public bool IsActive { get; set; } = true;
 
-        public ICollection<StationEntity>? Stations { get; set; }
-
         public ICollection<LegalUserEntity>? LegalUsers { get; set; }
+
+        public ICollection<StationEntity>? Stations { get; set; }
     }
 }

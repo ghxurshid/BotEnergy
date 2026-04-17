@@ -23,10 +23,26 @@ namespace Application.Services
             {
                 Name = dto.Name,
                 Description = dto.Description,
-                IsActive = true
+                IsActive = dto.IsActive
             };
 
             var created = await _roleRepository.CreateAsync(role);
+
+            if (dto.PermissionIds is not null && dto.PermissionIds.Count > 0)
+            {
+                foreach (var permissionId in dto.PermissionIds)
+                {
+                    var permission = await _roleRepository.GetPermissionByIdAsync(permissionId);
+                    if (permission is not null)
+                    {
+                        await _roleRepository.AddPermissionAsync(new RolePermissionEntity
+                        {
+                            RoleId = created.Id,
+                            PermissionId = permission.Id
+                        });
+                    }
+                }
+            }
 
             return GenericDto<CreateRoleResultDto>.Success(new CreateRoleResultDto
             {
@@ -54,6 +70,58 @@ namespace Application.Services
             }
 
             return GenericDto<GetRolesResultDto>.Success(result);
+        }
+
+        public async Task<GenericDto<RoleItemDto>> GetRoleByIdAsync(long id)
+        {
+            var role = await _roleRepository.GetByIdAsync(id);
+            if (role is null)
+                return GenericDto<RoleItemDto>.Error(404, "Rol topilmadi.");
+
+            var permissions = await _roleRepository.GetPermissionsByRoleIdAsync(role.Id);
+
+            return GenericDto<RoleItemDto>.Success(new RoleItemDto
+            {
+                Id = role.Id,
+                Name = role.Name,
+                Description = role.Description,
+                IsActive = role.IsActive,
+                Permissions = permissions
+            });
+        }
+
+        public async Task<GenericDto<RoleResultDto>> UpdateRoleAsync(long id, UpdateRoleDto dto)
+        {
+            var role = await _roleRepository.GetByIdAsync(id);
+            if (role is null)
+                return GenericDto<RoleResultDto>.Error(404, "Rol topilmadi.");
+
+            if (!string.IsNullOrWhiteSpace(dto.Name)) role.Name = dto.Name;
+            if (dto.Description is not null) role.Description = dto.Description;
+            if (dto.IsActive.HasValue) role.IsActive = dto.IsActive.Value;
+
+            await _roleRepository.UpdateAsync(role);
+
+            return GenericDto<RoleResultDto>.Success(new RoleResultDto
+            {
+                Id = role.Id,
+                ResultMessage = "Rol ma'lumotlari yangilandi."
+            });
+        }
+
+        public async Task<GenericDto<RoleResultDto>> DeleteRoleAsync(long id)
+        {
+            var role = await _roleRepository.GetByIdAsync(id);
+            if (role is null)
+                return GenericDto<RoleResultDto>.Error(404, "Rol topilmadi.");
+
+            await _roleRepository.DeleteAsync(id);
+
+            return GenericDto<RoleResultDto>.Success(new RoleResultDto
+            {
+                Id = id,
+                ResultMessage = "Rol o'chirildi."
+            });
         }
 
         public async Task<GenericDto<AddPermissionResultDto>> AddPermissionToRoleAsync(AddPermissionDto dto)

@@ -9,15 +9,16 @@ namespace Domain.Dtos
         public long StationId { get; set; }
         public string? Model { get; set; }
         public string? FirmwareVersion { get; set; }
-        public int FunctionCount { get; set; } = 1;
+        public bool IsOnline { get; set; } = false;
+        public bool IsActive { get; set; } = true;
     }
 
     public class UpdateDeviceDto
     {
         public string? Model { get; set; }
         public string? FirmwareVersion { get; set; }
+        public bool? IsOnline { get; set; }
         public bool? IsActive { get; set; }
-        public long? StationId { get; set; }
     }
 
     public class DeviceItemDto
@@ -27,7 +28,6 @@ namespace Domain.Dtos
         public DeviceType DeviceType { get; set; }
         public string? Model { get; set; }
         public string? FirmwareVersion { get; set; }
-        public int FunctionCount { get; set; }
         public long StationId { get; set; }
         public string StationName { get; set; } = string.Empty;
         public bool IsOnline { get; set; }

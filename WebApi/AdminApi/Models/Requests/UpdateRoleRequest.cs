@@ -1,10 +1,9 @@
 namespace AdminApi.Models.Requests
 {
-    public class CreateRoleRequest
+    public class UpdateRoleRequest
     {
-        public required string Name { get; set; }
+        public string? Name { get; set; }
         public string? Description { get; set; }
         public bool? IsActive { get; set; }
-        public List<long>? PermissionIds { get; set; }
     }
 }

@@ -4,7 +4,7 @@ namespace AdminApi.Models.Requests
     {
         public string? Model { get; set; }
         public string? FirmwareVersion { get; set; }
+        public bool? IsOnline { get; set; }
         public bool? IsActive { get; set; }
-        public long? StationId { get; set; }
     }
 }

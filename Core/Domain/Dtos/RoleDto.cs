@@ -4,7 +4,15 @@ namespace Domain.Dtos
     {
         public required string Name { get; set; }
         public string? Description { get; set; }
-        public long OrganizationId { get; set; } = 0;
+        public bool IsActive { get; set; } = true;
+        public List<long>? PermissionIds { get; set; }
+    }
+
+    public class UpdateRoleDto
+    {
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public bool? IsActive { get; set; }
     }
 
     public class CreateRoleResultDto
@@ -25,6 +33,12 @@ namespace Domain.Dtos
     public class GetRolesResultDto
     {
         public List<RoleItemDto> Roles { get; set; } = new();
+    }
+
+    public class RoleResultDto
+    {
+        public long Id { get; set; }
+        public required string ResultMessage { get; set; }
     }
 
     public class AddPermissionDto

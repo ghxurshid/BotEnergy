@@ -11,8 +11,6 @@ namespace Domain.Entities
 
         public DeviceType DeviceType { get; set; }
 
-        public int FunctionCount { get; set; } = 1;
-
         public string? Model { get; set; }
 
         public string? FirmwareVersion { get; set; }

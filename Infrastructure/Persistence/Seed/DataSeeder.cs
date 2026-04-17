@@ -34,6 +34,9 @@ namespace Persistence.Seed
             organization = new OrganizationEntity
             {
                 Name = DefaultOrganizationName,
+                Inn = "000000000",
+                Address = "Tashkent",
+                PhoneNumber = "998000000000",
                 IsActive = true
             };
 

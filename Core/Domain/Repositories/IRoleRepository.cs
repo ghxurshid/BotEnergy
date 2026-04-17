@@ -7,7 +7,10 @@ namespace Domain.Repositories
         Task<RoleEntity?> GetByIdAsync(long id);
         Task<List<RoleEntity>> GetAllAsync();
         Task<RoleEntity> CreateAsync(RoleEntity role);
+        Task<RoleEntity> UpdateAsync(RoleEntity role);
+        Task DeleteAsync(long id);
         Task<PermissionEntity?> GetPermissionByNameAsync(string name);
+        Task<PermissionEntity?> GetPermissionByIdAsync(long id);
         Task<List<string>> GetPermissionsByRoleIdAsync(long roleId);
         Task AddPermissionAsync(RolePermissionEntity permission);
         Task RemovePermissionAsync(long roleId, long permissionId);

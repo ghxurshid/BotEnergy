@@ -25,7 +25,7 @@ namespace Application.Services
                 Inn = dto.Inn,
                 BankAccount = dto.BankAccount,
                 CompanyName = dto.CompanyName,
-                IsActive = true
+                IsActive = dto.IsActive
             };
 
             var created = await _repo.CreateAsync(merchant);
@@ -59,8 +59,6 @@ namespace Application.Services
                 return GenericDto<MerchantResultDto>.Error(404, "Merchant topilmadi.");
 
             if (!string.IsNullOrWhiteSpace(dto.PhoneNumber)) merchant.PhoneNumber = dto.PhoneNumber;
-            if (!string.IsNullOrWhiteSpace(dto.BankAccount)) merchant.BankAccount = dto.BankAccount;
-            if (!string.IsNullOrWhiteSpace(dto.CompanyName)) merchant.CompanyName = dto.CompanyName;
 
             await _repo.UpdateAsync(merchant);
 

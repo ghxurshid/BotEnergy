@@ -19,9 +19,6 @@ namespace AdminApi.Filters.ValidationFilters
 
             if (request.StationId <= 0)
             { context.Result = new BadRequestObjectResult(new { message = "Stansiya ID kiritilishi shart." }); return; }
-
-            if (request.FunctionCount < 1)
-            { context.Result = new BadRequestObjectResult(new { message = "Funksiya soni kamida 1 bo'lishi kerak." }); return; }
         }
 
         public void OnActionExecuted(ActionExecutedContext context) { }

@@ -6,13 +6,12 @@ namespace Domain.Dtos
         public required string Inn { get; set; }
         public required string BankAccount { get; set; }
         public required string CompanyName { get; set; }
+        public bool IsActive { get; set; } = true;
     }
 
     public class UpdateMerchantDto
     {
         public string? PhoneNumber { get; set; }
-        public string? BankAccount { get; set; }
-        public string? CompanyName { get; set; }
     }
 
     public class MerchantItemDto

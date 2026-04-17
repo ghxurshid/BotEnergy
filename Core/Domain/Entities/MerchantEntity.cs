@@ -12,8 +12,8 @@ namespace Domain.Entities
 
         public required string CompanyName { get; set; }
 
-        public bool IsActive { get; set; } = true;
+        public bool IsActive { get; set; } = true; 
 
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public ICollection<StationEntity>? Stations { get; set; }
     }
 }

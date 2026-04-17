@@ -1,3 +1,4 @@
+using Domain.Constants;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
@@ -10,18 +11,24 @@ namespace Application.Services
     {
         private readonly IDeviceRepository _repo;
         private readonly IStationRepository _stationRepo;
+        private readonly IUserRepository _userRepo;
 
-        public DeviceService(IDeviceRepository repo, IStationRepository stationRepo)
+        public DeviceService(IDeviceRepository repo, IStationRepository stationRepo, IUserRepository userRepo)
         {
             _repo = repo;
             _stationRepo = stationRepo;
+            _userRepo = userRepo;
         }
 
-        public async Task<GenericDto<DeviceResultDto>> RegisterAsync(RegisterDeviceDto dto)
+        public async Task<GenericDto<DeviceResultDto>> RegisterAsync(RegisterDeviceDto dto, long callerId, HashSet<string> callerPermissions)
         {
             var station = await _stationRepo.GetByIdAsync(dto.StationId);
             if (station is null)
                 return GenericDto<DeviceResultDto>.Error(404, "Stansiya topilmadi.");
+
+            var accessCheck = await CheckStationAccessAsync(callerId, callerPermissions, station);
+            if (accessCheck is not null)
+                return accessCheck;
 
             var existing = await _repo.GetBySerialNumberAsync(dto.SerialNumber);
             if (existing is not null)
@@ -34,9 +41,8 @@ namespace Application.Services
                 StationId = dto.StationId,
                 Model = dto.Model,
                 FirmwareVersion = dto.FirmwareVersion,
-                FunctionCount = dto.FunctionCount > 0 ? dto.FunctionCount : 1,
-                IsOnline = false,
-                IsActive = true
+                IsOnline = dto.IsOnline,
+                IsActive = dto.IsActive
             };
 
             var created = await _repo.CreateAsync(device);
@@ -77,14 +83,8 @@ namespace Application.Services
 
             if (!string.IsNullOrWhiteSpace(dto.Model)) device.Model = dto.Model;
             if (!string.IsNullOrWhiteSpace(dto.FirmwareVersion)) device.FirmwareVersion = dto.FirmwareVersion;
+            if (dto.IsOnline.HasValue) device.IsOnline = dto.IsOnline.Value;
             if (dto.IsActive.HasValue) device.IsActive = dto.IsActive.Value;
-            if (dto.StationId.HasValue)
-            {
-                var station = await _stationRepo.GetByIdAsync(dto.StationId.Value);
-                if (station is null)
-                    return GenericDto<DeviceResultDto>.Error(404, "Yangi stansiya topilmadi.");
-                device.StationId = dto.StationId.Value;
-            }
 
             await _repo.UpdateAsync(device);
 
@@ -110,6 +110,34 @@ namespace Application.Services
             });
         }
 
+        private async Task<GenericDto<DeviceResultDto>?> CheckStationAccessAsync(
+            long callerId, HashSet<string> callerPermissions, StationEntity station)
+        {
+            if (callerPermissions.Contains(Permissions.MerchantAdminRegister))
+                return null;
+
+            var caller = await _userRepo.GetByIdAsync(callerId);
+            if (caller is null)
+                return GenericDto<DeviceResultDto>.Error(403, "Foydalanuvchi topilmadi.");
+
+            if (caller is MerchantUserEntity merchantUser)
+            {
+                if (station.MerchantId is null)
+                    return GenericDto<DeviceResultDto>.Error(403, "Bu stansiya merchantga tegishli emas.");
+
+                var callerStation = await _stationRepo.GetByIdAsync(merchantUser.StationId);
+                if (callerStation?.MerchantId != station.MerchantId)
+                    return GenericDto<DeviceResultDto>.Error(403, "Bu stansiya sizning merchantingizga tegishli emas.");
+            }
+            else if (caller is LegalUserEntity legalUser)
+            {
+                if (legalUser.OrganizationId != station.OrganizationId)
+                    return GenericDto<DeviceResultDto>.Error(403, "Bu stansiya sizning tashkilotingizga tegishli emas.");
+            }
+
+            return null;
+        }
+
         private static DeviceItemDto ToItem(DeviceEntity d) => new()
         {
             Id = d.Id,
@@ -117,7 +145,6 @@ namespace Application.Services
             DeviceType = d.DeviceType,
             Model = d.Model,
             FirmwareVersion = d.FirmwareVersion,
-            FunctionCount = d.FunctionCount,
             StationId = d.StationId,
             StationName = d.Station?.Name ?? string.Empty,
             IsOnline = d.IsOnline,

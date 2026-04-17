@@ -9,6 +9,7 @@ namespace Domain.Enums
     public enum UserType
     {
         NaturalPerson,
-        LegalEntity
+        LegalEntity,
+        MerchantPerson
     }
 }

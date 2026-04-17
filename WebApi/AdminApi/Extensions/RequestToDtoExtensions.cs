@@ -10,7 +10,16 @@ namespace AdminApi.Extensions
             {
                 Name = request.Name,
                 Description = request.Description,
-                OrganizationId = request.OrganizationId
+                IsActive = request.IsActive ?? true,
+                PermissionIds = request.PermissionIds
+            };
+
+        public static UpdateRoleDto ToDto(this UpdateRoleRequest request)
+            => new UpdateRoleDto
+            {
+                Name = request.Name,
+                Description = request.Description,
+                IsActive = request.IsActive
             };
 
         public static AddPermissionDto ToDto(this AddPermissionRequest request)
@@ -42,7 +51,17 @@ namespace AdminApi.Extensions
                 ProductType = request.ProductType,
                 Unit = request.Unit,
                 Price = request.Price,
-                DeviceId = request.DeviceId
+                DeviceId = request.DeviceId,
+                IsActive = request.IsActive ?? true
+            };
+
+        public static UpdateProductDto ToDto(this UpdateProductRequest request)
+            => new UpdateProductDto
+            {
+                Name = request.Name,
+                Description = request.Description,
+                Price = request.Price,
+                IsActive = request.IsActive
             };
 
         public static CreateOrganizationDto ToDto(this CreateOrganizationRequest request)
@@ -51,16 +70,17 @@ namespace AdminApi.Extensions
                 Name = request.Name,
                 Inn = request.Inn,
                 Address = request.Address,
-                PhoneNumber = request.PhoneNumber
+                PhoneNumber = request.PhoneNumber,
+                Balance = request.Balance ?? 0,
+                IsActive = request.IsActive ?? true
             };
 
         public static UpdateOrganizationDto ToDto(this UpdateOrganizationRequest request)
             => new UpdateOrganizationDto
             {
-                Name = request.Name,
-                Inn = request.Inn,
                 Address = request.Address,
-                PhoneNumber = request.PhoneNumber
+                PhoneNumber = request.PhoneNumber,
+                IsActive = request.IsActive
             };
 
         public static CreateStationDto ToDto(this CreateStationRequest request)
@@ -87,7 +107,8 @@ namespace AdminApi.Extensions
                 StationId = request.StationId,
                 Model = request.Model,
                 FirmwareVersion = request.FirmwareVersion,
-                FunctionCount = request.FunctionCount
+                IsOnline = request.IsOnline ?? false,
+                IsActive = request.IsActive ?? true
             };
 
         public static UpdateDeviceDto ToDto(this UpdateDeviceRequest request)
@@ -95,8 +116,8 @@ namespace AdminApi.Extensions
             {
                 Model = request.Model,
                 FirmwareVersion = request.FirmwareVersion,
-                IsActive = request.IsActive,
-                StationId = request.StationId
+                IsOnline = request.IsOnline,
+                IsActive = request.IsActive
             };
 
         public static CreateMerchantDto ToDto(this RegisterMerchantRequest request)
@@ -105,15 +126,39 @@ namespace AdminApi.Extensions
                 PhoneNumber = request.PhoneNumber,
                 Inn = request.Inn,
                 BankAccount = request.BankAccount,
-                CompanyName = request.CompanyName
+                CompanyName = request.CompanyName,
+                IsActive = request.IsActive ?? true
             };
 
         public static UpdateMerchantDto ToDto(this UpdateMerchantRequest request)
             => new UpdateMerchantDto
             {
+                PhoneNumber = request.PhoneNumber
+            };
+
+        public static CreateUserAdminDto ToDto(this CreateUserRequest request)
+            => new CreateUserAdminDto
+            {
+                PhoneId = request.PhoneId,
+                Mail = request.Mail,
                 PhoneNumber = request.PhoneNumber,
-                BankAccount = request.BankAccount,
-                CompanyName = request.CompanyName
+                RoleId = request.RoleId,
+                OrganizationId = request.OrganizationId,
+                StationId = request.StationId
+            };
+
+        public static SetPasswordAdminDto ToDto(this SetPasswordRequest request, long userId)
+            => new SetPasswordAdminDto
+            {
+                UserId = userId,
+                Password = request.Password
+            };
+
+        public static ResetPasswordAdminDto ToDto(this ResetPasswordRequest request, long userId)
+            => new ResetPasswordAdminDto
+            {
+                UserId = userId,
+                NewPassword = request.NewPassword
             };
 
         public static TopUpBalanceDto ToDto(this TopUpBalanceRequest request)

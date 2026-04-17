@@ -7,6 +7,9 @@ namespace Domain.Interfaces
     {
         Task<GenericDto<CreateRoleResultDto>> CreateRoleAsync(CreateRoleDto dto);
         Task<GenericDto<GetRolesResultDto>> GetRolesAsync();
+        Task<GenericDto<RoleItemDto>> GetRoleByIdAsync(long id);
+        Task<GenericDto<RoleResultDto>> UpdateRoleAsync(long id, UpdateRoleDto dto);
+        Task<GenericDto<RoleResultDto>> DeleteRoleAsync(long id);
         Task<GenericDto<AddPermissionResultDto>> AddPermissionToRoleAsync(AddPermissionDto dto);
         Task<GenericDto<RemovePermissionResultDto>> RemovePermissionFromRoleAsync(RemovePermissionDto dto);
         Task<GenericDto<AssignRoleResultDto>> AssignRoleToUserAsync(AssignRoleDto dto);

@@ -10,5 +10,6 @@ namespace AdminApi.Models.Requests
         public UnitType Unit { get; set; }
         public decimal Price { get; set; }
         public long DeviceId { get; set; }
+        public bool? IsActive { get; set; }
     }
 }

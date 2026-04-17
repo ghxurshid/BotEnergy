@@ -9,6 +9,7 @@ namespace AdminApi.Models.Requests
         public long StationId { get; set; }
         public string? Model { get; set; }
         public string? FirmwareVersion { get; set; }
-        public int FunctionCount { get; set; } = 1;
+        public bool? IsOnline { get; set; }
+        public bool? IsActive { get; set; }
     }
 }

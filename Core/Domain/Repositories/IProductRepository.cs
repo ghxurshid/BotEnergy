@@ -7,6 +7,10 @@ namespace Domain.Repositories
     {
         Task<ProductEntity?> GetByIdAsync(long id);
         Task<ProductEntity?> GetByTypeAsync(ProductType type);
-        Task CreateAsync(ProductEntity product);
+        Task<List<ProductEntity>> GetAllAsync();
+        Task<List<ProductEntity>> GetByDeviceIdAsync(long deviceId);
+        Task<ProductEntity> CreateAsync(ProductEntity product);
+        Task<ProductEntity> UpdateAsync(ProductEntity product);
+        Task DeleteAsync(long id);
     }
 }

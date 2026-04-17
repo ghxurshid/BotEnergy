@@ -1,3 +1,4 @@
+using Domain.Constants;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
@@ -10,18 +11,34 @@ namespace Application.Services
     {
         private readonly IStationRepository _repo;
         private readonly IOrganizationRepository _orgRepo;
+        private readonly IUserRepository _userRepo;
 
-        public StationService(IStationRepository repo, IOrganizationRepository orgRepo)
+        public StationService(IStationRepository repo, IOrganizationRepository orgRepo, IUserRepository userRepo)
         {
             _repo = repo;
             _orgRepo = orgRepo;
+            _userRepo = userRepo;
         }
 
-        public async Task<GenericDto<StationResultDto>> CreateAsync(CreateStationDto dto)
+        public async Task<GenericDto<StationResultDto>> CreateAsync(CreateStationDto dto, long callerId, HashSet<string> callerPermissions)
         {
             var org = await _orgRepo.GetByIdAsync(dto.OrganizationId);
             if (org is null)
                 return GenericDto<StationResultDto>.Error(404, "Tashkilot topilmadi.");
+
+            if (!callerPermissions.Contains(Permissions.OrganizationAdminCreate))
+            {
+                var caller = await _userRepo.GetByIdAsync(callerId);
+                if (caller is LegalUserEntity legalUser)
+                {
+                    if (legalUser.OrganizationId != dto.OrganizationId)
+                        return GenericDto<StationResultDto>.Error(403, "Faqat o'z tashkilotingizga stansiya qo'sha olasiz.");
+                }
+                else if (caller is MerchantUserEntity)
+                {
+                    return GenericDto<StationResultDto>.Error(403, "Boshqa tashkilotlarga stansiya qo'shish uchun tegishli ruxsat kerak.");
+                }
+            }
 
             var station = new StationEntity
             {

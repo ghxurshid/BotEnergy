@@ -44,7 +44,8 @@ namespace Persistence.Context
 
                 b.HasDiscriminator<UserType>("user_type")
                     .HasValue<NaturalUserEntity>(UserType.NaturalPerson)
-                    .HasValue<LegalUserEntity>(UserType.LegalEntity);
+                    .HasValue<LegalUserEntity>(UserType.LegalEntity)
+                    .HasValue<MerchantUserEntity>(UserType.MerchantPerson);
 
                 b.Property<UserType>("user_type")
                     .HasColumnType("auth.user_type")
@@ -96,6 +97,15 @@ namespace Persistence.Context
                     .WithMany(x => x.LegalUsers)
                     .HasForeignKey(x => x.OrganizationId)
                     .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<MerchantUserEntity>(b =>
+            {
+                b.Property(x => x.StationId).HasColumnName("station_id");
+                b.HasOne(x => x.Station)
+                    .WithMany()
+                    .HasForeignKey(x => x.StationId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
         }
 
@@ -232,10 +242,17 @@ namespace Persistence.Context
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
 
+                b.Property(x => x.MerchantId).HasColumnName("merchant_id");
+
                 b.HasOne(x => x.Organization)
                     .WithMany(x => x.Stations)
                     .HasForeignKey(x => x.OrganizationId)
                     .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasOne(x => x.Merchant)
+                    .WithMany(x => x.Stations)
+                    .HasForeignKey(x => x.MerchantId)
+                    .OnDelete(DeleteBehavior.SetNull);
 
                 b.HasIndex(x => new { x.OrganizationId, x.Name });
             });
@@ -253,7 +270,6 @@ namespace Persistence.Context
                 b.Property(x => x.SerialNumber).HasColumnName("serial_number").IsRequired().HasMaxLength(100);
                 b.Property(x => x.SecretKey).HasColumnName("secret_key").IsRequired().HasMaxLength(64);
                 b.Property(x => x.DeviceType).HasColumnName("device_type").HasConversion<int>();
-                b.Property(x => x.FunctionCount).HasColumnName("function_count").HasDefaultValue(1);
                 b.Property(x => x.Model).HasColumnName("model").HasMaxLength(100);
                 b.Property(x => x.FirmwareVersion).HasColumnName("firmware_version").HasMaxLength(50);
                 b.Property(x => x.StationId).HasColumnName("station_id").IsRequired();
@@ -386,7 +402,6 @@ namespace Persistence.Context
                 b.Property(x => x.CompanyName).HasColumnName("company_name").IsRequired().HasMaxLength(256);
 
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
-                b.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
 

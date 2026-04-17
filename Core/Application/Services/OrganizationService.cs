@@ -21,7 +21,8 @@ namespace Application.Services
                 Inn = dto.Inn,
                 Address = dto.Address,
                 PhoneNumber = dto.PhoneNumber,
-                IsActive = true
+                Balance = dto.Balance,
+                IsActive = dto.IsActive
             };
 
             var created = await _repo.CreateAsync(org);
@@ -54,10 +55,9 @@ namespace Application.Services
             if (org is null)
                 return GenericDto<OrganizationResultDto>.Error(404, "Tashkilot topilmadi.");
 
-            if (!string.IsNullOrWhiteSpace(dto.Name)) org.Name = dto.Name;
-            if (!string.IsNullOrWhiteSpace(dto.Inn)) org.Inn = dto.Inn;
             if (!string.IsNullOrWhiteSpace(dto.Address)) org.Address = dto.Address;
             if (!string.IsNullOrWhiteSpace(dto.PhoneNumber)) org.PhoneNumber = dto.PhoneNumber;
+            if (dto.IsActive.HasValue) org.IsActive = dto.IsActive.Value;
 
             await _repo.UpdateAsync(org);
 

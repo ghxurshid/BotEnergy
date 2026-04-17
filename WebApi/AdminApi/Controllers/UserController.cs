@@ -1,4 +1,7 @@
+using AdminApi.Extensions;
 using Permissions = Domain.Constants.Permissions;
+using AdminApi.Filters.ValidationFilters;
+using AdminApi.Models.Requests;
 using CommonConfiguration.Attributes;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -8,33 +11,37 @@ namespace AdminApi.Controllers
 {
     /// <summary>
     /// Foydalanuvchilarni admin tomonidan boshqarish.
-    /// Barcha turdagi foydalanuvchilar (NaturalUser va LegalUser) ustida CRUD operatsiyalari.
+    /// Barcha turdagi foydalanuvchilar (NaturalUser, LegalUser, MerchantUser) ustida CRUD operatsiyalari.
     ///
-    /// **Imkoniyatlar:**
-    /// - Barcha foydalanuvchilarni ko'rish
-    /// - ID bo'yicha foydalanuvchi ma'lumotlarini olish
-    /// - Foydalanuvchini bloklash / blokdan chiqarish
-    /// - Foydalanuvchini o'chirish (soft delete)
-    ///
-    /// **Cheklovlar:**
-    /// - JWT token talab qilinadi
-    /// - Bloklangan foydalanuvchi tizimga kira olmaydi
+    /// **Ierarxiya:** Organization → Station → MerchantUser
     /// </summary>
     [Route("api/[controller]/[action]")]
     [ApiController]
     [Authorize]
-    public class UserAdminController : ControllerBase
+    public class UserController : ControllerBase
     {
         private readonly IUserAdminService _service;
 
-        public UserAdminController(IUserAdminService service)
+        public UserController(IUserAdminService service)
             => _service = service;
 
         /// <summary>
-        /// Barcha foydalanuvchilar ro'yxati.
-        /// NaturalUser va LegalUser larni qaytaradi.
+        /// Yangi foydalanuvchi yaratish.
+        /// OrganizationId berilsa — LegalUser, StationId berilsa — MerchantUser yaratiladi.
         /// </summary>
-        /// <response code="200">Foydalanuvchilar ro'yxati</response>
+        [HttpPost]
+        [RequirePermission(Permissions.UserAdminCreate)]
+        [TypeFilter(typeof(CreateUserValidationFilter))]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
+        {
+            var result = await _service.CreateAsync(request.ToDto(), User.GetUserId(), User.GetPermissions());
+            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+        }
+
+        /// <summary>
+        /// Barcha foydalanuvchilar ro'yxati.
+        /// </summary>
         [HttpGet]
         [RequirePermission(Permissions.UserAdminGetAll)]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -47,9 +54,6 @@ namespace AdminApi.Controllers
         /// <summary>
         /// Foydalanuvchini ID bo'yicha olish.
         /// </summary>
-        /// <param name="id">Foydalanuvchi ID. Masalan: 1</param>
-        /// <response code="200">Foydalanuvchi ma'lumotlari</response>
-        /// <response code="404">Foydalanuvchi topilmadi</response>
         [HttpGet("{id}")]
         [RequirePermission(Permissions.UserAdminGetById)]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -61,13 +65,35 @@ namespace AdminApi.Controllers
         }
 
         /// <summary>
+        /// Foydalanuvchiga parol o'rnatish.
+        /// </summary>
+        [HttpPut("{id}")]
+        [RequirePermission(Permissions.UserAdminSetPassword)]
+        [TypeFilter(typeof(SetPasswordValidationFilter))]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> SetPassword(long id, [FromBody] SetPasswordRequest request)
+        {
+            var result = await _service.SetPasswordAsync(request.ToDto(id));
+            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+        }
+
+        /// <summary>
+        /// Foydalanuvchi parolini qayta o'rnatish.
+        /// </summary>
+        [HttpPut("{id}")]
+        [RequirePermission(Permissions.UserAdminResetPassword)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> ResetPassword(long id, [FromBody] ResetPasswordRequest request)
+        {
+            var result = await _service.ResetPasswordAsync(request.ToDto(id));
+            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+        }
+
+        /// <summary>
         /// Foydalanuvchini bloklash.
         /// Bloklangan foydalanuvchi tizimga kira olmaydi.
         /// </summary>
-        /// <param name="id">Bloklanadigan foydalanuvchi ID. Masalan: 5</param>
-        /// <response code="200">Foydalanuvchi bloklandi</response>
-        /// <response code="404">Foydalanuvchi topilmadi</response>
-        [HttpPut("{id}/block")]
+        [HttpPut("{id}")]
         [RequirePermission(Permissions.UserAdminBlock)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -80,10 +106,7 @@ namespace AdminApi.Controllers
         /// <summary>
         /// Foydalanuvchini blokdan chiqarish.
         /// </summary>
-        /// <param name="id">Blokdan chiqariladigan foydalanuvchi ID. Masalan: 5</param>
-        /// <response code="200">Foydalanuvchi blokdan chiqarildi</response>
-        /// <response code="404">Foydalanuvchi topilmadi</response>
-        [HttpPut("{id}/unblock")]
+        [HttpPut("{id}")]
         [RequirePermission(Permissions.UserAdminUnblock)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -96,9 +119,6 @@ namespace AdminApi.Controllers
         /// <summary>
         /// Foydalanuvchini o'chirish (soft delete).
         /// </summary>
-        /// <param name="id">O'chiriladigan foydalanuvchi ID. Masalan: 5</param>
-        /// <response code="200">Foydalanuvchi o'chirildi</response>
-        /// <response code="404">Foydalanuvchi topilmadi</response>
         [HttpDelete("{id}")]
         [RequirePermission(Permissions.UserAdminDelete)]
         [ProducesResponseType(StatusCodes.Status200OK)]

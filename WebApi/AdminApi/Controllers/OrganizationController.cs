@@ -12,40 +12,20 @@ namespace AdminApi.Controllers
     /// <summary>
     /// Tashkilotlar (Organization) boshqaruvi.
     /// Tashkilot — yuridik foydalanuvchilar va stansiyalarni guruhlash uchun ishlatiladi.
-    ///
-    /// **Imkoniyatlar:**
-    /// - Tashkilot yaratish, ko'rish, yangilash, o'chirish (CRUD)
-    ///
-    /// **Bog'liqliklar:**
-    /// - Tashkilotga stansiyalar biriktiriladi (StationAdmin)
-    /// - LegalUser tashkilotga tegishli — balans tashkilot darajasida saqlanadi
     /// </summary>
     [Route("api/[controller]/[action]")]
     [ApiController]
     [Authorize]
-    public class OrganizationAdminController : ControllerBase
+    public class OrganizationController : ControllerBase
     {
         private readonly IOrganizationService _service;
 
-        public OrganizationAdminController(IOrganizationService service)
+        public OrganizationController(IOrganizationService service)
             => _service = service;
 
         /// <summary>
         /// Yangi tashkilot yaratish.
         /// </summary>
-        /// <remarks>
-        /// Namuna so'rov:
-        ///
-        ///     POST /api/OrganizationAdmin/Create
-        ///     {
-        ///         "name": "BotEnergy LLC",
-        ///         "inn": "123456789",
-        ///         "address": "Tashkent, Amir Temur 1",
-        ///         "phoneNumber": "998712345678"
-        ///     }
-        /// </remarks>
-        /// <param name="request">Tashkilot ma'lumotlari</param>
-        /// <response code="200">Tashkilot yaratildi</response>
         [HttpPost]
         [RequirePermission(Permissions.OrganizationAdminCreate)]
         [TypeFilter(typeof(CreateOrganizationValidationFilter))]
@@ -59,7 +39,6 @@ namespace AdminApi.Controllers
         /// <summary>
         /// Barcha tashkilotlar ro'yxati.
         /// </summary>
-        /// <response code="200">Tashkilotlar ro'yxati</response>
         [HttpGet]
         [RequirePermission(Permissions.OrganizationAdminGetAll)]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -72,9 +51,6 @@ namespace AdminApi.Controllers
         /// <summary>
         /// Tashkilotni ID bo'yicha olish.
         /// </summary>
-        /// <param name="id">Tashkilot ID. Masalan: 1</param>
-        /// <response code="200">Tashkilot ma'lumotlari</response>
-        /// <response code="404">Tashkilot topilmadi</response>
         [HttpGet("{id}")]
         [RequirePermission(Permissions.OrganizationAdminGetById)]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -86,22 +62,8 @@ namespace AdminApi.Controllers
         }
 
         /// <summary>
-        /// Tashkilot ma'lumotlarini yangilash.
+        /// Tashkilot ma'lumotlarini yangilash (faqat Address, PhoneNumber, IsActive).
         /// </summary>
-        /// <remarks>
-        /// Namuna so'rov:
-        ///
-        ///     PUT /api/OrganizationAdmin/Update/1
-        ///     {
-        ///         "name": "BotEnergy Group",
-        ///         "address": "Tashkent, Navoi 15"
-        ///     }
-        ///
-        /// Faqat yuborilgan maydonlar yangilanadi.
-        /// </remarks>
-        /// <param name="id">Yangilanadigan tashkilot ID</param>
-        /// <param name="request">Yangilanadigan maydonlar</param>
-        /// <response code="200">Tashkilot yangilandi</response>
         [HttpPut("{id}")]
         [RequirePermission(Permissions.OrganizationAdminUpdate)]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -114,8 +76,6 @@ namespace AdminApi.Controllers
         /// <summary>
         /// Tashkilotni o'chirish (soft delete).
         /// </summary>
-        /// <param name="id">O'chiriladigan tashkilot ID. Masalan: 1</param>
-        /// <response code="200">Tashkilot o'chirildi</response>
         [HttpDelete("{id}")]
         [RequirePermission(Permissions.OrganizationAdminDelete)]
         [ProducesResponseType(StatusCodes.Status200OK)]

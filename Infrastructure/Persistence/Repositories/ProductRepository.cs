@@ -17,7 +17,7 @@ namespace Persistence.Repositories
         {
             return await _context.Products
                 .Include(p => p.Device)
-                .FirstOrDefaultAsync(p => p.Id == id && p.IsActive && !p.IsDeleted);
+                .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
         }
 
         public async Task<ProductEntity?> GetByTypeAsync(ProductType type)
@@ -27,9 +27,40 @@ namespace Persistence.Repositories
                 .FirstOrDefaultAsync(p => p.Type == type && p.IsActive && !p.IsDeleted);
         }
 
-        public async Task CreateAsync(ProductEntity product)
+        public async Task<List<ProductEntity>> GetAllAsync()
+            => await _context.Products
+                .Include(p => p.Device)
+                .Where(p => !p.IsDeleted)
+                .OrderBy(p => p.Name)
+                .ToListAsync();
+
+        public async Task<List<ProductEntity>> GetByDeviceIdAsync(long deviceId)
+            => await _context.Products
+                .Include(p => p.Device)
+                .Where(p => p.DeviceId == deviceId && !p.IsDeleted)
+                .OrderBy(p => p.Name)
+                .ToListAsync();
+
+        public async Task<ProductEntity> CreateAsync(ProductEntity product)
         {
             await _context.Products.AddAsync(product);
+            await _context.SaveChangesAsync();
+            return product;
+        }
+
+        public async Task<ProductEntity> UpdateAsync(ProductEntity product)
+        {
+            _context.Products.Update(product);
+            await _context.SaveChangesAsync();
+            return product;
+        }
+
+        public async Task DeleteAsync(long id)
+        {
+            var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id);
+            if (product is null) return;
+            product.IsDeleted = true;
+            product.IsActive = false;
             await _context.SaveChangesAsync();
         }
     }
