@@ -17,27 +17,26 @@ namespace Persistence.Repositories
         {
             return await _context.Products
                 .Include(p => p.Device)
-                .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
+                .FirstOrDefaultAsync(p => p.Id == id);
         }
 
         public async Task<ProductEntity?> GetByTypeAsync(ProductType type)
         {
             return await _context.Products
                 .Include(p => p.Device)
-                .FirstOrDefaultAsync(p => p.Type == type && p.IsActive && !p.IsDeleted);
+                .FirstOrDefaultAsync(p => p.Type == type && p.IsActive);
         }
 
         public async Task<List<ProductEntity>> GetAllAsync()
             => await _context.Products
                 .Include(p => p.Device)
-                .Where(p => !p.IsDeleted)
                 .OrderBy(p => p.Name)
                 .ToListAsync();
 
         public async Task<List<ProductEntity>> GetByDeviceIdAsync(long deviceId)
             => await _context.Products
                 .Include(p => p.Device)
-                .Where(p => p.DeviceId == deviceId && !p.IsDeleted)
+                .Where(p => p.DeviceId == deviceId)
                 .OrderBy(p => p.Name)
                 .ToListAsync();
 

@@ -13,13 +13,13 @@ namespace Persistence.Repositories
             => _context = context;
 
         public async Task<MerchantEntity?> GetByIdAsync(long id)
-            => await _context.Merchants.FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
+            => await _context.Merchants.FirstOrDefaultAsync(c => c.Id == id);
 
         public async Task<List<MerchantEntity>> GetAllAsync()
-            => await _context.Merchants.Where(c => !c.IsDeleted).OrderBy(c => c.CompanyName).ToListAsync();
+            => await _context.Merchants.OrderBy(c => c.CompanyName).ToListAsync();
 
         public async Task<MerchantEntity?> GetByPhoneNumberAsync(string phoneNumber)
-            => await _context.Merchants.FirstOrDefaultAsync(c => c.PhoneNumber == phoneNumber && !c.IsDeleted);
+            => await _context.Merchants.FirstOrDefaultAsync(c => c.PhoneNumber == phoneNumber);
 
         public async Task<MerchantEntity> CreateAsync(MerchantEntity merchant)
         {

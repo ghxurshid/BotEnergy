@@ -15,19 +15,18 @@ namespace Persistence.Repositories
         public async Task<StationEntity?> GetByIdAsync(long id)
             => await _context.Stations
                 .Include(s => s.Organization)
-                .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
+                .FirstOrDefaultAsync(s => s.Id == id);
 
         public async Task<List<StationEntity>> GetAllAsync()
             => await _context.Stations
                 .Include(s => s.Organization)
-                .Where(s => !s.IsDeleted)
                 .OrderBy(s => s.Name)
                 .ToListAsync();
 
         public async Task<List<StationEntity>> GetByOrganizationIdAsync(long organizationId)
             => await _context.Stations
                 .Include(s => s.Organization)
-                .Where(s => s.OrganizationId == organizationId && !s.IsDeleted)
+                .Where(s => s.OrganizationId == organizationId)
                 .OrderBy(s => s.Name)
                 .ToListAsync();
 

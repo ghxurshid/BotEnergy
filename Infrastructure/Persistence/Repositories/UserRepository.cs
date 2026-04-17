@@ -15,7 +15,7 @@ namespace Persistence.Repositories
         public async Task<UserEntity?> GetByIdAsync(long userId)
         {
             var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted);
+                .FirstOrDefaultAsync(u => u.Id == userId);
 
             if (user is LegalUserEntity legalUser)
                 await _context.Entry(legalUser).Reference(l => l.Organization).LoadAsync();
@@ -32,7 +32,6 @@ namespace Persistence.Repositories
         public async Task<List<UserEntity>> GetAllAsync()
             => await _context.Users
                 .Include(u => u.Role)
-                .Where(u => !u.IsDeleted)
                 .OrderBy(u => u.PhoneNumber)
                 .ToListAsync();
 

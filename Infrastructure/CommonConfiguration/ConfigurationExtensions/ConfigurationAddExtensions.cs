@@ -163,6 +163,7 @@ namespace CommonConfiguration.ConfigurationExtensions
             redisOptions.AbortOnConnectFail = false; // Redis yo'q bo'lsa ham app crash qilmaydi
             services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisOptions));
             services.AddSingleton<IDeviceLockService, RedisDeviceLockService>();
+            services.AddSingleton<IRefreshTokenStore, RedisRefreshTokenStore>();
 
             return services;
         }

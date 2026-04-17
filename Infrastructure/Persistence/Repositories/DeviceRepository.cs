@@ -15,15 +15,15 @@ namespace Persistence.Repositories
         public async Task<DeviceEntity?> GetByIdAsync(long id)
         {
             return await _context.Devices
-                .FirstOrDefaultAsync(d => d.Id == id && d.IsActive && !d.IsDeleted);
+                .FirstOrDefaultAsync(d => d.Id == id && d.IsActive);
         }
 
         public async Task<DeviceEntity?> GetBySerialNumberAsync(string serialNumber)
         {
             return await _context.Devices
                 .Include(d => d.Station)
-                .Include(d => d.Products!.Where(p => p.IsActive && !p.IsDeleted))
-                .FirstOrDefaultAsync(d => d.SerialNumber == serialNumber && d.IsActive && !d.IsDeleted);
+                .Include(d => d.Products!.Where(p => p.IsActive))
+                .FirstOrDefaultAsync(d => d.SerialNumber == serialNumber && d.IsActive);
         }
 
         public async Task<bool> ValidateDeviceAsync(string serialNumber, string secretKey)
@@ -31,21 +31,19 @@ namespace Persistence.Repositories
             return await _context.Devices
                 .AnyAsync(d => d.SerialNumber == serialNumber
                             && d.SecretKey == secretKey
-                            && d.IsActive
-                            && !d.IsDeleted);
+                            && d.IsActive);
         }
 
         public async Task<List<DeviceEntity>> GetAllAsync()
             => await _context.Devices
                 .Include(d => d.Station)
-                .Where(d => !d.IsDeleted)
                 .OrderBy(d => d.SerialNumber)
                 .ToListAsync();
 
         public async Task<List<DeviceEntity>> GetByStationIdAsync(long stationId)
             => await _context.Devices
                 .Include(d => d.Station)
-                .Where(d => d.StationId == stationId && !d.IsDeleted)
+                .Where(d => d.StationId == stationId)
                 .OrderBy(d => d.SerialNumber)
                 .ToListAsync();
 

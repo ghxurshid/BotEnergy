@@ -48,6 +48,9 @@ namespace Application.Services
                 if (org is null)
                     return GenericDto<UserAdminResultDto>.Error(404, "Tashkilot topilmadi.");
 
+                if (!org.IsActive)
+                    return GenericDto<UserAdminResultDto>.Error(400, "Tashkilot faol emas.");
+
                 if (!callerPermissions.Contains(Permissions.OrganizationAdminCreate))
                 {
                     var caller = await _userRepo.GetByIdAsync(callerId);
@@ -71,6 +74,9 @@ namespace Application.Services
                 var station = await _stationRepo.GetByIdAsync(dto.StationId.Value);
                 if (station is null)
                     return GenericDto<UserAdminResultDto>.Error(404, "Stansiya topilmadi.");
+
+                if (!station.IsActive)
+                    return GenericDto<UserAdminResultDto>.Error(400, "Stansiya faol emas.");
 
                 if (station.MerchantId is null)
                     return GenericDto<UserAdminResultDto>.Error(400, "Bu stansiya merchantga tegishli emas.");

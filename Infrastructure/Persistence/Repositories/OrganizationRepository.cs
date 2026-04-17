@@ -13,10 +13,10 @@ namespace Persistence.Repositories
             => _context = context;
 
         public async Task<OrganizationEntity?> GetByIdAsync(long id)
-            => await _context.Organizations.FirstOrDefaultAsync(o => o.Id == id && !o.IsDeleted);
+            => await _context.Organizations.FirstOrDefaultAsync(o => o.Id == id);
 
         public async Task<List<OrganizationEntity>> GetAllAsync()
-            => await _context.Organizations.Where(o => !o.IsDeleted).OrderBy(o => o.Name).ToListAsync();
+            => await _context.Organizations.OrderBy(o => o.Name).ToListAsync();
 
         public async Task<OrganizationEntity> CreateAsync(OrganizationEntity organization)
         {

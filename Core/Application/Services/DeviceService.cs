@@ -26,6 +26,9 @@ namespace Application.Services
             if (station is null)
                 return GenericDto<DeviceResultDto>.Error(404, "Stansiya topilmadi.");
 
+            if (!station.IsActive)
+                return GenericDto<DeviceResultDto>.Error(400, "Stansiya faol emas.");
+
             var accessCheck = await CheckStationAccessAsync(callerId, callerPermissions, station);
             if (accessCheck is not null)
                 return accessCheck;

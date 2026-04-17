@@ -26,6 +26,9 @@ namespace Application.Services
             if (org is null)
                 return GenericDto<StationResultDto>.Error(404, "Tashkilot topilmadi.");
 
+            if (!org.IsActive)
+                return GenericDto<StationResultDto>.Error(400, "Tashkilot faol emas.");
+
             if (!callerPermissions.Contains(Permissions.OrganizationAdminCreate))
             {
                 var caller = await _userRepo.GetByIdAsync(callerId);

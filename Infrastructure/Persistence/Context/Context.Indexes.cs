@@ -1,4 +1,5 @@
 using Domain.Entities;
+using Domain.Entities.BaseEntity;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,7 +34,30 @@ namespace Persistence.Context
             ConfigureUsageSession(modelBuilder);
             ConfigureMerchant(modelBuilder);
 
+            ApplyGlobalSoftDeleteFilter(modelBuilder);
+
             OnModelCreatingPartial(modelBuilder);
+        }
+
+        private static void ApplyGlobalSoftDeleteFilter(ModelBuilder modelBuilder)
+        {
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                if (!typeof(Entity).IsAssignableFrom(entityType.ClrType))
+                    continue;
+
+                var method = typeof(AppDbContext)
+                    .GetMethod(nameof(SetSoftDeleteFilter),
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+                    .MakeGenericMethod(entityType.ClrType);
+
+                method.Invoke(null, new object[] { modelBuilder });
+            }
+        }
+
+        private static void SetSoftDeleteFilter<T>(ModelBuilder modelBuilder) where T : Entity
+        {
+            modelBuilder.Entity<T>().HasQueryFilter(e => !e.IsDeleted);
         }
 
         private static void ConfigureUser(ModelBuilder modelBuilder)

@@ -24,7 +24,7 @@ namespace Persistence.Repositories
             return await _context.UsageSessions
                 .Include(s => s.User)
                 .Include(s => s.Device)
-                .FirstOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted);
+                .FirstOrDefaultAsync(s => s.Id == sessionId);
         }
 
         public async Task<UsageSessionEntity?> GetByTokenAsync(string sessionToken)
@@ -32,7 +32,7 @@ namespace Persistence.Repositories
             return await _context.UsageSessions
                 .Include(s => s.User)
                 .Include(s => s.Device)
-                .FirstOrDefaultAsync(s => s.SessionToken == sessionToken && !s.IsDeleted);
+                .FirstOrDefaultAsync(s => s.SessionToken == sessionToken);
         }
 
         public async Task<UsageSessionEntity> UpdateAsync(UsageSessionEntity session)
@@ -46,7 +46,6 @@ namespace Persistence.Repositories
         {
             return await _context.UsageSessions
                 .Where(s =>
-                    !s.IsDeleted &&
                     (s.Status == SessionStatus.Pending ||
                      s.Status == SessionStatus.DeviceConnected ||
                      s.Status == SessionStatus.InProgress) &&

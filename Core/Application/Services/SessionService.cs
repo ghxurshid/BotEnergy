@@ -41,6 +41,9 @@ namespace Application.Services
             if (user is null)
                 return GenericDto<CreateSessionResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
+            if (user.IsBlocked)
+                return GenericDto<CreateSessionResultDto>.Error(403, "Foydalanuvchi bloklangan.");
+
             var session = new UsageSessionEntity
             {
                 UserId = dto.UserId,

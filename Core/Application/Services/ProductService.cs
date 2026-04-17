@@ -57,6 +57,9 @@ namespace Application.Services
                 if (station is null)
                     return GenericDto<ProductResultDto>.Error(404, "Qurilma stansiyasi topilmadi.");
 
+                if (!station.IsActive)
+                    return GenericDto<ProductResultDto>.Error(400, "Qurilma stansiyasi faol emas.");
+
                 var caller = await _userRepo.GetByIdAsync(callerId);
                 if (caller is null)
                     return GenericDto<ProductResultDto>.Error(403, "Foydalanuvchi topilmadi.");

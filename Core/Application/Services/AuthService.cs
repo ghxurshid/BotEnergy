@@ -14,17 +14,22 @@ namespace Application.Services
         private readonly IOtpService _otpService;
         private readonly ITokenService _tokenService;
         private readonly IRoleRepository _roleRepository;
+        private readonly IRefreshTokenStore _refreshTokenStore;
+
+        private static readonly TimeSpan RefreshTokenExpiry = TimeSpan.FromDays(7);
 
         public AuthService(
             IUserRepository userRepository,
             IOtpService otpService,
             ITokenService tokenService,
-            IRoleRepository roleRepository)
+            IRoleRepository roleRepository,
+            IRefreshTokenStore refreshTokenStore)
         {
             _userRepository = userRepository;
             _otpService = otpService;
             _tokenService = tokenService;
             _roleRepository = roleRepository;
+            _refreshTokenStore = refreshTokenStore;
         }
 
         public async Task<GenericDto<RegisterResultDto>> RegisterAsync(RegisterDto request)
@@ -106,15 +111,13 @@ namespace Application.Services
             user.LastLoginDate = DateTime.Now;
             await _userRepository.UpdateUserAsync(user);
 
-            var permissions = await _roleRepository.GetUserPermissionsAsync(user.RoleId);
-            var accessToken = _tokenService.GenerateAccessToken(user, permissions);
-            var refreshToken = _tokenService.GenerateRefreshToken();
+            var tokens = await GenerateAndPersistTokensAsync(user);
 
             return GenericDto<SetPasswordResultDto>.Success(new SetPasswordResultDto
             {
-                AccessToken = accessToken,
-                RefreshToken = refreshToken,
-                AccessTokenExpiration = DateTime.Now.AddMinutes(15)
+                AccessToken = tokens.AccessToken,
+                RefreshToken = tokens.RefreshToken,
+                AccessTokenExpiration = tokens.AccessTokenExpiration
             });
         }
 
@@ -145,21 +148,44 @@ namespace Application.Services
             user.LastActiveDate = DateTime.Now;
             await _userRepository.UpdateUserAsync(user);
 
-            var permissions = await _roleRepository.GetUserPermissionsAsync(user.RoleId);
-            var accessToken = _tokenService.GenerateAccessToken(user, permissions);
-            var refreshToken = _tokenService.GenerateRefreshToken();
+            var tokens = await GenerateAndPersistTokensAsync(user);
 
             return GenericDto<LoginResultDto>.Success(new LoginResultDto
             {
-                AccessToken = accessToken,
-                RefreshToken = refreshToken,
-                AccessTokenExpiration = DateTime.Now.AddMinutes(15)
+                AccessToken = tokens.AccessToken,
+                RefreshToken = tokens.RefreshToken,
+                AccessTokenExpiration = tokens.AccessTokenExpiration
             });
         }
 
         public async Task<GenericDto<RefreshTokenResultDto>> RefreshTokenAsync(RefreshTokenDto request)
         {
-            return GenericDto<RefreshTokenResultDto>.Error(501, "Refresh token hali implement qilinmagan.");
+            var userId = await _refreshTokenStore.GetUserIdAsync(request.RefreshToken);
+            if (userId is null)
+                return GenericDto<RefreshTokenResultDto>.Error(401, "Refresh token noto'g'ri yoki muddati o'tgan.");
+
+            var user = await _userRepository.GetByIdAsync(userId.Value);
+            if (user is null)
+                return GenericDto<RefreshTokenResultDto>.Error(401, "Foydalanuvchi topilmadi.");
+
+            if (user.IsBlocked)
+                return GenericDto<RefreshTokenResultDto>.Error(403, "Akkaunt bloklangan.");
+
+            if (user.IsDeleted)
+                return GenericDto<RefreshTokenResultDto>.Error(403, "Akkaunt o'chirilgan.");
+
+            // Rotation: eski tokenni bekor qilib, yangi juftlik yaratish
+            await _refreshTokenStore.RevokeAsync(request.RefreshToken);
+
+            var tokens = await GenerateAndPersistTokensAsync(user);
+
+            return GenericDto<RefreshTokenResultDto>.Success(new RefreshTokenResultDto
+            {
+                ResultMessage = "Token muvaffaqiyatli yangilandi.",
+                AccessToken = tokens.AccessToken,
+                RefreshToken = tokens.RefreshToken,
+                AccessTokenExpiration = tokens.AccessTokenExpiration
+            });
         }
 
         public async Task<GenericDto<ResetPasswordRequestResultDto>> ResetPasswordRequestAsync(ResetPasswordRequestDto request)
@@ -216,6 +242,17 @@ namespace Application.Services
 
             return GenericDto<ResetPasswordSetResultDto>.Success(
                 new ResetPasswordSetResultDto { ResultMessage = "Parol muvaffaqiyatli o'zgartirildi." });
+        }
+
+        private async Task<(string AccessToken, string RefreshToken, DateTime AccessTokenExpiration)> GenerateAndPersistTokensAsync(UserEntity user)
+        {
+            var permissions = await _roleRepository.GetUserPermissionsAsync(user.RoleId);
+            var accessToken = _tokenService.GenerateAccessToken(user, permissions);
+            var refreshToken = _tokenService.GenerateRefreshToken();
+
+            await _refreshTokenStore.SaveAsync(refreshToken, user.Id, RefreshTokenExpiry);
+
+            return (accessToken, refreshToken, DateTime.Now.AddMinutes(15));
         }
     }
 }
