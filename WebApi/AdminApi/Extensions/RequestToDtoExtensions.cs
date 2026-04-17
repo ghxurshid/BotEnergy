@@ -19,7 +19,8 @@ namespace AdminApi.Extensions
             {
                 Name = request.Name,
                 Description = request.Description,
-                IsActive = request.IsActive
+                IsActive = request.IsActive,
+                PermissionIds = request.PermissionIds
             };
 
         public static AddPermissionDto ToDto(this AddPermissionRequest request)

@@ -3,6 +3,7 @@ using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Application.Services
 {
