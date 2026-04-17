@@ -4,6 +4,6 @@ namespace AdminApi.Models.Requests
     {
         public string Name { get; set; } = string.Empty;
         public string? Location { get; set; }
-        public long OrganizationId { get; set; }
+        public long MerchantId { get; set; }
     }
 }

@@ -264,24 +264,17 @@ namespace Persistence.Context
 
                 b.Property(x => x.Name).HasColumnName("name").IsRequired().HasMaxLength(150);
                 b.Property(x => x.Location).HasColumnName("location").HasMaxLength(300);
-                b.Property(x => x.OrganizationId).HasColumnName("organization_id").IsRequired();
+                b.Property(x => x.MerchantId).HasColumnName("merchant_id").IsRequired();
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
 
-                b.Property(x => x.MerchantId).HasColumnName("merchant_id");
-
-                b.HasOne(x => x.Organization)
-                    .WithMany(x => x.Stations)
-                    .HasForeignKey(x => x.OrganizationId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
                 b.HasOne(x => x.Merchant)
                     .WithMany(x => x.Stations)
                     .HasForeignKey(x => x.MerchantId)
-                    .OnDelete(DeleteBehavior.SetNull);
+                    .OnDelete(DeleteBehavior.Restrict);
 
-                b.HasIndex(x => new { x.OrganizationId, x.Name });
+                b.HasIndex(x => new { x.MerchantId, x.Name });
             });
         }
 

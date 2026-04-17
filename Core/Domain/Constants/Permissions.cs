@@ -28,7 +28,7 @@ namespace Domain.Constants
         public const string StationAdminCreate = "StationAdmin.Create";
         public const string StationAdminGetAll = "StationAdmin.GetAll";
         public const string StationAdminGetById = "StationAdmin.GetById";
-        public const string StationAdminGetByOrganization = "StationAdmin.GetByOrganization";
+        public const string StationAdminGetByMerchant = "StationAdmin.GetByMerchant";
         public const string StationAdminUpdate = "StationAdmin.Update";
         public const string StationAdminDelete = "StationAdmin.Delete";
 
@@ -98,7 +98,7 @@ namespace Domain.Constants
 
             // Station
             StationAdminCreate, StationAdminGetAll, StationAdminGetById,
-            StationAdminGetByOrganization, StationAdminUpdate, StationAdminDelete,
+            StationAdminGetByMerchant, StationAdminUpdate, StationAdminDelete,
 
             // Device
             DeviceAdminRegister, DeviceAdminGetAll, DeviceAdminGetById,

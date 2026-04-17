@@ -4,7 +4,7 @@ namespace Domain.Dtos
     {
         public required string Name { get; set; }
         public string? Location { get; set; }
-        public long OrganizationId { get; set; }
+        public long MerchantId { get; set; }
     }
 
     public class UpdateStationDto
@@ -19,8 +19,8 @@ namespace Domain.Dtos
         public long Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? Location { get; set; }
-        public long OrganizationId { get; set; }
-        public string OrganizationName { get; set; } = string.Empty;
+        public long MerchantId { get; set; }
+        public string MerchantName { get; set; } = string.Empty;
         public bool IsActive { get; set; }
         public DateTime CreatedDate { get; set; }
     }

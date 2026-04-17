@@ -39,30 +39,30 @@ namespace AdminApi.Controllers
         /// Yangi stansiya yaratish.
         /// </summary>
         /// <remarks>
-        /// Yangi stansiyani tizimga qo'shadi va ko'rsatilgan tashkilotga biriktiradi.
+        /// Yangi stansiyani tizimga qo'shadi va ko'rsatilgan merchantga biriktiradi.
         ///
         /// **Permission:** `station.admin.create`
         ///
-        /// **Permission level:** Faqat `organization.*` permissioniga ega userlar boshqa tashkilotlarga stansiya qo'sha oladi.
-        /// Oddiy user faqat o'zining tashkiloti uchun stansiya yaratishi mumkin.
+        /// **Permission level:** Faqat `merchant.*` permissioniga ega userlar boshqa merchantlarga stansiya qo'sha oladi.
+        /// Oddiy merchant xodimi faqat o'zining merchanti uchun stansiya yaratishi mumkin.
         ///
         /// **Request body maydonlari:**
         ///
-        /// | Maydon          | Turi   | Majburiy | ReadOnly | Tavsif                                                                        |
-        /// |-----------------|--------|----------|----------|-------------------------------------------------------------------------------|
-        /// | Name            | string | **Ha**   | Yo'q     | Stansiya nomi. Keyinchalik o'zgartirish mumkin.                               |
-        /// | Location        | string | Yo'q     | Yo'q     | Stansiya joylashuvi (ixtiyoriy).                                              |
-        /// | OrganizationId  | long   | **Ha**   | Ha       | Stansiya biriktirilgan tashkilot ID si. Yaratilgandan keyin o'zgartirilmaydi. |
+        /// | Maydon       | Turi   | Majburiy | ReadOnly | Tavsif                                                                      |
+        /// |--------------|--------|----------|----------|-----------------------------------------------------------------------------|
+        /// | Name         | string | **Ha**   | Yo'q     | Stansiya nomi. Keyinchalik o'zgartirish mumkin.                             |
+        /// | Location     | string | Yo'q     | Yo'q     | Stansiya joylashuvi (ixtiyoriy).                                            |
+        /// | MerchantId   | long   | **Ha**   | Ha       | Stansiya biriktirilgan merchant ID si. Yaratilgandan keyin o'zgartirilmaydi.|
         ///
         /// **Xatolik holatlari:**
-        /// - Ko'rsatilgan `OrganizationId` bo'yicha tashkilot topilmasa — xatolik qaytadi.
-        /// - User boshqa tashkilotga stansiya qo'shmoqchi bo'lsa va `organization.*` permissioni bo'lmasa — xatolik qaytadi.
+        /// - Ko'rsatilgan `MerchantId` bo'yicha merchant topilmasa — xatolik qaytadi.
+        /// - User boshqa merchantga stansiya qo'shmoqchi bo'lsa va `merchant.*` permissioni bo'lmasa — xatolik qaytadi.
         /// </remarks>
         /// <param name="request">Stansiya yaratish uchun ma'lumotlar.</param>
         /// <response code="200">Stansiya muvaffaqiyatli yaratildi.</response>
         /// <response code="400">Validatsiya xatosi (majburiy maydonlar to'ldirilmagan).</response>
-        /// <response code="403">Permission yetarli emas yoki boshqa tashkilotga ruxsat yo'q.</response>
-        /// <response code="404">Ko'rsatilgan OrganizationId bo'yicha tashkilot topilmadi.</response>
+        /// <response code="403">Permission yetarli emas yoki boshqa merchantga ruxsat yo'q.</response>
+        /// <response code="404">Ko'rsatilgan MerchantId bo'yicha merchant topilmadi.</response>
         [HttpPost]
         [RequirePermission(Permissions.StationAdminCreate)]
         [TypeFilter(typeof(CreateStationValidationFilter))]
@@ -120,23 +120,23 @@ namespace AdminApi.Controllers
         }
 
         /// <summary>
-        /// Tashkilotga tegishli stansiyalar ro'yxati.
+        /// Merchantga tegishli stansiyalar ro'yxati.
         /// </summary>
         /// <remarks>
-        /// Berilgan tashkilot ID si bo'yicha unga tegishli barcha stansiyalarni qaytaradi.
+        /// Berilgan merchant ID si bo'yicha unga tegishli barcha stansiyalarni qaytaradi.
         ///
-        /// **Permission:** `station.admin.getbyorganization`
+        /// **Permission:** `station.admin.getbymerchant`
         /// </remarks>
-        /// <param name="organizationId">Tashkilot ID si.</param>
-        /// <response code="200">Tashkilotga tegishli stansiyalar ro'yxati qaytarildi.</response>
+        /// <param name="merchantId">Merchant ID si.</param>
+        /// <response code="200">Merchantga tegishli stansiyalar ro'yxati qaytarildi.</response>
         /// <response code="403">Permission yetarli emas.</response>
-        [HttpGet("by-organization/{organizationId}")]
-        [RequirePermission(Permissions.StationAdminGetByOrganization)]
+        [HttpGet("by-merchant/{merchantId}")]
+        [RequirePermission(Permissions.StationAdminGetByMerchant)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        public async Task<IActionResult> GetByOrganization(long organizationId)
+        public async Task<IActionResult> GetByMerchant(long merchantId)
         {
-            var result = await _service.GetByOrganizationAsync(organizationId);
+            var result = await _service.GetByMerchantAsync(merchantId);
             return Ok(result.Result);
         }
 
@@ -144,7 +144,7 @@ namespace AdminApi.Controllers
         /// Stansiya ma'lumotlarini yangilash.
         /// </summary>
         /// <remarks>
-        /// Faqat readonly bo'lmagan maydonlarni yangilash mumkin. OrganizationId o'zgartirilmaydi.
+        /// Faqat readonly bo'lmagan maydonlarni yangilash mumkin. MerchantId o'zgartirilmaydi.
         ///
         /// **Permission:** `station.admin.update`
         ///

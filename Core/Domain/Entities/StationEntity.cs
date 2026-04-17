@@ -8,11 +8,7 @@ namespace Domain.Entities
 
         public string? Location { get; set; }
 
-        public long OrganizationId { get; set; }
-
-        public OrganizationEntity? Organization { get; set; }
-
-        public long? MerchantId { get; set; }
+        public long MerchantId { get; set; }
 
         public MerchantEntity? Merchant { get; set; }
 

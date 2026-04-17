@@ -68,19 +68,12 @@ namespace Application.Services
                 {
                     if (caller is MerchantUserEntity merchantUser && merchantUser.StationId != device.StationId)
                         return GenericDto<ProductResultDto>.Error(403, "Bu qurilma sizning stansiyangizga tegishli emas.");
-                    if (caller is LegalUserEntity legalUser && legalUser.OrganizationId != station.OrganizationId)
-                        return GenericDto<ProductResultDto>.Error(403, "Bu qurilma sizning tashkilotingizga tegishli emas.");
                 }
-                else
+                else if (caller is MerchantUserEntity merchantUser)
                 {
-                    if (caller is LegalUserEntity legalUser && legalUser.OrganizationId != station.OrganizationId)
-                        return GenericDto<ProductResultDto>.Error(403, "Bu stansiya sizning tashkilotingizga tegishli emas.");
-                    if (caller is MerchantUserEntity merchantUser)
-                    {
-                        var callerStation = await _stationRepo.GetByIdAsync(merchantUser.StationId);
-                        if (callerStation?.MerchantId != station.MerchantId)
-                            return GenericDto<ProductResultDto>.Error(403, "Bu stansiya sizning merchantingizga tegishli emas.");
-                    }
+                    var callerStation = await _stationRepo.GetByIdAsync(merchantUser.StationId);
+                    if (callerStation?.MerchantId != station.MerchantId)
+                        return GenericDto<ProductResultDto>.Error(403, "Bu stansiya sizning merchantingizga tegishli emas.");
                 }
             }
 

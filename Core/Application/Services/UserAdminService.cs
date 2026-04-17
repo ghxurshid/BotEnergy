@@ -78,9 +78,6 @@ namespace Application.Services
                 if (!station.IsActive)
                     return GenericDto<UserAdminResultDto>.Error(400, "Stansiya faol emas.");
 
-                if (station.MerchantId is null)
-                    return GenericDto<UserAdminResultDto>.Error(400, "Bu stansiya merchantga tegishli emas.");
-
                 if (!callerPermissions.Contains(Permissions.MerchantAdminRegister))
                 {
                     var caller = await _userRepo.GetByIdAsync(callerId);

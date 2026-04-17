@@ -11,7 +11,7 @@ namespace CommonConfiguration.Redis
 
         public Task SaveAsync(string token, long userId, TimeSpan expiry)
         {
-            _store[token] = new Entry(userId, DateTimeOffset.UtcNow.Add(expiry));
+            _store[token] = new Entry(userId, DateTimeOffset.Now.Add(expiry));
             return Task.CompletedTask;
         }
 
@@ -19,7 +19,7 @@ namespace CommonConfiguration.Redis
         {
             if (_store.TryGetValue(token, out var entry))
             {
-                if (entry.ExpiresAt > DateTimeOffset.UtcNow)
+                if (entry.ExpiresAt > DateTimeOffset.Now)
                     return Task.FromResult<long?>(entry.UserId);
 
                 _store.TryRemove(token, out _);

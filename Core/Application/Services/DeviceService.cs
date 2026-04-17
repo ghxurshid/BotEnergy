@@ -125,17 +125,13 @@ namespace Application.Services
 
             if (caller is MerchantUserEntity merchantUser)
             {
-                if (station.MerchantId is null)
-                    return GenericDto<DeviceResultDto>.Error(403, "Bu stansiya merchantga tegishli emas.");
-
                 var callerStation = await _stationRepo.GetByIdAsync(merchantUser.StationId);
                 if (callerStation?.MerchantId != station.MerchantId)
                     return GenericDto<DeviceResultDto>.Error(403, "Bu stansiya sizning merchantingizga tegishli emas.");
             }
-            else if (caller is LegalUserEntity legalUser)
+            else
             {
-                if (legalUser.OrganizationId != station.OrganizationId)
-                    return GenericDto<DeviceResultDto>.Error(403, "Bu stansiya sizning tashkilotingizga tegishli emas.");
+                return GenericDto<DeviceResultDto>.Error(403, "Bu operatsiya uchun merchant xodimi bo'lishingiz kerak.");
             }
 
             return null;

@@ -89,7 +89,7 @@ namespace AdminApi.Extensions
             {
                 Name = request.Name,
                 Location = request.Location,
-                OrganizationId = request.OrganizationId
+                MerchantId = request.MerchantId
             };
 
         public static UpdateStationDto ToDto(this UpdateStationRequest request)

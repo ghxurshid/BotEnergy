@@ -14,19 +14,19 @@ namespace Persistence.Repositories
 
         public async Task<StationEntity?> GetByIdAsync(long id)
             => await _context.Stations
-                .Include(s => s.Organization)
+                .Include(s => s.Merchant)
                 .FirstOrDefaultAsync(s => s.Id == id);
 
         public async Task<List<StationEntity>> GetAllAsync()
             => await _context.Stations
-                .Include(s => s.Organization)
+                .Include(s => s.Merchant)
                 .OrderBy(s => s.Name)
                 .ToListAsync();
 
-        public async Task<List<StationEntity>> GetByOrganizationIdAsync(long organizationId)
+        public async Task<List<StationEntity>> GetByMerchantIdAsync(long merchantId)
             => await _context.Stations
-                .Include(s => s.Organization)
-                .Where(s => s.OrganizationId == organizationId)
+                .Include(s => s.Merchant)
+                .Where(s => s.MerchantId == merchantId)
                 .OrderBy(s => s.Name)
                 .ToListAsync();
 

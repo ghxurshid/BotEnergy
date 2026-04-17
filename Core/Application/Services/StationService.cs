@@ -10,36 +10,37 @@ namespace Application.Services
     public class StationService : IStationService
     {
         private readonly IStationRepository _repo;
-        private readonly IOrganizationRepository _orgRepo;
+        private readonly IMerchantRepository _merchantRepo;
         private readonly IUserRepository _userRepo;
 
-        public StationService(IStationRepository repo, IOrganizationRepository orgRepo, IUserRepository userRepo)
+        public StationService(IStationRepository repo, IMerchantRepository merchantRepo, IUserRepository userRepo)
         {
             _repo = repo;
-            _orgRepo = orgRepo;
+            _merchantRepo = merchantRepo;
             _userRepo = userRepo;
         }
 
         public async Task<GenericDto<StationResultDto>> CreateAsync(CreateStationDto dto, long callerId, HashSet<string> callerPermissions)
         {
-            var org = await _orgRepo.GetByIdAsync(dto.OrganizationId);
-            if (org is null)
-                return GenericDto<StationResultDto>.Error(404, "Tashkilot topilmadi.");
+            var merchant = await _merchantRepo.GetByIdAsync(dto.MerchantId);
+            if (merchant is null)
+                return GenericDto<StationResultDto>.Error(404, "Merchant topilmadi.");
 
-            if (!org.IsActive)
-                return GenericDto<StationResultDto>.Error(400, "Tashkilot faol emas.");
+            if (!merchant.IsActive)
+                return GenericDto<StationResultDto>.Error(400, "Merchant faol emas.");
 
-            if (!callerPermissions.Contains(Permissions.OrganizationAdminCreate))
+            if (!callerPermissions.Contains(Permissions.MerchantAdminRegister))
             {
                 var caller = await _userRepo.GetByIdAsync(callerId);
-                if (caller is LegalUserEntity legalUser)
+                if (caller is MerchantUserEntity merchantUser)
                 {
-                    if (legalUser.OrganizationId != dto.OrganizationId)
-                        return GenericDto<StationResultDto>.Error(403, "Faqat o'z tashkilotingizga stansiya qo'sha olasiz.");
+                    var callerStation = await _repo.GetByIdAsync(merchantUser.StationId);
+                    if (callerStation?.MerchantId != dto.MerchantId)
+                        return GenericDto<StationResultDto>.Error(403, "Faqat o'z merchantingizga stansiya qo'sha olasiz.");
                 }
-                else if (caller is MerchantUserEntity)
+                else
                 {
-                    return GenericDto<StationResultDto>.Error(403, "Boshqa tashkilotlarga stansiya qo'shish uchun tegishli ruxsat kerak.");
+                    return GenericDto<StationResultDto>.Error(403, "Boshqa merchantlarga stansiya qo'shish uchun tegishli ruxsat kerak.");
                 }
             }
 
@@ -47,7 +48,7 @@ namespace Application.Services
             {
                 Name = dto.Name,
                 Location = dto.Location,
-                OrganizationId = dto.OrganizationId,
+                MerchantId = dto.MerchantId,
                 IsActive = true
             };
 
@@ -66,9 +67,9 @@ namespace Application.Services
             return GenericDto<List<StationItemDto>>.Success(list.Select(ToItem).ToList());
         }
 
-        public async Task<GenericDto<List<StationItemDto>>> GetByOrganizationAsync(long organizationId)
+        public async Task<GenericDto<List<StationItemDto>>> GetByMerchantAsync(long merchantId)
         {
-            var list = await _repo.GetByOrganizationIdAsync(organizationId);
+            var list = await _repo.GetByMerchantIdAsync(merchantId);
             return GenericDto<List<StationItemDto>>.Success(list.Select(ToItem).ToList());
         }
 
@@ -120,8 +121,8 @@ namespace Application.Services
             Id = s.Id,
             Name = s.Name,
             Location = s.Location,
-            OrganizationId = s.OrganizationId,
-            OrganizationName = s.Organization?.Name ?? string.Empty,
+            MerchantId = s.MerchantId,
+            MerchantName = s.Merchant?.CompanyName ?? string.Empty,
             IsActive = s.IsActive,
             CreatedDate = s.CreatedDate
         };

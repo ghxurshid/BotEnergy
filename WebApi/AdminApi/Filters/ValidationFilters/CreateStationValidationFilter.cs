@@ -14,8 +14,8 @@ namespace AdminApi.Filters.ValidationFilters
             if (string.IsNullOrWhiteSpace(request.Name))
             { context.Result = new BadRequestObjectResult(new { message = "Stansiya nomi kiritilishi shart." }); return; }
 
-            if (request.OrganizationId <= 0)
-            { context.Result = new BadRequestObjectResult(new { message = "Tashkilot ID kiritilishi shart." }); return; }
+            if (request.MerchantId <= 0)
+            { context.Result = new BadRequestObjectResult(new { message = "Merchant ID kiritilishi shart." }); return; }
         }
 
         public void OnActionExecuted(ActionExecutedContext context) { }
