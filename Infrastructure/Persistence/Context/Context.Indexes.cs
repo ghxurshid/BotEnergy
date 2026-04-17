@@ -46,6 +46,9 @@ namespace Persistence.Context
                 if (!typeof(Entity).IsAssignableFrom(entityType.ClrType))
                     continue;
 
+                if (entityType.BaseType is not null)
+                    continue;
+
                 var method = typeof(AppDbContext)
                     .GetMethod(nameof(SetSoftDeleteFilter),
                         System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
