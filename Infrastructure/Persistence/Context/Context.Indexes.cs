@@ -100,6 +100,7 @@ namespace Persistence.Context
 
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.Property(x => x.LastLoginDate).HasColumnName("last_login_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.LastActiveDate).HasColumnName("last_active_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
@@ -154,6 +155,7 @@ namespace Persistence.Context
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasIndex(x => x.Name);
                 b.HasIndex(x => x.Inn);
@@ -174,6 +176,7 @@ namespace Persistence.Context
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasIndex(x => x.Name);
             });
@@ -192,6 +195,7 @@ namespace Persistence.Context
                 b.Property(x => x.Description).HasColumnName("description").HasMaxLength(300);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasIndex(x => x.Name).IsUnique();
             });
@@ -210,6 +214,7 @@ namespace Persistence.Context
                 b.Property(x => x.PermissionId).HasColumnName("permission_id").IsRequired();
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasOne(x => x.Role)
                     .WithMany(x => x.RolePermissions)
@@ -238,6 +243,7 @@ namespace Persistence.Context
                 b.Property(x => x.RoleId).HasColumnName("role_id").IsRequired();
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasOne(x => x.User)
                     .WithMany(x => x.UserRoles)
@@ -268,6 +274,7 @@ namespace Persistence.Context
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasOne(x => x.Merchant)
                     .WithMany(x => x.Stations)
@@ -297,6 +304,7 @@ namespace Persistence.Context
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasOne(x => x.Station)
                     .WithMany(x => x.Devices)
@@ -336,6 +344,7 @@ namespace Persistence.Context
 
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasIndex(x => x.DeviceId);
             });
@@ -380,11 +389,11 @@ namespace Persistence.Context
                     .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.EndedAt).HasColumnName("ended_at")
                     .HasColumnType(TimestampWithoutTimeZone);
-                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date")
                     .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
                     .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasOne(x => x.User)
                     .WithMany(x => x.UsageSessions)
@@ -424,6 +433,7 @@ namespace Persistence.Context
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasIndex(x => x.PhoneNumber).IsUnique();
                 b.HasIndex(x => x.Inn).IsUnique();
