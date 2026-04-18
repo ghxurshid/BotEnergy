@@ -9,13 +9,11 @@ namespace Domain.Constants
         // ── AdminApi — Rol va permission boshqaruvi ───────────────────
         public const string RoleCreateRole = "Role.CreateRole";
         public const string RoleGetAll = "Role.GetAll";
-        public const string RoleAddPermission = "Role.AddPermission";
-        public const string RoleRemovePermission = "Role.RemovePermission";
-        public const string RoleAssignToUser = "Role.AssignToUser";
         public const string RoleGetById = "Role.GetById";
         public const string RoleUpdate = "Role.Update";
         public const string RoleDelete = "Role.Delete";
         public const string RoleGetPermissions = "Role.GetPermissions";
+        public const string RoleGetAllowedPermissions = "Role.GetAllowedPermissions";
 
         // ── AdminApi — Tashkilot boshqaruvi ──────────────────────────
         public const string OrganizationAdminCreate = "OrganizationAdmin.Create";
@@ -90,7 +88,7 @@ namespace Domain.Constants
         {
             // Role
             RoleCreateRole, RoleGetAll, RoleGetById, RoleUpdate, RoleDelete,
-            RoleAddPermission, RoleRemovePermission, RoleAssignToUser, RoleGetPermissions,
+            RoleGetPermissions, RoleGetAllowedPermissions,
 
             // Organization
             OrganizationAdminCreate, OrganizationAdminGetAll, OrganizationAdminGetById,

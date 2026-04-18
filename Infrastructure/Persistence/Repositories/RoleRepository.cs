@@ -65,6 +65,11 @@ namespace Persistence.Repositories
             => await _context.Permissions
                 .FirstOrDefaultAsync(p => p.Id == id);
 
+        public async Task<List<PermissionEntity>> GetAllPermissionsAsync()
+            => await _context.Permissions
+                .OrderBy(p => p.Name)
+                .ToListAsync();
+
         public async Task RemovePermissionAsync(long roleId, long permissionId)
         {
             var entity = await _context.RolePermissions

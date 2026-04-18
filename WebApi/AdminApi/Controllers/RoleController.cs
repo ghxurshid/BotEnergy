@@ -173,105 +173,6 @@ namespace AdminApi.Controllers
         }
 
         /// <summary>
-        /// Rolga ruxsat (permission) qo'shish.
-        /// </summary>
-        /// <remarks>
-        /// Mavjud rolga yangi permission qo'shadi. Agar permission allaqachon tayinlangan bo'lsa — xatolik qaytadi.
-        ///
-        /// **Permission:** `role.addpermission`
-        ///
-        /// **Request body maydonlari:**
-        ///
-        /// | Maydon     | Turi   | Majburiy | Tavsif                                                                    |
-        /// |------------|--------|----------|---------------------------------------------------------------------------|
-        /// | RoleId     | long   | **Ha**   | Rol ID si.                                                                |
-        /// | Permission | string | **Ha**   | Qo'shiladigan permission nomi (masalan: `device.admin.register`).         |
-        /// </remarks>
-        /// <param name="request">Permission qo'shish uchun ma'lumotlar.</param>
-        /// <response code="200">Permission muvaffaqiyatli qo'shildi.</response>
-        /// <response code="400">Validatsiya xatosi yoki permission allaqachon mavjud.</response>
-        /// <response code="403">Permission yetarli emas.</response>
-        /// <response code="404">Rol topilmadi.</response>
-        [HttpPost]
-        [RequirePermission(Permissions.RoleAddPermission)]
-        [TypeFilter(typeof(AddPermissionValidationFilter))]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> AddPermission([FromBody] AddPermissionRequest request)
-        {
-            var result = await _roleService.AddPermissionToRoleAsync(request.ToDto());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
-        }
-
-        /// <summary>
-        /// Roldan ruxsatni olib tashlash.
-        /// </summary>
-        /// <remarks>
-        /// Roldan mavjud permission ni olib tashlaydi.
-        ///
-        /// **Permission:** `role.removepermission`
-        ///
-        /// **Request body maydonlari:**
-        ///
-        /// | Maydon     | Turi   | Majburiy | Tavsif                                               |
-        /// |------------|--------|----------|------------------------------------------------------|
-        /// | RoleId     | long   | **Ha**   | Rol ID si.                                           |
-        /// | Permission | string | **Ha**   | Olib tashlanadigan permission nomi.                  |
-        /// </remarks>
-        /// <param name="request">Permission olib tashlash uchun ma'lumotlar.</param>
-        /// <response code="200">Permission muvaffaqiyatli olib tashlandi.</response>
-        /// <response code="400">Validatsiya xatosi.</response>
-        /// <response code="403">Permission yetarli emas.</response>
-        /// <response code="404">Rol yoki permission topilmadi.</response>
-        [HttpDelete]
-        [RequirePermission(Permissions.RoleRemovePermission)]
-        [TypeFilter(typeof(RemovePermissionValidationFilter))]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> RemovePermission([FromBody] RemovePermissionRequest request)
-        {
-            var result = await _roleService.RemovePermissionFromRoleAsync(request.ToDto());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
-        }
-
-        /// <summary>
-        /// Foydalanuvchiga rol tayinlash.
-        /// </summary>
-        /// <remarks>
-        /// Ko'rsatilgan foydalanuvchiga rol tayinlaydi. Foydalanuvchi telefon raqami bo'yicha aniqlanadi.
-        ///
-        /// **Permission:** `role.assigntouser`
-        ///
-        /// **Request body maydonlari:**
-        ///
-        /// | Maydon      | Turi   | Majburiy | Tavsif                                  |
-        /// |-------------|--------|----------|-----------------------------------------|
-        /// | PhoneNumber | string | **Ha**   | Foydalanuvchi telefon raqami.           |
-        /// | RoleId      | long   | **Ha**   | Tayinlanadigan rol ID si.               |
-        /// </remarks>
-        /// <param name="request">Rol tayinlash uchun ma'lumotlar.</param>
-        /// <response code="200">Rol muvaffaqiyatli tayinlandi.</response>
-        /// <response code="400">Validatsiya xatosi.</response>
-        /// <response code="403">Permission yetarli emas.</response>
-        /// <response code="404">Foydalanuvchi yoki rol topilmadi.</response>
-        [HttpPost]
-        [RequirePermission(Permissions.RoleAssignToUser)]
-        [TypeFilter(typeof(AssignRoleValidationFilter))]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> AssignToUser([FromBody] AssignRoleRequest request)
-        {
-            var result = await _roleService.AssignRoleToUserAsync(request.ToDto());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
-        }
-
-        /// <summary>
         /// Berilgan rolning barcha ruxsatlarini ko'rish.
         /// </summary>
         /// <remarks>
@@ -292,6 +193,29 @@ namespace AdminApi.Controllers
         {
             var result = await _roleService.GetRolePermissionsAsync(roleId);
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+        }
+
+        /// <summary>
+        /// Tizimdagi barcha ruxsat etilgan permissionlar ro'yxati.
+        /// </summary>
+        /// <remarks>
+        /// Permissions jadvalidagi barcha permissionlarni `{ Id, Name }` ko'rinishida qaytaradi.
+        /// Qaytarilgan `Id` qiymatlari rol yaratish yoki yangilashda `PermissionIds` maydonida ishlatiladi.
+        ///
+        /// **Permission:** `role.getallowedpermissions`
+        ///
+        /// Bu endpointga faqat rolga permission biriktira oladigan userlarga ruxsat berilishi kerak.
+        /// </remarks>
+        /// <response code="200">Permissionlar ro'yxati muvaffaqiyatli qaytarildi.</response>
+        /// <response code="403">Permission yetarli emas.</response>
+        [HttpGet]
+        [RequirePermission(Permissions.RoleGetAllowedPermissions)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> GetAllowedPermissions()
+        {
+            var result = await _roleService.GetAllowedPermissionsAsync();
+            return Ok(result.Result);
         }
     }
 }

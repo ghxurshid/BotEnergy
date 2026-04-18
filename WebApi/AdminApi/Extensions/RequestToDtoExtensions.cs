@@ -23,27 +23,6 @@ namespace AdminApi.Extensions
                 PermissionIds = request.PermissionIds
             };
 
-        public static AddPermissionDto ToDto(this AddPermissionRequest request)
-            => new AddPermissionDto
-            {
-                RoleId = request.RoleId,
-                Permission = request.Permission
-            };
-
-        public static RemovePermissionDto ToDto(this RemovePermissionRequest request)
-            => new RemovePermissionDto
-            {
-                RoleId = request.RoleId,
-                Permission = request.Permission
-            };
-
-        public static AssignRoleDto ToDto(this AssignRoleRequest request)
-            => new AssignRoleDto
-            {
-                PhoneNumber = request.PhoneNumber,
-                RoleId = request.RoleId
-            };
-
         public static CreateProductDto ToDto(this CreateProductRequest request)
             => new CreateProductDto
             {

@@ -11,6 +11,7 @@ namespace Domain.Repositories
         Task DeleteAsync(long id);
         Task<PermissionEntity?> GetPermissionByNameAsync(string name);
         Task<PermissionEntity?> GetPermissionByIdAsync(long id);
+        Task<List<PermissionEntity>> GetAllPermissionsAsync();
         Task<List<string>> GetPermissionsByRoleIdAsync(long roleId);
         Task AddPermissionAsync(RolePermissionEntity permission);
         Task RemovePermissionAsync(long roleId, long permissionId);
