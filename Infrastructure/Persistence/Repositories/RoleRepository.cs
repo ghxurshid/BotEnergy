@@ -16,6 +16,11 @@ namespace Persistence.Repositories
             => await _context.Roles
                 .FirstOrDefaultAsync(r => r.Id == id);
 
+        public async Task<RoleEntity?> GetByIdWithPermissionsAsync(long id)
+            => await _context.Roles
+                .Include(r => r.RolePermissions)
+                .FirstOrDefaultAsync(r => r.Id == id);
+
         public async Task<List<RoleEntity>> GetAllAsync()
             => await _context.Roles
                 .OrderBy(r => r.Name)
@@ -68,6 +73,12 @@ namespace Persistence.Repositories
         public async Task<List<PermissionEntity>> GetAllPermissionsAsync()
             => await _context.Permissions
                 .OrderBy(p => p.Name)
+                .ToListAsync();
+
+        public async Task<List<long>> FilterExistingPermissionIdsAsync(IEnumerable<long> ids)
+            => await _context.Permissions
+                .Where(p => ids.Contains(p.Id))
+                .Select(p => p.Id)
                 .ToListAsync();
 
         public async Task RemovePermissionAsync(long roleId, long permissionId)
