@@ -1,7 +1,9 @@
+using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Context;
+using Persistence.Extensions;
 
 namespace Persistence.Repositories
 {
@@ -29,11 +31,11 @@ namespace Persistence.Repositories
                 .FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
         }
 
-        public async Task<List<UserEntity>> GetAllAsync()
-            => await _context.Users
+        public Task<PagedResult<UserEntity>> GetAllAsync(PaginationParams param)
+            => _context.Users
                 .Include(u => u.Role)
                 .OrderBy(u => u.PhoneNumber)
-                .ToListAsync();
+                .ToPagedResultAsync(param);
 
         public async Task<UserEntity> CreateUserAsync(UserEntity user)
         {

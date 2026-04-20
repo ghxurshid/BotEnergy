@@ -1,7 +1,9 @@
+using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Context;
+using Persistence.Extensions;
 
 namespace Persistence.Repositories
 {
@@ -17,11 +19,11 @@ namespace Persistence.Repositories
                 .Include(s => s.Merchant)
                 .FirstOrDefaultAsync(s => s.Id == id);
 
-        public async Task<List<StationEntity>> GetAllAsync()
-            => await _context.Stations
+        public Task<PagedResult<StationEntity>> GetAllAsync(PaginationParams param)
+            => _context.Stations
                 .Include(s => s.Merchant)
                 .OrderBy(s => s.Name)
-                .ToListAsync();
+                .ToPagedResultAsync(param);
 
         public async Task<List<StationEntity>> GetByMerchantIdAsync(long merchantId)
             => await _context.Stations

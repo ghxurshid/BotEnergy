@@ -1,8 +1,10 @@
+using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Context;
+using Persistence.Extensions;
 
 namespace Persistence.Repositories
 {
@@ -27,11 +29,11 @@ namespace Persistence.Repositories
                 .FirstOrDefaultAsync(p => p.Type == type && p.IsActive);
         }
 
-        public async Task<List<ProductEntity>> GetAllAsync()
-            => await _context.Products
+        public Task<PagedResult<ProductEntity>> GetAllAsync(PaginationParams param)
+            => _context.Products
                 .Include(p => p.Device)
                 .OrderBy(p => p.Name)
-                .ToListAsync();
+                .ToPagedResultAsync(param);
 
         public async Task<List<ProductEntity>> GetByDeviceIdAsync(long deviceId)
             => await _context.Products

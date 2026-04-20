@@ -1,7 +1,9 @@
+using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Context;
+using Persistence.Extensions;
 
 namespace Persistence.Repositories
 {
@@ -34,11 +36,11 @@ namespace Persistence.Repositories
                             && d.IsActive);
         }
 
-        public async Task<List<DeviceEntity>> GetAllAsync()
-            => await _context.Devices
+        public Task<PagedResult<DeviceEntity>> GetAllAsync(PaginationParams param)
+            => _context.Devices
                 .Include(d => d.Station)
                 .OrderBy(d => d.SerialNumber)
-                .ToListAsync();
+                .ToPagedResultAsync(param);
 
         public async Task<List<DeviceEntity>> GetByStationIdAsync(long stationId)
             => await _context.Devices

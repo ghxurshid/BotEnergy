@@ -57,10 +57,10 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<List<DeviceItemDto>>> GetAllAsync()
+        public async Task<GenericDto<PagedResult<DeviceItemDto>>> GetAllAsync(PaginationParams param)
         {
-            var list = await _repo.GetAllAsync();
-            return GenericDto<List<DeviceItemDto>>.Success(list.Select(ToItem).ToList());
+            var page = await _repo.GetAllAsync(param);
+            return GenericDto<PagedResult<DeviceItemDto>>.Success(page.Map(ToItem));
         }
 
         public async Task<GenericDto<List<DeviceItemDto>>> GetByStationAsync(long stationId)

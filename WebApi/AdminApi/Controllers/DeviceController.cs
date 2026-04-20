@@ -3,6 +3,8 @@ using Permissions = Domain.Constants.Permissions;
 using AdminApi.Filters.ValidationFilters;
 using AdminApi.Models.Requests;
 using CommonConfiguration.Attributes;
+using Domain.Dtos;
+using Domain.Dtos.Base;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -49,15 +51,15 @@ namespace AdminApi.Controllers
         ///
         /// **Request body maydonlari:**
         ///
-        /// | Maydon          | Turi  | Majburiy | ReadOnly | Tavsif                                                                 |
-        /// |-----------------|-------|----------|----------|-------------------------------------------------------------------------
-        /// | SerialNumber    | string| **Ha**   | Ha       | Qurilmaning seriya raqami. Yaratilgandan keyin o'zgartirilmaydi.      |
-        /// | DeviceType      | enum  | **Ha**   | Ha       | Qurilma turi. Yaratilgandan keyin o'zgartirilmaydi.                   |
+        /// | Maydon          | Turi  | Majburiy | ReadOnly | Tavsif                                                                      |
+        /// |-----------------|-------|----------|----------|-----------------------------------------------------------------------------|
+        /// | SerialNumber    | string| **Ha**   | Ha       | Qurilmaning seriya raqami. Yaratilgandan keyin o'zgartirilmaydi.            |
+        /// | DeviceType      | enum  | **Ha**   | Ha       | Qurilma turi. Yaratilgandan keyin o'zgartirilmaydi.                         |
         /// | StationId       | long  | **Ha**   | Ha       | Qurilma biriktirilgan stansiya ID si. Yaratilgandan keyin o'zgartirilmaydi. |
-        /// | Model           | string| Yo'q     | Yo'q     | Qurilma modeli (ixtiyoriy).                                           |
-        /// | FirmwareVersion | string| Yo'q     | Yo'q     | Firmware versiyasi (ixtiyoriy).                                       |
-        /// | IsOnline        | bool  | Yo'q     | Yo'q     | Online holati. Berilmasa default (false).                             |
-        /// | IsActive        | bool  | Yo'q     | Yo'q     | Faol holati. Berilmasa default (true).                                |
+        /// | Model           | string| Yo'q     | Yo'q     | Qurilma modeli (ixtiyoriy).                                                 |
+        /// | FirmwareVersion | string| Yo'q     | Yo'q     | Firmware versiyasi (ixtiyoriy).                                             |
+        /// | IsOnline        | bool  | Yo'q     | Yo'q     | Online holati. Berilmasa default (false).                                   |
+        /// | IsActive        | bool  | Yo'q     | Yo'q     | Faol holati. Berilmasa default (true).                                      |
         ///
         /// **Xatolik holatlari:**
         /// - Ko'rsatilgan `StationId` bo'yicha station topilmasa — xatolik qaytadi.
@@ -82,22 +84,32 @@ namespace AdminApi.Controllers
         }
 
         /// <summary>
-        /// Barcha qurilmalar ro'yxatini olish.
+        /// Qurilmalar ro'yxatini sahifalab olish.
         /// </summary>
         /// <remarks>
-        /// Tizimdagi barcha qurilmalarni qaytaradi (soft delete qilinganlar bundan mustasno).
+        /// Tizimdagi qurilmalarni sahifalab qaytaradi (soft delete qilinganlar bundan mustasno).
         ///
         /// **Permission:** `device.admin.getall`
+        ///
+        /// **Query parametrlari:**
+        ///
+        /// | Maydon     | Turi | Majburiy | Default | Tavsif                                                           |
+        /// |------------|------|----------|---------|------------------------------------------------------------------|
+        /// | PageNumber | int  | Yo'q     | 1       | Sahifa raqami (1 dan boshlanadi).                                |
+        /// | PageSize   | int  | Yo'q     | 20      | Bir sahifadagi yozuvlar soni. Maksimal 100 gacha cheklanadi.     |
+        ///
+        /// **Response:** `items` bilan birga `pageNumber`, `pageSize`, `totalCount`, `totalPages`, `hasNext`, `hasPrevious` qaytariladi.
         /// </remarks>
+        /// <param name="param">Sahifalash parametrlari.</param>
         /// <response code="200">Qurilmalar ro'yxati muvaffaqiyatli qaytarildi.</response>
         /// <response code="403">Permission yetarli emas.</response>
         [HttpGet]
         [RequirePermission(Permissions.DeviceAdminGetAll)]
-        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(PagedResult<DeviceItemDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] PaginationParams param)
         {
-            var result = await _service.GetAllAsync();
+            var result = await _service.GetAllAsync(param);
             return Ok(result.Result);
         }
 

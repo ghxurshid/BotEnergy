@@ -1,7 +1,9 @@
+using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Context;
+using Persistence.Extensions;
 
 namespace Persistence.Repositories
 {
@@ -15,8 +17,10 @@ namespace Persistence.Repositories
         public async Task<OrganizationEntity?> GetByIdAsync(long id)
             => await _context.Organizations.FirstOrDefaultAsync(o => o.Id == id);
 
-        public async Task<List<OrganizationEntity>> GetAllAsync()
-            => await _context.Organizations.OrderBy(o => o.Name).ToListAsync();
+        public Task<PagedResult<OrganizationEntity>> GetAllAsync(PaginationParams param)
+            => _context.Organizations
+                .OrderBy(o => o.Name)
+                .ToPagedResultAsync(param);
 
         public async Task<OrganizationEntity> CreateAsync(OrganizationEntity organization)
         {

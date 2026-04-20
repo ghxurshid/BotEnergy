@@ -6,7 +6,7 @@ namespace Domain.Interfaces
     public interface IDeviceService
     {
         Task<GenericDto<DeviceResultDto>> RegisterAsync(RegisterDeviceDto dto, long callerId, HashSet<string> callerPermissions);
-        Task<GenericDto<List<DeviceItemDto>>> GetAllAsync();
+        Task<GenericDto<PagedResult<DeviceItemDto>>> GetAllAsync(PaginationParams param);
         Task<GenericDto<List<DeviceItemDto>>> GetByStationAsync(long stationId);
         Task<GenericDto<DeviceItemDto>> GetByIdAsync(long id);
         Task<GenericDto<DeviceResultDto>> UpdateAsync(long id, UpdateDeviceDto dto);

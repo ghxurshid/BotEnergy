@@ -3,6 +3,8 @@ using Permissions = Domain.Constants.Permissions;
 using AdminApi.Filters.ValidationFilters;
 using AdminApi.Models.Requests;
 using CommonConfiguration.Attributes;
+using Domain.Dtos;
+using Domain.Dtos.Base;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -101,22 +103,32 @@ namespace AdminApi.Controllers
         }
 
         /// <summary>
-        /// Barcha foydalanuvchilar ro'yxatini olish.
+        /// Foydalanuvchilar ro'yxatini sahifalab olish.
         /// </summary>
         /// <remarks>
-        /// Tizimdagi barcha foydalanuvchilarni qaytaradi (soft delete qilinganlar bundan mustasno).
+        /// Tizimdagi foydalanuvchilarni sahifalab qaytaradi (soft delete qilinganlar bundan mustasno).
         ///
         /// **Permission:** `user.admin.getall`
+        ///
+        /// **Query parametrlari:**
+        ///
+        /// | Maydon     | Turi | Majburiy | Default | Tavsif                                                           |
+        /// |------------|------|----------|---------|------------------------------------------------------------------|
+        /// | PageNumber | int  | Yo'q     | 1       | Sahifa raqami (1 dan boshlanadi).                                |
+        /// | PageSize   | int  | Yo'q     | 20      | Bir sahifadagi yozuvlar soni. Maksimal 100 gacha cheklanadi.     |
+        ///
+        /// **Response:** `items` bilan birga `pageNumber`, `pageSize`, `totalCount`, `totalPages`, `hasNext`, `hasPrevious` qaytariladi.
         /// </remarks>
+        /// <param name="param">Sahifalash parametrlari.</param>
         /// <response code="200">Foydalanuvchilar ro'yxati muvaffaqiyatli qaytarildi.</response>
         /// <response code="403">Permission yetarli emas.</response>
         [HttpGet]
         [RequirePermission(Permissions.UserAdminGetAll)]
-        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(PagedResult<UserAdminItemDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] PaginationParams param)
         {
-            var result = await _service.GetAllAsync();
+            var result = await _service.GetAllAsync(param);
             return Ok(result.Result);
         }
 

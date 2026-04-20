@@ -1,3 +1,4 @@
+using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Enums;
 
@@ -7,7 +8,7 @@ namespace Domain.Repositories
     {
         Task<ProductEntity?> GetByIdAsync(long id);
         Task<ProductEntity?> GetByTypeAsync(ProductType type);
-        Task<List<ProductEntity>> GetAllAsync();
+        Task<PagedResult<ProductEntity>> GetAllAsync(PaginationParams param);
         Task<List<ProductEntity>> GetByDeviceIdAsync(long deviceId);
         Task<ProductEntity> CreateAsync(ProductEntity product);
         Task<ProductEntity> UpdateAsync(ProductEntity product);

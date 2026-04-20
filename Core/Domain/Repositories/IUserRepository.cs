@@ -1,4 +1,5 @@
-﻿using Domain.Entities;
+﻿using Domain.Dtos.Base;
+using Domain.Entities;
 
 namespace Domain.Repositories
 {
@@ -6,7 +7,7 @@ namespace Domain.Repositories
     {
         Task<UserEntity?> GetByIdAsync(long userId);
         Task<UserEntity?> GetByPhoneNumberAsync(string phoneNumber);
-        Task<List<UserEntity>> GetAllAsync();
+        Task<PagedResult<UserEntity>> GetAllAsync(PaginationParams param);
         Task<UserEntity> CreateUserAsync(UserEntity user);
         Task<UserEntity> UpdateUserAsync(UserEntity user);
         Task DeleteUserAsync(long userId);

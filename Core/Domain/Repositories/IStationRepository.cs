@@ -1,3 +1,4 @@
+using Domain.Dtos.Base;
 using Domain.Entities;
 
 namespace Domain.Repositories
@@ -5,7 +6,7 @@ namespace Domain.Repositories
     public interface IStationRepository
     {
         Task<StationEntity?> GetByIdAsync(long id);
-        Task<List<StationEntity>> GetAllAsync();
+        Task<PagedResult<StationEntity>> GetAllAsync(PaginationParams param);
         Task<List<StationEntity>> GetByMerchantIdAsync(long merchantId);
         Task<StationEntity> CreateAsync(StationEntity station);
         Task<StationEntity> UpdateAsync(StationEntity station);

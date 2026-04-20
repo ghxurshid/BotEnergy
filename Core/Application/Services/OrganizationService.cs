@@ -34,10 +34,10 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<List<OrganizationItemDto>>> GetAllAsync()
+        public async Task<GenericDto<PagedResult<OrganizationItemDto>>> GetAllAsync(PaginationParams param)
         {
-            var list = await _repo.GetAllAsync();
-            return GenericDto<List<OrganizationItemDto>>.Success(list.Select(ToItem).ToList());
+            var page = await _repo.GetAllAsync(param);
+            return GenericDto<PagedResult<OrganizationItemDto>>.Success(page.Map(ToItem));
         }
 
         public async Task<GenericDto<OrganizationItemDto>> GetByIdAsync(long id)

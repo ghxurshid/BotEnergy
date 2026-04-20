@@ -161,11 +161,10 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<List<UserAdminItemDto>>> GetAllAsync()
+        public async Task<GenericDto<PagedResult<UserAdminItemDto>>> GetAllAsync(PaginationParams param)
         {
-            var users = await _userRepo.GetAllAsync();
-            var items = users.Select(ToItem).ToList();
-            return GenericDto<List<UserAdminItemDto>>.Success(items);
+            var page = await _userRepo.GetAllAsync(param);
+            return GenericDto<PagedResult<UserAdminItemDto>>.Success(page.Map(ToItem));
         }
 
         public async Task<GenericDto<UserAdminItemDto>> GetByIdAsync(long userId)
