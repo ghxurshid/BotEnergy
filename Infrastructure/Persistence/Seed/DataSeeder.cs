@@ -54,7 +54,7 @@ namespace Persistence.Seed
             if (role is not null)
                 return role;
 
-            role = new RoleEntity
+            role = new NaturalRoleEntity
             {
                 Name = DefaultRoleName,
                 Description = "Barcha huquqlarga ega administrator roli.",

@@ -17,7 +17,7 @@ namespace Application.Services
 
         public async Task<GenericDto<CreateRoleResultDto>> CreateRoleAsync(CreateRoleDto dto)
         {
-            var role = new RoleEntity
+            RoleEntity role = new NaturalRoleEntity
             {
                 Name = dto.Name,
                 Description = dto.Description,

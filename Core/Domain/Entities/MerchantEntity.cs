@@ -15,5 +15,7 @@ namespace Domain.Entities
         public bool IsActive { get; set; } = true; 
 
         public ICollection<StationEntity>? Stations { get; set; }
+
+        public ICollection<MerchantRoleEntity>? Roles { get; set; }
     }
 }

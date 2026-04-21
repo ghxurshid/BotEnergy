@@ -19,6 +19,7 @@ namespace Persistence.Context
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.HasPostgresEnum<UserType>("auth", "user_type");
+            modelBuilder.HasPostgresEnum<RoleType>("auth", "role_type");
 
             modelBuilder.HasDefaultSchema(AppSchema);
 
@@ -168,6 +169,14 @@ namespace Persistence.Context
             {
                 b.ToTable("roles", AuthSchema);
 
+                b.HasDiscriminator<RoleType>("role_type")
+                    .HasValue<NaturalRoleEntity>(RoleType.NaturalRole)
+                    .HasValue<LegalRoleEntity>(RoleType.LegalRole)
+                    .HasValue<MerchantRoleEntity>(RoleType.MerchantRole);
+
+                b.Property<RoleType>("role_type")
+                    .HasColumnName("role_type");
+
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
 
@@ -179,6 +188,28 @@ namespace Persistence.Context
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasIndex(x => x.Name);
+            });
+
+            modelBuilder.Entity<LegalRoleEntity>(b =>
+            {
+                b.Property(x => x.OrganizationId).HasColumnName("organization_id");
+                b.HasOne(x => x.Organization)
+                    .WithMany(x => x.Roles)
+                    .HasForeignKey(x => x.OrganizationId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => x.OrganizationId);
+            });
+
+            modelBuilder.Entity<MerchantRoleEntity>(b =>
+            {
+                b.Property(x => x.MerchantId).HasColumnName("merchant_id");
+                b.HasOne(x => x.Merchant)
+                    .WithMany(x => x.Roles)
+                    .HasForeignKey(x => x.MerchantId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => x.MerchantId);
             });
         }
 
