@@ -1,4 +1,4 @@
-namespace CommonConfiguration.Redis
+namespace Domain.Interfaces
 {
     /// <summary>
     /// Qurilmani exclusive lock qilish — bir vaqtda faqat bitta foydalanuvchi bitta qurilmani boshqaradi.

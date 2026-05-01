@@ -32,7 +32,8 @@ namespace Persistence.Context
             ConfigureStation(modelBuilder);
             ConfigureDevice(modelBuilder);
             ConfigureProduct(modelBuilder);
-            ConfigureUsageSession(modelBuilder);
+            ConfigureSession(modelBuilder);
+            ConfigureProductProcess(modelBuilder);
             ConfigureMerchant(modelBuilder);
 
             ApplyGlobalSoftDeleteFilter(modelBuilder);
@@ -333,6 +334,7 @@ namespace Persistence.Context
                 b.Property(x => x.StationId).HasColumnName("station_id").IsRequired();
                 b.Property(x => x.IsOnline).HasColumnName("is_online").HasDefaultValue(false);
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+                b.Property(x => x.LastSeenAt).HasColumnName("last_seen_at").HasColumnType(TimestampWithoutTimeZone);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
@@ -381,11 +383,11 @@ namespace Persistence.Context
             });
         }
 
-        private static void ConfigureUsageSession(ModelBuilder modelBuilder)
+        private static void ConfigureSession(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<UsageSessionEntity>(b =>
+            modelBuilder.Entity<SessionEntity>(b =>
             {
-                b.ToTable("usage_sessions", AppSchema);
+                b.ToTable("sessions", AppSchema);
 
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
@@ -394,30 +396,82 @@ namespace Persistence.Context
                 b.Property(x => x.DeviceId).HasColumnName("device_id");
 
                 b.Property(x => x.SessionToken).HasColumnName("session_token").IsRequired().HasMaxLength(100);
-                b.Property(x => x.Status).HasColumnName("status")
-                    .HasConversion<string>().HasMaxLength(30);
+                b.Property(x => x.Status).HasColumnName("status").HasConversion<int>();
+                b.Property(x => x.CloseReason).HasColumnName("close_reason").HasConversion<int?>();
 
-                b.Property(x => x.ProductId).HasColumnName("product_id");
-                b.Property(x => x.Unit).HasColumnName("unit").HasConversion<int?>();
-                b.Property(x => x.RequestedQuantity).HasColumnName("requested_quantity")
-                    .HasColumnType("numeric(18,4)");
-                b.Property(x => x.DeliveredQuantity).HasColumnName("delivered_quantity")
-                    .HasColumnType("numeric(18,4)").HasDefaultValue(0m);
-                b.Property(x => x.PricePerUnit).HasColumnName("price_per_unit")
-                    .HasColumnType("numeric(18,2)").HasDefaultValue(0m);
-                b.Property(x => x.EndReason).HasColumnName("end_reason").HasMaxLength(50);
-
-                // Snapshot maydonlar
-                b.Property(x => x.UserPhoneNumber).HasColumnName("user_phone_number").HasMaxLength(20);
-                b.Property(x => x.DeviceSerialNumber).HasColumnName("device_serial_number").HasMaxLength(100);
-                b.Property(x => x.ProductName).HasColumnName("product_name").HasMaxLength(200);
-
-                b.Property(x => x.StartedAt).HasColumnName("started_at")
+                b.Property(x => x.CreatedAt).HasColumnName("created_at")
                     .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
-                b.Property(x => x.DeviceConnectedAt).HasColumnName("device_connected_at")
+                b.Property(x => x.ConnectedAt).HasColumnName("connected_at")
+                    .HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.ClosedAt).HasColumnName("closed_at")
                     .HasColumnType(TimestampWithoutTimeZone);
                 b.Property(x => x.LastActivityAt).HasColumnName("last_activity_at")
                     .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+
+                b.Property(x => x.CreatedDate).HasColumnName("created_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+                b.HasOne(x => x.User)
+                    .WithMany(x => x.Sessions)
+                    .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasOne(x => x.Device)
+                    .WithMany(x => x.Sessions)
+                    .HasForeignKey(x => x.DeviceId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasMany(x => x.Processes)
+                    .WithOne(x => x.Session!)
+                    .HasForeignKey(x => x.SessionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => x.SessionToken).IsUnique();
+                b.HasIndex(x => new { x.UserId, x.Status });
+                b.HasIndex(x => x.LastActivityAt);
+            });
+        }
+
+        private static void ConfigureProductProcess(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<ProductProcessEntity>(b =>
+            {
+                b.ToTable("product_processes", AppSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.SessionId).HasColumnName("session_id").IsRequired();
+                b.Property(x => x.ProductId).HasColumnName("product_id").IsRequired();
+
+                b.Property(x => x.ProductName).HasColumnName("product_name").HasMaxLength(200);
+                b.Property(x => x.PricePerUnit).HasColumnName("price_per_unit")
+                    .HasColumnType("numeric(18,2)").HasDefaultValue(0m);
+                b.Property(x => x.Unit).HasColumnName("unit").HasConversion<int>();
+
+                b.Property(x => x.RequestedAmount).HasColumnName("requested_amount")
+                    .HasColumnType("numeric(18,4)").HasDefaultValue(0m);
+                b.Property(x => x.GivenAmount).HasColumnName("given_amount")
+                    .HasColumnType("numeric(18,4)").HasDefaultValue(0m);
+
+                b.Property(x => x.Status).HasColumnName("status").HasConversion<int>();
+                b.Property(x => x.EndReason).HasColumnName("end_reason").HasConversion<int?>();
+
+                b.Property(x => x.IsBalanceDeducted).HasColumnName("is_balance_deducted").HasDefaultValue(false);
+                b.Property(x => x.LastTelemetrySequence).HasColumnName("last_telemetry_sequence").HasDefaultValue(0L);
+
+                b.Property(x => x.RowVersion).HasColumnName("xmin")
+                    .HasColumnType("xid")
+                    .ValueGeneratedOnAddOrUpdate()
+                    .IsConcurrencyToken();
+
+                b.Property(x => x.StartedAt).HasColumnName("started_at")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.PausedAt).HasColumnName("paused_at")
+                    .HasColumnType(TimestampWithoutTimeZone);
                 b.Property(x => x.EndedAt).HasColumnName("ended_at")
                     .HasColumnType(TimestampWithoutTimeZone);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date")
@@ -426,24 +480,13 @@ namespace Persistence.Context
                     .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
-                b.HasOne(x => x.User)
-                    .WithMany(x => x.UsageSessions)
-                    .HasForeignKey(x => x.UserId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
-                b.HasOne(x => x.Device)
-                    .WithMany(x => x.UsageSessions)
-                    .HasForeignKey(x => x.DeviceId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
                 b.HasOne(x => x.Product)
-                    .WithMany(x => x.UsageSessions)
+                    .WithMany(x => x.Processes)
                     .HasForeignKey(x => x.ProductId)
                     .OnDelete(DeleteBehavior.Restrict);
 
-                b.HasIndex(x => x.SessionToken).IsUnique();
-                b.HasIndex(x => new { x.UserId, x.Status });
-                b.HasIndex(x => x.LastActivityAt);
+                b.HasIndex(x => x.SessionId);
+                b.HasIndex(x => new { x.SessionId, x.Status });
             });
         }
 

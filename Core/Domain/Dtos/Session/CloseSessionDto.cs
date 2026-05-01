@@ -10,5 +10,6 @@ namespace Domain.Dtos.Session
     {
         public string ResultMessage { get; set; } = string.Empty;
         public decimal TotalDelivered { get; set; }
+        public decimal TotalCost { get; set; }
     }
 }

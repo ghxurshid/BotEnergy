@@ -5,6 +5,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.BackgroundServices
 {
+    /// <summary>
+    /// Har 5 daqiqada ishlaydi — 30 daqiqadan beri faol bo'lmagan sessiyalarni yopadi.
+    /// Aktiv jarayonlar mavjud bo'lsa, ularga avval MQTT stop yuboriladi va balansdan yechiladi.
+    /// </summary>
     public class IdleSessionCleanerService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
@@ -30,6 +34,7 @@ namespace Application.BackgroundServices
                     using var scope = _scopeFactory.CreateScope();
                     var sessionService = scope.ServiceProvider.GetRequiredService<ISessionService>();
                     await sessionService.CloseTimedOutSessionsAsync();
+                    await sessionService.CloseOfflineDeviceSessionsAsync();
                 }
                 catch (Exception ex)
                 {

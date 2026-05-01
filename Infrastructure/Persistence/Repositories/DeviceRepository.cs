@@ -71,5 +71,23 @@ namespace Persistence.Repositories
             device.IsActive = false;
             await _context.SaveChangesAsync();
         }
+
+        public Task<int> TouchLastSeenAsync(string serialNumber)
+        {
+            var now = DateTime.Now;
+            return _context.Devices
+                .Where(d => d.SerialNumber == serialNumber && d.IsActive)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(d => d.LastSeenAt, now)
+                    .SetProperty(d => d.IsOnline, true)
+                    .SetProperty(d => d.UpdatedDate, now));
+        }
+
+        public async Task<List<DeviceEntity>> GetStaleOnlineDevicesAsync(DateTime threshold)
+        {
+            return await _context.Devices
+                .Where(d => d.IsOnline && (d.LastSeenAt == null || d.LastSeenAt < threshold))
+                .ToListAsync();
+        }
     }
 }

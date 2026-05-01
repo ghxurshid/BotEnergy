@@ -21,6 +21,6 @@ namespace Domain.Entities
 
         public DeviceEntity? Device { get; set; }
 
-        public ICollection<UsageSessionEntity>? UsageSessions { get; set; }
+        public ICollection<ProductProcessEntity>? Processes { get; set; }
     }
 }

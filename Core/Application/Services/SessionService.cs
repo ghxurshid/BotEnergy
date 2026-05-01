@@ -7,341 +7,278 @@ using Domain.Repositories;
 
 namespace Application.Services
 {
+    /// <summary>
+    /// Sessiya darajasidagi operatsiyalar — yaratish, qurilma ulanish, yopish.
+    /// Mahsulot berish jarayonlari (start/stop/pause/resume/telemetry) <see cref="ProcessService"/> da.
+    /// </summary>
     public class SessionService : ISessionService
     {
-        private readonly ISessionRepository _sessionRepository;
-        private readonly IDeviceRepository _deviceRepository;
-        private readonly IProductRepository _productRepository;
-        private readonly IUserRepository _userRepository;
+        private readonly ISessionRepository _sessionRepo;
+        private readonly IDeviceRepository _deviceRepo;
+        private readonly IUserRepository _userRepo;
+        private readonly IProductProcessRepository _processRepo;
         private readonly ISessionNotifier _notifier;
+        private readonly IDeviceCommandPublisher _commandPublisher;
+        private readonly IDeviceLockService _deviceLock;
+        private readonly IBillingService _billing;
 
         private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan DeviceOfflineThreshold = TimeSpan.FromSeconds(90);
 
         public SessionService(
-            ISessionRepository sessionRepository,
-            IDeviceRepository deviceRepository,
-            IProductRepository productRepository,
-            IUserRepository userRepository,
-            ISessionNotifier notifier)
+            ISessionRepository sessionRepo,
+            IDeviceRepository deviceRepo,
+            IUserRepository userRepo,
+            IProductProcessRepository processRepo,
+            ISessionNotifier notifier,
+            IDeviceCommandPublisher commandPublisher,
+            IDeviceLockService deviceLock,
+            IBillingService billing)
         {
-            _sessionRepository = sessionRepository;
-            _deviceRepository = deviceRepository;
-            _productRepository = productRepository;
-            _userRepository = userRepository;
+            _sessionRepo = sessionRepo;
+            _deviceRepo = deviceRepo;
+            _userRepo = userRepo;
+            _processRepo = processRepo;
             _notifier = notifier;
+            _commandPublisher = commandPublisher;
+            _deviceLock = deviceLock;
+            _billing = billing;
         }
 
-        /// <summary>
-        /// 1-qadam: Bo'sh sessiya yaratish. Faqat user info bilan.
-        /// Product va miqdor keyinroq to'ldiriladi.
-        /// </summary>
         public async Task<GenericDto<CreateSessionResultDto>> CreateSessionAsync(CreateSessionDto dto)
         {
-            var user = await _userRepository.GetByIdAsync(dto.UserId);
+            var user = await _userRepo.GetByIdAsync(dto.UserId);
             if (user is null)
                 return GenericDto<CreateSessionResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
             if (user.IsBlocked)
                 return GenericDto<CreateSessionResultDto>.Error(403, "Foydalanuvchi bloklangan.");
 
-            var session = new UsageSessionEntity
+            var session = new SessionEntity
             {
                 UserId = dto.UserId,
                 SessionToken = Guid.NewGuid().ToString("N"),
-                Status = SessionStatus.Pending,
-                StartedAt = DateTime.Now,
-                LastActivityAt = DateTime.Now,
-                UserPhoneNumber = user.PhoneNumber,
+                Status = SessionStatus.Created,
+                CreatedAt = DateTime.Now,
+                LastActivityAt = DateTime.Now
             };
 
-            var created = await _sessionRepository.CreateAsync(session);
+            var created = await _sessionRepo.CreateAsync(session);
 
             return GenericDto<CreateSessionResultDto>.Success(new CreateSessionResultDto
             {
                 SessionId = created.Id,
                 SessionToken = created.SessionToken,
-                ExpiresAt = created.StartedAt.Add(IdleTimeout),
+                ExpiresAt = created.CreatedAt.Add(IdleTimeout),
                 ResultMessage = "Sessiya yaratildi. Qurilma QR kodni skanerlab ulanishini kuting."
             });
         }
 
-        /// <summary>
-        /// 2-qadam: Qurilma QR kodni skanerlab sessiyaga ulanadi.
-        /// Qurilmaning birinchi aktiv product i sessiyaga avtomatik yoziladi.
-        /// </summary>
         public async Task<GenericDto<DeviceConnectedResultDto>> DeviceConnectAsync(DeviceConnectedDto dto)
         {
-            var session = await _sessionRepository.GetByTokenAsync(dto.SessionToken);
+            var session = await _sessionRepo.GetByTokenAsync(dto.SessionToken);
             if (session is null)
                 return GenericDto<DeviceConnectedResultDto>.Error(404, "Sessiya topilmadi.");
 
-            if (session.Status != SessionStatus.Pending)
-                return GenericDto<DeviceConnectedResultDto>.Error(400, "Sessiya pending holatida emas.");
+            if (session.Status != SessionStatus.Created)
+                return GenericDto<DeviceConnectedResultDto>.Error(400, "Sessiya allaqachon ulangan yoki yopilgan.");
 
-            var device = await _deviceRepository.GetBySerialNumberAsync(dto.SerialNumber);
+            var device = await _deviceRepo.GetBySerialNumberAsync(dto.SerialNumber);
             if (device is null)
                 return GenericDto<DeviceConnectedResultDto>.Error(404, "Qurilma topilmadi yoki faol emas.");
 
-            var product = device.Products?.FirstOrDefault();
-            if (product is null)
-                return GenericDto<DeviceConnectedResultDto>.Error(400, "Qurilmada aktiv mahsulot topilmadi.");
-
             session.DeviceId = device.Id;
-            session.DeviceSerialNumber = device.SerialNumber;
-            session.ProductId = product.Id;
-            session.ProductName = product.Name;
-            session.PricePerUnit = product.Price;
-            session.Unit = product.Unit;
-            session.Status = SessionStatus.DeviceConnected;
-            session.DeviceConnectedAt = DateTime.Now;
+            session.Status = SessionStatus.Connected;
+            session.ConnectedAt = DateTime.Now;
             session.LastActivityAt = DateTime.Now;
 
-            await _sessionRepository.UpdateAsync(session);
+            await _sessionRepo.UpdateAsync(session);
+
+            var capabilities = (device.Products ?? Enumerable.Empty<ProductEntity>())
+                .Where(p => p.IsActive)
+                .Select(p => new DeviceProductCapabilityDto
+                {
+                    ProductId = p.Id,
+                    Name = p.Name,
+                    Type = p.Type.ToString(),
+                    Unit = p.Unit.ToString(),
+                    Price = p.Price
+                })
+                .ToList();
+
+            var result = new DeviceConnectedResultDto
+            {
+                SessionId = session.Id,
+                DeviceId = device.Id,
+                DeviceSerialNumber = device.SerialNumber,
+                DeviceType = device.DeviceType.ToString(),
+                Products = capabilities,
+                ResultMessage = "Qurilma sessiyaga ulandi. Mahsulot tanlash uchun /Process/Start ga murojaat qiling."
+            };
 
             await _notifier.NotifyDeviceConnectedAsync(session.SessionToken, new
             {
+                session_id = session.Id,
                 device_id = device.Id,
                 serial_number = device.SerialNumber,
-                product_id = product.Id,
-                product_name = product.Name,
-                unit = product.Unit.ToString(),
-                price_per_unit = product.Price,
-                connected_at = session.DeviceConnectedAt
+                device_type = device.DeviceType.ToString(),
+                products = capabilities,
+                connected_at = session.ConnectedAt
             });
 
-            return GenericDto<DeviceConnectedResultDto>.Success(new DeviceConnectedResultDto
-            {
-                SessionId = session.Id,
-                ProductId = product.Id,
-                ProductName = product.Name,
-                Unit = product.Unit.ToString(),
-                PricePerUnit = product.Price,
-                DeviceSerialNumber = device.SerialNumber,
-                ResultMessage = "Qurilma sessiyaga ulandi. Endi miqdor belgilash uchun /SetQuantity ga murojaat qiling."
-            });
-        }
-
-        /// <summary>
-        /// 3-qadam: Miqdor belgilash. Ikkala tomon ulangandan keyin user miqdor belgilaydi.
-        /// Balans tekshiriladi, limit hisoblanadi.
-        /// </summary>
-        public async Task<GenericDto<SetQuantityResultDto>> SetQuantityAsync(SetQuantityDto dto)
-        {
-            var session = await _sessionRepository.GetByIdAsync(dto.SessionId);
-            if (session is null)
-                return GenericDto<SetQuantityResultDto>.Error(404, "Sessiya topilmadi.");
-
-            if (session.UserId != dto.UserId)
-                return GenericDto<SetQuantityResultDto>.Error(403, "Bu sessiya sizga tegishli emas.");
-
-            if (session.Status != SessionStatus.DeviceConnected)
-                return GenericDto<SetQuantityResultDto>.Error(400, "Qurilma hali ulanmagan yoki sessiya allaqachon boshlangan.");
-
-            if (session.ProductId is null)
-                return GenericDto<SetQuantityResultDto>.Error(400, "Mahsulot hali belgilanmagan.");
-
-            var user = await _userRepository.GetByIdAsync(dto.UserId);
-            if (user is null)
-                return GenericDto<SetQuantityResultDto>.Error(404, "Foydalanuvchi topilmadi.");
-
-            decimal availableBalance = GetUserBalance(user);
-            decimal maxQuantity = session.PricePerUnit > 0
-                ? availableBalance / session.PricePerUnit
-                : 0;
-
-            decimal limit = dto.RequestedQuantity.HasValue
-                ? Math.Min(dto.RequestedQuantity.Value, maxQuantity)
-                : maxQuantity;
-
-            if (limit <= 0)
-                return GenericDto<SetQuantityResultDto>.Error(400, "Balans yetarli emas.");
-
-            session.RequestedQuantity = limit;
-            session.Status = SessionStatus.InProgress;
-            session.LastActivityAt = DateTime.Now;
-
-            await _sessionRepository.UpdateAsync(session);
-
-            return GenericDto<SetQuantityResultDto>.Success(new SetQuantityResultDto
-            {
-                LimitQuantity = limit,
-                ProductName = session.ProductName,
-                Unit = session.Unit?.ToString() ?? string.Empty,
-                PricePerUnit = session.PricePerUnit,
-                DeviceSerialNumber = session.DeviceSerialNumber,
-                ProductId = session.ProductId ?? 0,
-                ResultMessage = "Miqdor belgilandi. Qurilmaga start buyrug'i yuborildi."
-            });
-        }
-
-        public async Task<GenericDto<SessionProgressResultDto>> ReportProgressAsync(SessionProgressDto dto)
-        {
-            var session = await _sessionRepository.GetByTokenAsync(dto.SessionToken);
-            if (session is null)
-                return GenericDto<SessionProgressResultDto>.Error(404, "Sessiya topilmadi.");
-
-            if (session.Device?.SerialNumber != dto.SerialNumber)
-                return GenericDto<SessionProgressResultDto>.Error(403, "Qurilma bu sessiyaga tegishli emas.");
-
-            if (session.Status != SessionStatus.InProgress)
-                return GenericDto<SessionProgressResultDto>.Error(400, "Sessiya aktiv holatda emas.");
-
-            session.DeliveredQuantity += dto.Quantity;
-            session.LastActivityAt = DateTime.Now;
-            await _sessionRepository.UpdateAsync(session);
-
-            await _notifier.NotifyProgressUpdateAsync(session.SessionToken, new
-            {
-                quantity = dto.Quantity,
-                total_quantity = session.DeliveredQuantity,
-                product_id = session.ProductId,
-                unit = session.Unit?.ToString(),
-                price_per_unit = session.PricePerUnit,
-                current_cost = session.DeliveredQuantity * session.PricePerUnit
-            });
-
-            return GenericDto<SessionProgressResultDto>.Success(new SessionProgressResultDto
-            {
-                ResultMessage = "Progress qabul qilindi."
-            });
-        }
-
-        public async Task<GenericDto<DeviceFinishResultDto>> DeviceFinishAsync(DeviceFinishDto dto)
-        {
-            var session = await _sessionRepository.GetByTokenAsync(dto.SessionToken);
-            if (session is null)
-                return GenericDto<DeviceFinishResultDto>.Error(404, "Sessiya topilmadi.");
-
-            if (session.Device?.SerialNumber != dto.SerialNumber)
-                return GenericDto<DeviceFinishResultDto>.Error(403, "Qurilma bu sessiyaga tegishli emas.");
-
-            if (session.Status != SessionStatus.InProgress && session.Status != SessionStatus.DeviceConnected)
-                return GenericDto<DeviceFinishResultDto>.Error(400, "Sessiya aktiv holatda emas.");
-
-            session.Status = SessionStatus.Completed;
-            session.DeliveredQuantity = dto.FinalQuantity;
-            session.EndReason = dto.EndReason;
-            session.EndedAt = DateTime.Now;
-            session.LastActivityAt = DateTime.Now;
-
-            await _sessionRepository.UpdateAsync(session);
-            await DeductUserBalanceAsync(session);
-
-            await _notifier.NotifySessionCompletedAsync(session.SessionToken, new
-            {
-                total_delivered = session.DeliveredQuantity,
-                product_id = session.ProductId,
-                price_per_unit = session.PricePerUnit,
-                total_cost = session.DeliveredQuantity * session.PricePerUnit,
-                end_reason = session.EndReason,
-                ended_at = session.EndedAt
-            });
-
-            return GenericDto<DeviceFinishResultDto>.Success(new DeviceFinishResultDto
-            {
-                ResultMessage = "Sessiya muvaffaqiyatli tugallandi.",
-                TotalDelivered = session.DeliveredQuantity
-            });
+            return GenericDto<DeviceConnectedResultDto>.Success(result);
         }
 
         public async Task<GenericDto<CloseSessionResultDto>> CloseSessionByUserAsync(CloseSessionDto dto)
         {
-            var session = await _sessionRepository.GetByIdAsync(dto.SessionId);
+            var session = await _sessionRepo.GetByIdWithProcessesAsync(dto.SessionId);
             if (session is null)
                 return GenericDto<CloseSessionResultDto>.Error(404, "Sessiya topilmadi.");
 
             if (session.UserId != dto.UserId)
                 return GenericDto<CloseSessionResultDto>.Error(403, "Bu sessiya sizga tegishli emas.");
 
-            if (session.Status == SessionStatus.Completed ||
-                session.Status == SessionStatus.ClosedByUser ||
-                session.Status == SessionStatus.TimedOut)
+            if (session.Status == SessionStatus.Closed)
                 return GenericDto<CloseSessionResultDto>.Error(400, "Sessiya allaqachon yopilgan.");
 
-            session.Status = SessionStatus.ClosedByUser;
-            session.EndReason = "closed_by_user";
-            session.EndedAt = DateTime.Now;
-            session.LastActivityAt = DateTime.Now;
+            var (totalDelivered, totalCost) = await FinalizeOpenProcessesAsync(
+                session, ProcessEndReason.UserStopped, sendStopCommand: true);
 
-            await _sessionRepository.UpdateAsync(session);
-            await DeductUserBalanceAsync(session);
+            session.Status = SessionStatus.Closed;
+            session.CloseReason = SessionCloseReason.UserClosed;
+            session.ClosedAt = DateTime.Now;
+            session.LastActivityAt = DateTime.Now;
+            await _sessionRepo.UpdateAsync(session);
 
             await _notifier.NotifySessionClosedAsync(session.SessionToken, new
             {
-                reason = "closed_by_user",
-                total_delivered = session.DeliveredQuantity,
-                total_cost = session.DeliveredQuantity * session.PricePerUnit,
-                ended_at = session.EndedAt
+                reason = nameof(SessionCloseReason.UserClosed),
+                total_delivered = totalDelivered,
+                total_cost = totalCost,
+                closed_at = session.ClosedAt
             });
 
             return GenericDto<CloseSessionResultDto>.Success(new CloseSessionResultDto
             {
                 ResultMessage = "Sessiya muvaffaqiyatli yopildi.",
-                TotalDelivered = session.DeliveredQuantity
+                TotalDelivered = totalDelivered,
+                TotalCost = totalCost
             });
         }
 
         public async Task CloseTimedOutSessionsAsync()
         {
             var idleBefore = DateTime.Now.Subtract(IdleTimeout);
-            var idleSessions = await _sessionRepository.GetIdleSessionsAsync(idleBefore);
+            var idleSessions = await _sessionRepo.GetIdleSessionsAsync(idleBefore);
 
             foreach (var session in idleSessions)
             {
-                session.Status = SessionStatus.TimedOut;
-                session.EndReason = "timed_out";
-                session.EndedAt = DateTime.Now;
+                var (totalDelivered, totalCost) = await FinalizeOpenProcessesAsync(
+                    session, ProcessEndReason.DeviceError, sendStopCommand: true);
 
-                await _sessionRepository.UpdateAsync(session);
-                await DeductUserBalanceAsync(session);
+                session.Status = SessionStatus.Closed;
+                session.CloseReason = SessionCloseReason.Timeout;
+                session.ClosedAt = DateTime.Now;
+                await _sessionRepo.UpdateAsync(session);
 
                 await _notifier.NotifySessionClosedAsync(session.SessionToken, new
                 {
-                    reason = "timed_out",
-                    total_delivered = session.DeliveredQuantity,
-                    total_cost = session.DeliveredQuantity * session.PricePerUnit,
-                    ended_at = session.EndedAt
+                    reason = nameof(SessionCloseReason.Timeout),
+                    total_delivered = totalDelivered,
+                    total_cost = totalCost,
+                    closed_at = session.ClosedAt
                 });
             }
         }
 
-        private decimal GetUserBalance(UserEntity user)
+        public async Task CloseOfflineDeviceSessionsAsync()
         {
-            if (user is NaturalUserEntity natural)
-                return natural.Balance;
+            var threshold = DateTime.Now.Subtract(DeviceOfflineThreshold);
+            var staleDevices = await _deviceRepo.GetStaleOnlineDevicesAsync(threshold);
 
-            if (user is LegalUserEntity legal && legal.Organization is not null)
-                return legal.Organization.Balance;
+            foreach (var device in staleDevices)
+            {
+                var activeSessions = await _sessionRepo.GetActiveSessionsForDeviceAsync(device.Id);
+                foreach (var session in activeSessions)
+                {
+                    var (totalDelivered, totalCost) = await FinalizeOpenProcessesAsync(
+                        session, ProcessEndReason.DeviceError, sendStopCommand: false);
 
-            return 0;
+                    session.Status = SessionStatus.Closed;
+                    session.CloseReason = SessionCloseReason.DeviceLost;
+                    session.ClosedAt = DateTime.Now;
+                    session.LastActivityAt = DateTime.Now;
+                    await _sessionRepo.UpdateAsync(session);
+
+                    await _notifier.NotifySessionUpdatedAsync(session.SessionToken, new
+                    {
+                        session_id = session.Id,
+                        status = SessionStatus.Closed.ToString(),
+                        reason = nameof(SessionCloseReason.DeviceLost),
+                        total_delivered = totalDelivered,
+                        total_cost = totalCost,
+                        closed_at = session.ClosedAt
+                    });
+                }
+
+                device.IsOnline = false;
+                await _deviceRepo.UpdateAsync(device);
+            }
         }
 
-        private async Task DeductUserBalanceAsync(UsageSessionEntity session)
+        /// <summary>
+        /// Sessiya yopilayotganda hali tugamagan barcha jarayonlarni yakunlaydi:
+        /// qurilmaga stop yuboradi, statusni Ended ga o'tkazadi, balansni yechadi va lockni bo'shatadi.
+        /// </summary>
+        private async Task<(decimal totalDelivered, decimal totalCost)> FinalizeOpenProcessesAsync(
+            SessionEntity session,
+            ProcessEndReason endReason,
+            bool sendStopCommand)
         {
-            if (session.DeliveredQuantity <= 0 || session.PricePerUnit <= 0)
-                return;
+            decimal totalDelivered = 0;
+            decimal totalCost = 0;
 
-            var cost = session.DeliveredQuantity * session.PricePerUnit;
-            var user = await _userRepository.GetByIdAsync(session.UserId);
+            if (session.Processes is null || session.Processes.Count == 0)
+                return (totalDelivered, totalCost);
 
-            if (user is NaturalUserEntity naturalUser)
+            foreach (var process in session.Processes)
             {
-                naturalUser.Balance = naturalUser.Balance >= cost
-                    ? naturalUser.Balance - cost
-                    : 0;
-                await _userRepository.UpdateUserAsync(naturalUser);
-            }
-            else if (user is LegalUserEntity legalUser)
-            {
-                var organization = legalUser.Organization;
-                if (organization is null)
-                    return;
+                if (process.Status == ProcessStatus.Ended)
+                {
+                    totalDelivered += process.GivenAmount;
+                    totalCost += process.GivenAmount * process.PricePerUnit;
+                    continue;
+                }
 
-                organization.Balance = organization.Balance >= cost
-                    ? organization.Balance - cost
-                    : 0;
-                await _userRepository.UpdateUserAsync(legalUser);
+                if (sendStopCommand && session.Device is not null)
+                {
+                    _commandPublisher.PublishStop(session.Device.SerialNumber, process.Id);
+                }
+
+                process.Status = ProcessStatus.Ended;
+                process.EndReason = endReason;
+                process.EndedAt = DateTime.Now;
+                await _processRepo.UpdateAsync(process);
+
+                var deducted = await _billing.DeductForProcessAsync(process.Id);
+
+                totalDelivered += process.GivenAmount;
+                totalCost += deducted;
+
+                if (session.Device is not null)
+                    await _deviceLock.UnlockDeviceAsync(session.Device.SerialNumber, session.UserId);
+
+                await _notifier.NotifyProcessEndedAsync(session.SessionToken, new
+                {
+                    process_id = process.Id,
+                    end_reason = endReason.ToString(),
+                    total_delivered = process.GivenAmount,
+                    total_cost = deducted,
+                    ended_at = process.EndedAt
+                });
             }
+
+            return (totalDelivered, totalCost);
         }
     }
 }

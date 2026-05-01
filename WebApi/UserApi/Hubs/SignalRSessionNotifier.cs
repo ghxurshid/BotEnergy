@@ -5,7 +5,7 @@ namespace UserApi.Hubs
 {
     /// <summary>
     /// ISessionNotifier ning SignalR implementatsiyasi.
-    /// SessionService bu interfeys orqali klientlarga xabar yuboradi —
+    /// Service qatlami bu interfeys orqali klientlarga xabar yuboradi —
     /// qaysi transport ishlatilishini bilmaydi.
     /// </summary>
     public sealed class SignalRSessionNotifier : ISessionNotifier
@@ -20,13 +20,21 @@ namespace UserApi.Hubs
         public Task NotifyDeviceConnectedAsync(string sessionToken, object payload)
             => _hubContext.Clients.Group(sessionToken).SendAsync("DeviceConnected", payload);
 
-        public Task NotifyProgressUpdateAsync(string sessionToken, object payload)
-            => _hubContext.Clients.Group(sessionToken).SendAsync("ProgressUpdate", payload);
-
-        public Task NotifySessionCompletedAsync(string sessionToken, object payload)
-            => _hubContext.Clients.Group(sessionToken).SendAsync("SessionCompleted", payload);
+        public Task NotifySessionUpdatedAsync(string sessionToken, object payload)
+            => _hubContext.Clients.Group(sessionToken).SendAsync("SessionUpdated", payload);
 
         public Task NotifySessionClosedAsync(string sessionToken, object payload)
-            => _hubContext.Clients.Group(sessionToken).SendAsync("SessionClosed", payload);
+            => Task.WhenAll(
+                _hubContext.Clients.Group(sessionToken).SendAsync("SessionUpdated", payload),
+                _hubContext.Clients.Group(sessionToken).SendAsync("SessionClosed", payload));
+
+        public Task NotifyProcessStartedAsync(string sessionToken, object payload)
+            => _hubContext.Clients.Group(sessionToken).SendAsync("ProcessStarted", payload);
+
+        public Task NotifyProcessUpdatedAsync(string sessionToken, object payload)
+            => _hubContext.Clients.Group(sessionToken).SendAsync("ProcessUpdated", payload);
+
+        public Task NotifyProcessEndedAsync(string sessionToken, object payload)
+            => _hubContext.Clients.Group(sessionToken).SendAsync("ProcessEnded", payload);
     }
 }

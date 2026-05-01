@@ -73,8 +73,13 @@ namespace Domain.Constants
 
         // ── UserApi — Sessiya boshqaruvi ─────────────────────────────
         public const string SessionCreate = "Session.Create";
-        public const string SessionSetQuantity = "Session.SetQuantity";
         public const string SessionClose = "Session.Close";
+
+        // ── UserApi — Mahsulot berish jarayoni ───────────────────────
+        public const string ProcessStart = "Process.Start";
+        public const string ProcessStop = "Process.Stop";
+        public const string ProcessPause = "Process.Pause";
+        public const string ProcessResume = "Process.Resume";
 
         // ── UserApi — Foydalanuvchi profili ──────────────────────────
         public const string UserMe = "User.Me";
@@ -123,7 +128,10 @@ namespace Domain.Constants
             BalanceGetMyBalance, BalanceTopUp,
 
             // Session
-            SessionCreate, SessionSetQuantity, SessionClose,
+            SessionCreate, SessionClose,
+
+            // Process
+            ProcessStart, ProcessStop, ProcessPause, ProcessResume,
 
             // User Profile
             UserMe, UserUpdateMe, DeviceConnectionGetProducts,

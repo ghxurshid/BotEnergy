@@ -1,37 +1,29 @@
-using CommonConfiguration.Messaging;
-using Domain.Messaging;
-using Domain.Messaging.Commands;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace UserApi.Hubs
 {
     /// <summary>
-    /// Real-time sessiya boshqaruvi.
-    /// Android/iOS klient shu hub ga ulanib sessiyani kuzatadi va boshqaradi.
+    /// Server → Client real-time push uchun ishlatiladi.
+    /// Klient sessiya guruhiga qo'shilishi va undan chiqishi mumkin — boshqa hech qanday
+    /// state-modifying operatsiya hub orqali qabul qilinmaydi (ownership-check va
+    /// audit-trail uchun barcha buyruqlar REST endpoint orqali yuboriladi).
     ///
-    /// Client → Server:
-    ///   JoinSession(sessionToken)   — sessiya guruhiga qo'shilish
-    ///   LeaveSession(sessionToken)  — guruhdan chiqish
-    ///   PauseSession(serialNumber)  — qurilmani pauza qilish (RabbitMQ → DeviceApi → MQTT)
-    ///   ResumeSession(serialNumber) — qurilmani davom ettirish
-    ///   StopSession(serialNumber)   — qurilmani to'xtatish
-    ///
-    /// Server → Client (events):
-    ///   DeviceConnected   { serial_number, product_id, ... }
-    ///   ProgressUpdate    { quantity, total_quantity, ... }
-    ///   SessionCompleted  { total_delivered, end_reason, ... }
+    /// Server → Client eventlar:
+    ///   DeviceConnected   { device_id, products, ... }
+    ///   ProcessStarted    { process_id, product_id, requested_amount, ... }
+    ///   ProcessUpdated    { process_id, total_quantity, current_cost, ... }
+    ///   ProcessEnded      { process_id, end_reason, total_cost, ... }
+    ///   SessionUpdated    { ... }
     ///   SessionClosed     { reason, total_delivered, ... }
     /// </summary>
     [Authorize]
     public sealed class SessionHub : Hub
     {
-        private readonly RabbitMqPublisher _publisher;
         private readonly ILogger<SessionHub> _logger;
 
-        public SessionHub(RabbitMqPublisher publisher, ILogger<SessionHub> logger)
+        public SessionHub(ILogger<SessionHub> logger)
         {
-            _publisher = publisher;
             _logger = logger;
         }
 
@@ -45,36 +37,6 @@ namespace UserApi.Hubs
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, sessionToken);
             _logger.LogDebug("Client {ConnectionId} left session {Token}", Context.ConnectionId, sessionToken);
-        }
-
-        public Task PauseSession(string deviceSerialNumber)
-        {
-            _publisher.Publish(QueueNames.CommandQueue, new DeviceCommand
-            {
-                CommandType = DeviceCommandTypes.Pause,
-                SerialNumber = deviceSerialNumber
-            });
-            return Task.CompletedTask;
-        }
-
-        public Task ResumeSession(string deviceSerialNumber)
-        {
-            _publisher.Publish(QueueNames.CommandQueue, new DeviceCommand
-            {
-                CommandType = DeviceCommandTypes.Resume,
-                SerialNumber = deviceSerialNumber
-            });
-            return Task.CompletedTask;
-        }
-
-        public Task StopSession(string deviceSerialNumber)
-        {
-            _publisher.Publish(QueueNames.CommandQueue, new DeviceCommand
-            {
-                CommandType = DeviceCommandTypes.Stop,
-                SerialNumber = deviceSerialNumber
-            });
-            return Task.CompletedTask;
         }
 
         public override async Task OnDisconnectedAsync(Exception? exception)

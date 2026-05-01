@@ -1,4 +1,5 @@
 using Domain.Dtos;
+using Domain.Dtos.Process;
 using Domain.Dtos.Session;
 using UserApi.Models.Requests;
 
@@ -19,18 +20,26 @@ namespace UserApi.Extensions
                 UserId = userId
             };
 
-        public static SetQuantityDto ToDto(this SetQuantityRequest request, long userId)
-            => new SetQuantityDto
-            {
-                SessionId = request.SessionId,
-                UserId = userId,
-                RequestedQuantity = request.RequestedQuantity
-            };
-
         public static CloseSessionDto ToDto(this CloseSessionRequest request, long userId)
             => new CloseSessionDto
             {
                 SessionId = request.SessionId,
+                UserId = userId
+            };
+
+        public static StartProcessDto ToDto(this StartProcessRequest request, long userId)
+            => new StartProcessDto
+            {
+                SessionId = request.SessionId,
+                UserId = userId,
+                ProductId = request.ProductId,
+                RequestedAmount = request.RequestedAmount
+            };
+
+        public static ProcessControlDto ToControlDto(long processId, long userId)
+            => new ProcessControlDto
+            {
+                ProcessId = processId,
                 UserId = userId
             };
     }

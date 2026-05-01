@@ -7,10 +7,8 @@ namespace Domain.Interfaces
     {
         Task<GenericDto<CreateSessionResultDto>> CreateSessionAsync(CreateSessionDto dto);
         Task<GenericDto<DeviceConnectedResultDto>> DeviceConnectAsync(DeviceConnectedDto dto);
-        Task<GenericDto<SetQuantityResultDto>> SetQuantityAsync(SetQuantityDto dto);
-        Task<GenericDto<SessionProgressResultDto>> ReportProgressAsync(SessionProgressDto dto);
-        Task<GenericDto<DeviceFinishResultDto>> DeviceFinishAsync(DeviceFinishDto dto);
         Task<GenericDto<CloseSessionResultDto>> CloseSessionByUserAsync(CloseSessionDto dto);
         Task CloseTimedOutSessionsAsync();
+        Task CloseOfflineDeviceSessionsAsync();
     }
 }

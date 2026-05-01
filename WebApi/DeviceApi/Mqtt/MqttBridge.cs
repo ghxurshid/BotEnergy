@@ -14,9 +14,17 @@ using MQTTnet.Client;
 namespace DeviceApi.Mqtt
 {
     /// <summary>
-    /// MQTT bilan bevosita bog'lanish — qurilmalardan telemetry qabul qiladi,
+    /// MQTT bilan bevosita bog'lanish — qurilmalardan event/telemetry/heartbeat qabul qiladi,
     /// qurilmalarga buyruq yuboradi.
     /// Qurilma eventlarini RabbitMQ ga uzatadi (UserApi ga yetkazish uchun).
+    ///
+    /// **Topiclar:**
+    ///  Server → Device:  server/{serial}/command
+    ///  Device → Server:  device/{serial}/event       — connected / stopped / error / out_of_resource
+    ///                    device/{serial}/telemetry  — har 5s
+    ///                    device/{serial}/response   — buyruqlarga ack
+    ///                    device/{serial}/heartbeat  — har 30s, LastSeenAt yangilanishi uchun
+    ///                    device/{serial}/status     — diagnostika (auth talab qilinmaydi)
     /// </summary>
     public sealed class MqttBridge : BackgroundService
     {
@@ -70,13 +78,15 @@ namespace DeviceApi.Mqtt
                             _options.BrokerHost, _options.BrokerPort);
 
                         await _mqttClient.SubscribeAsync(
-                            new MqttTopicFilterBuilder().WithTopic("station/+/session/connected").WithAtLeastOnceQoS().Build(), stoppingToken);
+                            new MqttTopicFilterBuilder().WithTopic("device/+/event").WithAtLeastOnceQoS().Build(), stoppingToken);
                         await _mqttClient.SubscribeAsync(
-                            new MqttTopicFilterBuilder().WithTopic("station/+/telemetry").WithAtMostOnceQoS().Build(), stoppingToken);
+                            new MqttTopicFilterBuilder().WithTopic("device/+/telemetry").WithAtMostOnceQoS().Build(), stoppingToken);
                         await _mqttClient.SubscribeAsync(
-                            new MqttTopicFilterBuilder().WithTopic("station/+/session/completed").WithAtLeastOnceQoS().Build(), stoppingToken);
+                            new MqttTopicFilterBuilder().WithTopic("device/+/response").WithAtLeastOnceQoS().Build(), stoppingToken);
                         await _mqttClient.SubscribeAsync(
-                            new MqttTopicFilterBuilder().WithTopic("station/+/status").WithAtLeastOnceQoS().Build(), stoppingToken);
+                            new MqttTopicFilterBuilder().WithTopic("device/+/heartbeat").WithAtMostOnceQoS().Build(), stoppingToken);
+                        await _mqttClient.SubscribeAsync(
+                            new MqttTopicFilterBuilder().WithTopic("device/+/status").WithAtLeastOnceQoS().Build(), stoppingToken);
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
@@ -97,29 +107,35 @@ namespace DeviceApi.Mqtt
 
         // ── Qurilmaga buyruq yuborish (RabbitMQ dan keladi) ───────────
 
-        public async Task PublishStartCommandAsync(string serialNumber, long productId, decimal amount)
-        {
-            await PublishAsync($"station/{serialNumber}/command/start", new
+        public Task PublishStartCommandAsync(string serialNumber, long processId, long productId, decimal amount)
+            => PublishAsync($"server/{serialNumber}/command", new
             {
+                type = "start",
+                process_id = processId,
                 product_id = productId,
                 amount
             });
-        }
 
-        public async Task PublishPauseCommandAsync(string serialNumber)
-        {
-            await PublishAsync($"station/{serialNumber}/command/pause", new { });
-        }
+        public Task PublishPauseCommandAsync(string serialNumber, long processId)
+            => PublishAsync($"server/{serialNumber}/command", new
+            {
+                type = "pause",
+                process_id = processId
+            });
 
-        public async Task PublishResumeCommandAsync(string serialNumber)
-        {
-            await PublishAsync($"station/{serialNumber}/command/resume", new { });
-        }
+        public Task PublishResumeCommandAsync(string serialNumber, long processId)
+            => PublishAsync($"server/{serialNumber}/command", new
+            {
+                type = "resume",
+                process_id = processId
+            });
 
-        public async Task PublishStopCommandAsync(string serialNumber)
-        {
-            await PublishAsync($"station/{serialNumber}/command/stop", new { });
-        }
+        public Task PublishStopCommandAsync(string serialNumber, long processId)
+            => PublishAsync($"server/{serialNumber}/command", new
+            {
+                type = "stop",
+                process_id = processId
+            });
 
         // ── MQTT xabarlarni qabul qilish → RabbitMQ ga uzatish ───────
 
@@ -129,16 +145,16 @@ namespace DeviceApi.Mqtt
             var payload = Encoding.UTF8.GetString(args.ApplicationMessage.PayloadSegment);
 
             var parts = topic.Split('/');
-            if (parts.Length < 3 || parts[0] != "station")
+            if (parts.Length < 3 || parts[0] != "device")
                 return;
 
             var serialNumber = parts[1];
+            var action = parts[2];
 
             try
             {
-                var action = string.Join("/", parts[2..]);
-
-                // status topicda device_token talab qilinmaydi
+                // Status va heartbeat — engil topiclar, har birida auth talab qilamiz
+                // (telemetry istisno: o'ta tezkor bo'lishi uchun har payloadda token tekshiriladi).
                 if (action != "status")
                 {
                     var basePayload = JsonSerializer.Deserialize<DeviceAuthPayload>(payload, JsonOpts);
@@ -158,20 +174,27 @@ namespace DeviceApi.Mqtt
                             serialNumber, topic);
                         return;
                     }
+
+                    // LastSeenAt va IsOnline ni atomic update — alohida scope da
+                    await deviceRepo.TouchLastSeenAsync(serialNumber);
                 }
 
                 switch (action)
                 {
-                    case "session/connected":
-                        HandleDeviceConnected(serialNumber, payload);
+                    case "event":
+                        HandleDeviceEvent(serialNumber, payload);
                         break;
 
                     case "telemetry":
                         HandleTelemetry(serialNumber, payload);
                         break;
 
-                    case "session/completed":
-                        HandleSessionCompleted(serialNumber, payload);
+                    case "response":
+                        HandleDeviceResponse(serialNumber, payload);
+                        break;
+
+                    case "heartbeat":
+                        HandleHeartbeat(serialNumber);
                         break;
 
                     case "status":
@@ -189,17 +212,39 @@ namespace DeviceApi.Mqtt
             }
         }
 
-        private void HandleDeviceConnected(string serialNumber, string payload)
+        private void HandleDeviceEvent(string serialNumber, string payload)
         {
-            var data = JsonSerializer.Deserialize<DeviceConnectedPayload>(payload, JsonOpts);
+            var data = JsonSerializer.Deserialize<DeviceEventPayload>(payload, JsonOpts);
             if (data is null) return;
 
-            _rabbitPublisher.Publish(QueueNames.EventQueue, new DeviceEvent
+            var type = (data.Type ?? string.Empty).ToLowerInvariant();
+
+            if (type is "connect" or "connected")
             {
-                EventType = DeviceEventTypes.Connected,
-                SerialNumber = serialNumber,
-                SessionToken = data.SessionToken
-            });
+                _rabbitPublisher.Publish(QueueNames.EventQueue, new DeviceEvent
+                {
+                    EventType = DeviceEventTypes.Connected,
+                    SerialNumber = serialNumber,
+                    SessionToken = data.SessionToken
+                });
+                return;
+            }
+
+            if (type is "stopped" or "error" or "out_of_resource" or "completed")
+            {
+                _rabbitPublisher.Publish(QueueNames.EventQueue, new DeviceEvent
+                {
+                    EventType = DeviceEventTypes.Finished,
+                    SerialNumber = serialNumber,
+                    SessionToken = data.SessionToken,
+                    ProcessId = data.ProcessId,
+                    FinalQuantity = data.FinalQuantity,
+                    EndReason = type
+                });
+                return;
+            }
+
+            _logger.LogDebug("Noma'lum device event turi: {Type}", type);
         }
 
         private void HandleTelemetry(string serialNumber, string payload)
@@ -212,22 +257,32 @@ namespace DeviceApi.Mqtt
                 EventType = DeviceEventTypes.Telemetry,
                 SerialNumber = serialNumber,
                 SessionToken = data.SessionToken,
+                ProcessId = data.ProcessId,
+                Sequence = data.Sequence,
                 Quantity = data.Quantity
             });
         }
 
-        private void HandleSessionCompleted(string serialNumber, string payload)
+        private void HandleDeviceResponse(string serialNumber, string payload)
         {
-            var data = JsonSerializer.Deserialize<SessionCompletedPayload>(payload, JsonOpts);
+            // Response qurilmaning command-ga ack-i. Hozircha event queue-ga finished sifatida uzatamiz —
+            // agar ack stop ga bo'lsa, server bu jarayonni yopish bilan band emas (allaqachon Ended).
+            // Kelajakda command tracking jadvali kerak bo'ladi.
+            var data = JsonSerializer.Deserialize<DeviceResponsePayload>(payload, JsonOpts);
             if (data is null) return;
 
+            _logger.LogInformation(
+                "Device {Serial} response: process={Process} command={Cmd} status={Status}",
+                serialNumber, data.ProcessId, data.Command, data.Status);
+        }
+
+        private void HandleHeartbeat(string serialNumber)
+        {
+            // LastSeenAt allaqachon TouchLastSeenAsync orqali yangilangan.
             _rabbitPublisher.Publish(QueueNames.EventQueue, new DeviceEvent
             {
-                EventType = DeviceEventTypes.Completed,
-                SerialNumber = serialNumber,
-                SessionToken = data.SessionToken,
-                FinalQuantity = data.FinalQuantity,
-                EndReason = data.EndReason
+                EventType = DeviceEventTypes.Heartbeat,
+                SerialNumber = serialNumber
             });
         }
 
@@ -274,21 +329,26 @@ namespace DeviceApi.Mqtt
         public string? DeviceToken { get; set; }
     }
 
-    internal sealed class DeviceConnectedPayload : DeviceAuthPayload
+    internal sealed class DeviceEventPayload : DeviceAuthPayload
     {
-        public string SessionToken { get; set; } = string.Empty;
+        public string? Type { get; set; }
+        public string? SessionToken { get; set; }
+        public long? ProcessId { get; set; }
+        public decimal? FinalQuantity { get; set; }
     }
 
     internal sealed class TelemetryPayload : DeviceAuthPayload
     {
         public string SessionToken { get; set; } = string.Empty;
+        public long ProcessId { get; set; }
+        public long Sequence { get; set; }
         public decimal Quantity { get; set; }
     }
 
-    internal sealed class SessionCompletedPayload : DeviceAuthPayload
+    internal sealed class DeviceResponsePayload : DeviceAuthPayload
     {
-        public string SessionToken { get; set; } = string.Empty;
-        public decimal FinalQuantity { get; set; }
-        public string? EndReason { get; set; }
+        public long ProcessId { get; set; }
+        public string? Command { get; set; }
+        public string? Status { get; set; }
     }
 }

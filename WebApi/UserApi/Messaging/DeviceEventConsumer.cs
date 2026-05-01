@@ -1,5 +1,7 @@
 using CommonConfiguration.Messaging;
+using Domain.Dtos.Process;
 using Domain.Dtos.Session;
+using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Messaging;
 using Domain.Messaging.Events;
@@ -10,7 +12,7 @@ namespace UserApi.Messaging
 {
     /// <summary>
     /// DeviceApi dan RabbitMQ orqali kelgan eventlarni qayta ishlaydi.
-    /// EventQueue: Qurilma → MQTT → DeviceApi → RabbitMQ → UserApi → SessionService → SignalR
+    /// EventQueue: Qurilma → MQTT → DeviceApi → RabbitMQ → UserApi → SessionService/ProcessService → SignalR
     /// </summary>
     public sealed class DeviceEventConsumer : RabbitMqConsumerBase<DeviceEvent>
     {
@@ -30,8 +32,8 @@ namespace UserApi.Messaging
         protected override async Task HandleMessageAsync(DeviceEvent deviceEvent)
         {
             _logger.LogInformation(
-                "RabbitMQ event qabul qilindi: {Type} — Serial: {Serial}",
-                deviceEvent.EventType, deviceEvent.SerialNumber);
+                "RabbitMQ event qabul qilindi: {Type} — Serial: {Serial} Process: {Process}",
+                deviceEvent.EventType, deviceEvent.SerialNumber, deviceEvent.ProcessId);
 
             switch (deviceEvent.EventType)
             {
@@ -43,8 +45,12 @@ namespace UserApi.Messaging
                     await HandleTelemetryAsync(deviceEvent);
                     break;
 
-                case DeviceEventTypes.Completed:
-                    await HandleSessionCompletedAsync(deviceEvent);
+                case DeviceEventTypes.Finished:
+                    await HandleFinishedAsync(deviceEvent);
+                    break;
+
+                case DeviceEventTypes.Heartbeat:
+                    // LastSeenAt allaqachon DeviceApi tomonidan yangilangan — bu yerda qo'shimcha hech narsa qilmaymiz.
                     break;
 
                 case DeviceEventTypes.Status:
@@ -74,28 +80,39 @@ namespace UserApi.Messaging
         private async Task HandleTelemetryAsync(DeviceEvent e)
         {
             using var scope = _scopeFactory.CreateScope();
-            var sessionService = scope.ServiceProvider.GetRequiredService<ISessionService>();
+            var processService = scope.ServiceProvider.GetRequiredService<IProcessService>();
 
-            await sessionService.ReportProgressAsync(new SessionProgressDto
+            await processService.ReportTelemetryAsync(new ProcessTelemetryDto
             {
                 SessionToken = e.SessionToken ?? string.Empty,
                 SerialNumber = e.SerialNumber,
-                Quantity = e.Quantity ?? 0
+                ProcessId = e.ProcessId ?? 0,
+                Quantity = e.Quantity ?? 0,
+                Sequence = e.Sequence ?? 0
             });
         }
 
-        private async Task HandleSessionCompletedAsync(DeviceEvent e)
+        private async Task HandleFinishedAsync(DeviceEvent e)
         {
             using var scope = _scopeFactory.CreateScope();
-            var sessionService = scope.ServiceProvider.GetRequiredService<ISessionService>();
+            var processService = scope.ServiceProvider.GetRequiredService<IProcessService>();
 
-            await sessionService.DeviceFinishAsync(new DeviceFinishDto
+            await processService.ReportDeviceFinishedAsync(new DeviceProcessReportDto
             {
                 SessionToken = e.SessionToken ?? string.Empty,
                 SerialNumber = e.SerialNumber,
+                ProcessId = e.ProcessId ?? 0,
                 FinalQuantity = e.FinalQuantity ?? 0,
-                EndReason = e.EndReason
+                EndReason = MapEndReason(e.EndReason)
             });
         }
+
+        private static ProcessEndReason MapEndReason(string? raw) => raw?.ToLowerInvariant() switch
+        {
+            "completed" => ProcessEndReason.Completed,
+            "stopped" => ProcessEndReason.UserStopped,
+            "out_of_resource" => ProcessEndReason.OutOfResource,
+            _ => ProcessEndReason.DeviceError
+        };
     }
 }

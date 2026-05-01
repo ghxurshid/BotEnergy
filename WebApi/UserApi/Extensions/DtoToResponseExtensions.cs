@@ -1,3 +1,4 @@
+using Domain.Dtos.Process;
 using Domain.Dtos.Session;
 using UserApi.Models.Responses;
 
@@ -14,21 +15,33 @@ namespace UserApi.Extensions
                 Message = dto.ResultMessage
             };
 
-        public static SetQuantityResponse ToResponse(this SetQuantityResultDto dto)
-            => new SetQuantityResponse
-            {
-                LimitQuantity = dto.LimitQuantity,
-                ProductName = dto.ProductName,
-                Unit = dto.Unit,
-                PricePerUnit = dto.PricePerUnit,
-                Message = dto.ResultMessage
-            };
-
         public static CloseSessionResponse ToResponse(this CloseSessionResultDto dto)
             => new CloseSessionResponse
             {
                 Message = dto.ResultMessage,
-                TotalDelivered = dto.TotalDelivered
+                TotalDelivered = dto.TotalDelivered,
+                TotalCost = dto.TotalCost
+            };
+
+        public static StartProcessResponse ToResponse(this StartProcessResultDto dto)
+            => new StartProcessResponse
+            {
+                ProcessId = dto.ProcessId,
+                ProductId = dto.ProductId,
+                ProductName = dto.ProductName,
+                Unit = dto.Unit,
+                PricePerUnit = dto.PricePerUnit,
+                LimitAmount = dto.LimitAmount,
+                DeviceSerialNumber = dto.DeviceSerialNumber,
+                Message = dto.ResultMessage
+            };
+
+        public static ProcessControlResponse ToResponse(this ProcessControlResultDto dto)
+            => new ProcessControlResponse
+            {
+                ProcessId = dto.ProcessId,
+                Status = dto.Status,
+                Message = dto.ResultMessage
             };
     }
 }

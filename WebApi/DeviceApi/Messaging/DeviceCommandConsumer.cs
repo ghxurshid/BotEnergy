@@ -28,28 +28,29 @@ namespace DeviceApi.Messaging
         protected override async Task HandleMessageAsync(DeviceCommand command)
         {
             _logger.LogInformation(
-                "RabbitMQ buyruq qabul qilindi: {Type} → {Serial}",
-                command.CommandType, command.SerialNumber);
+                "RabbitMQ buyruq qabul qilindi: {Type} → {Serial} (process={Process})",
+                command.CommandType, command.SerialNumber, command.ProcessId);
 
             switch (command.CommandType)
             {
                 case DeviceCommandTypes.Start:
                     await _mqttBridge.PublishStartCommandAsync(
                         command.SerialNumber,
+                        command.ProcessId,
                         command.ProductId ?? 0,
                         command.Amount ?? 0);
                     break;
 
                 case DeviceCommandTypes.Pause:
-                    await _mqttBridge.PublishPauseCommandAsync(command.SerialNumber);
+                    await _mqttBridge.PublishPauseCommandAsync(command.SerialNumber, command.ProcessId);
                     break;
 
                 case DeviceCommandTypes.Resume:
-                    await _mqttBridge.PublishResumeCommandAsync(command.SerialNumber);
+                    await _mqttBridge.PublishResumeCommandAsync(command.SerialNumber, command.ProcessId);
                     break;
 
                 case DeviceCommandTypes.Stop:
-                    await _mqttBridge.PublishStopCommandAsync(command.SerialNumber);
+                    await _mqttBridge.PublishStopCommandAsync(command.SerialNumber, command.ProcessId);
                     break;
 
                 default:

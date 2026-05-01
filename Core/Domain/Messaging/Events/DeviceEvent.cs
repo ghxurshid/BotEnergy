@@ -9,6 +9,8 @@ namespace Domain.Messaging.Events
         public string EventType { get; set; } = string.Empty;
         public string SerialNumber { get; set; } = string.Empty;
         public string? SessionToken { get; set; }
+        public long? ProcessId { get; set; }
+        public long? Sequence { get; set; }
         public decimal? Quantity { get; set; }
         public decimal? FinalQuantity { get; set; }
         public string? EndReason { get; set; }
@@ -19,7 +21,8 @@ namespace Domain.Messaging.Events
     {
         public const string Connected = "connected";
         public const string Telemetry = "telemetry";
-        public const string Completed = "completed";
+        public const string Finished = "finished";
+        public const string Heartbeat = "heartbeat";
         public const string Status = "status";
     }
 }

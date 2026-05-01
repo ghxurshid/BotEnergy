@@ -1,4 +1,5 @@
 using StackExchange.Redis;
+using Domain.Interfaces;
 
 namespace CommonConfiguration.Redis
 {

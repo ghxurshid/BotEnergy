@@ -23,8 +23,11 @@ namespace Domain.Entities
 
         public bool IsActive { get; set; } = true;
 
+        /// <summary>Qurilmadan kelgan oxirgi MQTT signal vaqti (heartbeat / telemetry).</summary>
+        public DateTime? LastSeenAt { get; set; }
+
         public ICollection<ProductEntity>? Products { get; set; }
 
-        public ICollection<UsageSessionEntity>? UsageSessions { get; set; }
+        public ICollection<SessionEntity>? Sessions { get; set; }
     }
 }

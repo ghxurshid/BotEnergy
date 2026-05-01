@@ -20,6 +20,6 @@ namespace Domain.Entities
         public string? PasswordSalt { get; set; }
 
         public ICollection<UserRoleEntity>? UserRoles { get; set; }
-        public ICollection<UsageSessionEntity>? UsageSessions { get; set; }
+        public ICollection<SessionEntity>? Sessions { get; set; }
     }
 }

@@ -4,5 +4,6 @@ namespace UserApi.Models.Responses
     {
         public string Message { get; set; } = string.Empty;
         public decimal TotalDelivered { get; set; }
+        public decimal TotalCost { get; set; }
     }
 }
