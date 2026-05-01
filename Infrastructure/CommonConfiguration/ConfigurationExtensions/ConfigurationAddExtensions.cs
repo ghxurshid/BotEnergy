@@ -222,7 +222,9 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IDeviceRepository, DeviceRepository>();
             services.AddScoped<IProductRepository, ProductRepository>();
+            services.AddScoped<IProductProcessRepository, ProductProcessRepository>();
             services.AddScoped<ISessionRepository, SessionRepository>();
+            services.AddScoped<IProcessService, ProcessService>();
             services.AddScoped<ISessionService, SessionService>();
             // ISessionNotifier — UserApi Program.cs da ro'yxatdan o'tkaziladi
             services.AddHostedService<IdleSessionCleanerService>();
