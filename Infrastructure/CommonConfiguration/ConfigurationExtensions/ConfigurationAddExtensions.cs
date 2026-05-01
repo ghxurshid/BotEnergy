@@ -5,11 +5,13 @@ using CommonConfiguration.Redis;
 using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Npgsql;
@@ -23,6 +25,21 @@ namespace CommonConfiguration.ConfigurationExtensions
 {
     public static class ConfigurationAddExtensions
     {
+        /// <summary>
+        /// DI konfiguratsiyasini barcha API lar uchun bir xil qiladi.
+        /// Build vaqtida service graph validatsiya qilinadi.
+        /// </summary>
+        public static WebApplicationBuilder AddValidatedServiceProvider(this WebApplicationBuilder builder)
+        {
+            builder.Host.UseDefaultServiceProvider((context, options) =>
+            {
+                options.ValidateOnBuild = true;
+                options.ValidateScopes = context.HostingEnvironment.IsDevelopment();
+            });
+
+            return builder;
+        }
+
         /// <summary>
         /// Swagger + JWT Bearer auth konfiguratsiyasi.
         /// <paramref name="includeJwtAuth"/> false bo'lsa, faqat Swagger doc va XML comments qo'shiladi (masalan, AuthApi).

@@ -6,7 +6,7 @@ using UserApi.Hubs;
 using UserApi.Messaging;
 
 var builder = WebApplication.CreateBuilder(args);
-
+builder.AddValidatedServiceProvider();
 builder.Services.AddControllers(options =>
 {
     options.Filters.Add<PermissionFilter>();
@@ -30,6 +30,7 @@ builder.Services.AddRedisServices(builder.Configuration);
 
 // SignalR Session Notifier
 builder.Services.AddScoped<ISessionNotifier, SignalRSessionNotifier>();
+builder.Services.AddScoped<IDeviceCommandPublisher, RabbitMqDeviceCommandPublisher>();
 
 // RabbitMQ Consumer — DeviceApi dan kelgan eventlarni qayta ishlaydi
 builder.Services.AddHostedService<DeviceEventConsumer>();

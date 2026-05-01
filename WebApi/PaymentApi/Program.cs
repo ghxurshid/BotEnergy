@@ -3,6 +3,7 @@ using CommonConfiguration.ConfigurationServices;
 using CommonConfiguration.Filters;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddValidatedServiceProvider();
 
 builder.Services.AddControllers(options =>
 {
