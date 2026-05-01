@@ -225,6 +225,7 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<IMerchantService, MerchantService>();
 
             // Billing
+            services.AddScoped<IProductProcessRepository, ProductProcessRepository>();
             services.AddScoped<IBillingService, BillingService>();
 
             return services;
