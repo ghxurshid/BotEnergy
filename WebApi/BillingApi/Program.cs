@@ -18,6 +18,9 @@ builder.Configuration.AddCommonConfiguration();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
 
+// Redis
+builder.Services.AddRedisServices(builder.Configuration);
+
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
 var app = builder.Build();

@@ -24,6 +24,9 @@ builder.Services.RegisterDeviceServices();
 // RabbitMQ
 builder.Services.AddRabbitMq(builder.Configuration);
 
+// Redis
+builder.Services.AddRedisServices(builder.Configuration);
+
 // MQTT Bridge
 builder.Services.Configure<MqttOptions>(builder.Configuration.GetSection("Mqtt"));
 builder.Services.AddSingleton<MqttBridge>();

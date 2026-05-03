@@ -17,8 +17,10 @@ builder.Services.AddSwaggerWithJwtAuth(
 
 builder.Configuration.AddCommonConfiguration();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddRedisServices(builder.Configuration);
 builder.Services.RegisterServices();
+
+// Redis
+builder.Services.AddRedisServices(builder.Configuration);
 
 var app = builder.Build();
 
