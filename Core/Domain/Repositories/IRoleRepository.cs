@@ -1,4 +1,5 @@
 using Domain.Entities;
+using Domain.Enums;
 
 namespace Domain.Repositories
 {
@@ -7,6 +8,7 @@ namespace Domain.Repositories
         Task<RoleEntity?> GetByIdAsync(long id);
         Task<RoleEntity?> GetByIdWithPermissionsAsync(long id);
         Task<List<RoleEntity>> GetAllAsync();
+        Task<List<RoleEntity>> GetByScopeAsync(IEnumerable<RoleType> roleTypes, long? organizationId, long? merchantId);
         Task<RoleEntity> CreateAsync(RoleEntity role);
         Task<RoleEntity> UpdateAsync(RoleEntity role);
         Task DeleteAsync(long id);

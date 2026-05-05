@@ -1,3 +1,5 @@
+using Domain.Enums;
+
 namespace Domain.Dtos
 {
     public class CreateRoleDto
@@ -5,6 +7,8 @@ namespace Domain.Dtos
         public required string Name { get; set; }
         public string? Description { get; set; }
         public bool IsActive { get; set; } = true;
+        public long? StationId { get; set; }
+        public long? OrganizationId { get; set; }
         public List<long>? PermissionIds { get; set; }
     }
 
@@ -28,6 +32,9 @@ namespace Domain.Dtos
         public required string Name { get; set; }
         public string? Description { get; set; }
         public bool IsActive { get; set; }
+        public RoleType RoleType { get; set; }
+        public long? OrganizationId { get; set; }
+        public long? MerchantId { get; set; }
         public List<string> Permissions { get; set; } = new();
     }
 
@@ -57,6 +64,7 @@ namespace Domain.Dtos
 
     public class GetAllowedPermissionsResultDto
     {
+        public RoleType RoleType { get; set; }
         public List<AllowedPermissionDto> Permissions { get; set; } = new();
     }
 }

@@ -11,6 +11,8 @@ namespace AdminApi.Extensions
                 Name = request.Name,
                 Description = request.Description,
                 IsActive = request.IsActive ?? true,
+                StationId = request.StationId,
+                OrganizationId = request.OrganizationId,
                 PermissionIds = request.PermissionIds
             };
 

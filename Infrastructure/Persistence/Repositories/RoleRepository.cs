@@ -1,4 +1,5 @@
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Context;
@@ -25,6 +26,23 @@ namespace Persistence.Repositories
             => await _context.Roles
                 .OrderBy(r => r.Name)
                 .ToListAsync();
+
+        public async Task<List<RoleEntity>> GetByScopeAsync(IEnumerable<RoleType> roleTypes, long? organizationId, long? merchantId)
+        {
+            var typeSet = roleTypes.ToHashSet();
+            if (typeSet.Count == 0)
+                return new List<RoleEntity>();
+
+            return await _context.Roles
+                .Where(r =>
+                    (typeSet.Contains(RoleType.NaturalRole) && r is NaturalRoleEntity) ||
+                    (typeSet.Contains(RoleType.LegalRole) && r is LegalRoleEntity &&
+                        (organizationId == null || ((LegalRoleEntity)r).OrganizationId == organizationId)) ||
+                    (typeSet.Contains(RoleType.MerchantRole) && r is MerchantRoleEntity &&
+                        (merchantId == null || ((MerchantRoleEntity)r).MerchantId == merchantId)))
+                .OrderBy(r => r.Name)
+                .ToListAsync();
+        }
 
         public async Task<RoleEntity> CreateAsync(RoleEntity role)
         {

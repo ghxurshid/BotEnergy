@@ -21,6 +21,8 @@ namespace Persistence.Repositories
 
             if (user is LegalUserEntity legalUser)
                 await _context.Entry(legalUser).Reference(l => l.Organization).LoadAsync();
+            else if (user is MerchantUserEntity merchantUser)
+                await _context.Entry(merchantUser).Reference(m => m.Station).LoadAsync();
 
             return user;
         }
