@@ -1,3 +1,5 @@
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using CommonConfiguration.Messaging;
@@ -24,7 +26,13 @@ namespace DeviceApi.Mqtt
     ///                    device/{serial}/telemetry  — har 5s
     ///                    device/{serial}/response   — buyruqlarga ack
     ///                    device/{serial}/heartbeat  — har 30s, LastSeenAt yangilanishi uchun
-    ///                    device/{serial}/status     — diagnostika (auth talab qilinmaydi)
+    ///                    device/{serial}/status     — diagnostika (auth/encryption talab qilinmaydi)
+    ///
+    /// **Xavfsizlik qatlamlari (sozlamaga ko'ra):**
+    ///  - TLS (UseTls=true) — MQTT broker bilan shifrlangan TCP
+    ///  - Mutual TLS (ClientCertificatePath bo'lsa) — qurilma sertifikati bilan
+    ///  - Application-level (EnableEncryption=true): AES-256-GCM + HMAC-SHA256 + timestamp
+    ///    Kalitlar Device.SecretKey dan derive qilinadi (har qurilma uchun unikal).
     /// </summary>
     public sealed class MqttBridge : BackgroundService
     {
@@ -71,11 +79,14 @@ namespace DeviceApi.Mqtt
                         if (!string.IsNullOrEmpty(_options.Username))
                             opts = opts.WithCredentials(_options.Username, _options.Password);
 
+                        if (_options.UseTls)
+                            opts = ApplyTls(opts);
+
                         await _mqttClient.ConnectAsync(opts.Build(), stoppingToken);
 
                         _logger.LogInformation(
-                            "MQTT brokerga ulandi: {Host}:{Port}",
-                            _options.BrokerHost, _options.BrokerPort);
+                            "MQTT brokerga ulandi: {Host}:{Port} (TLS={Tls}, Encryption={Enc})",
+                            _options.BrokerHost, _options.BrokerPort, _options.UseTls, _options.EnableEncryption);
 
                         await _mqttClient.SubscribeAsync(
                             new MqttTopicFilterBuilder().WithTopic("device/+/event").WithAtLeastOnceQoS().Build(), stoppingToken);
@@ -105,10 +116,35 @@ namespace DeviceApi.Mqtt
             _mqttClient.Dispose();
         }
 
+        private MqttClientOptionsBuilder ApplyTls(MqttClientOptionsBuilder builder)
+        {
+            X509Certificate2? clientCert = null;
+            if (!string.IsNullOrEmpty(_options.ClientCertificatePath))
+            {
+                clientCert = new X509Certificate2(
+                    _options.ClientCertificatePath,
+                    _options.ClientCertificatePassword);
+            }
+
+            return builder.WithTlsOptions(tls =>
+            {
+                tls.UseTls(true);
+                tls.WithAllowUntrustedCertificates(_options.AllowUntrustedCertificates);
+                tls.WithIgnoreCertificateChainErrors(_options.AllowUntrustedCertificates);
+                tls.WithIgnoreCertificateRevocationErrors(_options.AllowUntrustedCertificates);
+                tls.WithSslProtocols(SslProtocols.Tls12);
+
+                if (clientCert is not null)
+                {
+                    tls.WithClientCertificates(new[] { clientCert });
+                }
+            });
+        }
+
         // ── Qurilmaga buyruq yuborish (RabbitMQ dan keladi) ───────────
 
         public Task PublishStartCommandAsync(string serialNumber, long processId, long productId, decimal amount)
-            => PublishAsync($"server/{serialNumber}/command", new
+            => PublishToDeviceAsync(serialNumber, "command", new
             {
                 type = "start",
                 process_id = processId,
@@ -117,21 +153,21 @@ namespace DeviceApi.Mqtt
             });
 
         public Task PublishPauseCommandAsync(string serialNumber, long processId)
-            => PublishAsync($"server/{serialNumber}/command", new
+            => PublishToDeviceAsync(serialNumber, "command", new
             {
                 type = "pause",
                 process_id = processId
             });
 
         public Task PublishResumeCommandAsync(string serialNumber, long processId)
-            => PublishAsync($"server/{serialNumber}/command", new
+            => PublishToDeviceAsync(serialNumber, "command", new
             {
                 type = "resume",
                 process_id = processId
             });
 
         public Task PublishStopCommandAsync(string serialNumber, long processId)
-            => PublishAsync($"server/{serialNumber}/command", new
+            => PublishToDeviceAsync(serialNumber, "command", new
             {
                 type = "stop",
                 process_id = processId
@@ -142,7 +178,7 @@ namespace DeviceApi.Mqtt
         private async Task OnMessageAsync(MqttApplicationMessageReceivedEventArgs args)
         {
             var topic = args.ApplicationMessage.Topic;
-            var payload = Encoding.UTF8.GetString(args.ApplicationMessage.PayloadSegment);
+            var rawPayload = Encoding.UTF8.GetString(args.ApplicationMessage.PayloadSegment);
 
             var parts = topic.Split('/');
             if (parts.Length < 3 || parts[0] != "device")
@@ -153,30 +189,66 @@ namespace DeviceApi.Mqtt
 
             try
             {
-                // Status va heartbeat — engil topiclar, har birida auth talab qilamiz
-                // (telemetry istisno: o'ta tezkor bo'lishi uchun har payloadda token tekshiriladi).
-                if (action != "status")
+                string payload;
+
+                if (action == "status")
                 {
-                    var basePayload = JsonSerializer.Deserialize<DeviceAuthPayload>(payload, JsonOpts);
-                    if (string.IsNullOrEmpty(basePayload?.DeviceToken))
-                    {
-                        _logger.LogWarning("MQTT xabar rad etildi — device_token yo'q. Topic: {Topic}", topic);
-                        return;
-                    }
+                    // Diagnostika — auth/encryption talab qilmaydi
+                    payload = rawPayload;
+                }
+                else
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var deviceRepo = scope.ServiceProvider.GetRequiredService<IDeviceRepository>();
 
-                    using var authScope = _scopeFactory.CreateScope();
-                    var deviceRepo = authScope.ServiceProvider.GetRequiredService<IDeviceRepository>();
-                    var isValid = await deviceRepo.ValidateDeviceAsync(serialNumber, basePayload.DeviceToken);
-                    if (!isValid)
+                    if (_options.EnableEncryption)
                     {
-                        _logger.LogWarning(
-                            "MQTT xabar rad etildi — noto'g'ri device_token. Serial: {Serial}, Topic: {Topic}",
-                            serialNumber, topic);
-                        return;
-                    }
+                        // Encrypted flow: serial → SecretKey → envelope unwrap
+                        var device = await deviceRepo.GetBySerialNumberAsync(serialNumber);
+                        if (device is null)
+                        {
+                            _logger.LogWarning("MQTT xabar rad etildi — qurilma topilmadi: {Serial}", serialNumber);
+                            return;
+                        }
 
-                    // LastSeenAt va IsOnline ni atomic update — alohida scope da
-                    await deviceRepo.TouchLastSeenAsync(serialNumber);
+                        if (!SecureMqttEnvelope.TryUnwrap(
+                                rawPayload,
+                                device.SecretKey,
+                                _options.MaxClockSkewSeconds,
+                                out payload,
+                                out var error))
+                        {
+                            _logger.LogWarning(
+                                "MQTT envelope rad etildi — {Reason}. Serial: {Serial}, Topic: {Topic}",
+                                error, serialNumber, topic);
+                            return;
+                        }
+
+                        // Envelope HMAC+GCM tag muvaffaqiyatli — identity tasdiqlandi.
+                        await deviceRepo.TouchLastSeenAsync(serialNumber);
+                    }
+                    else
+                    {
+                        // Legacy flow: payload ichida device_token bo'lishi shart
+                        var basePayload = JsonSerializer.Deserialize<DeviceAuthPayload>(rawPayload, JsonOpts);
+                        if (string.IsNullOrEmpty(basePayload?.DeviceToken))
+                        {
+                            _logger.LogWarning("MQTT xabar rad etildi — device_token yo'q. Topic: {Topic}", topic);
+                            return;
+                        }
+
+                        var isValid = await deviceRepo.ValidateDeviceAsync(serialNumber, basePayload.DeviceToken);
+                        if (!isValid)
+                        {
+                            _logger.LogWarning(
+                                "MQTT xabar rad etildi — noto'g'ri device_token. Serial: {Serial}, Topic: {Topic}",
+                                serialNumber, topic);
+                            return;
+                        }
+
+                        await deviceRepo.TouchLastSeenAsync(serialNumber);
+                        payload = rawPayload;
+                    }
                 }
 
                 switch (action)
@@ -300,25 +372,46 @@ namespace DeviceApi.Mqtt
 
         // ── Yordamchi ─────────────────────────────────────────────────
 
-        private async Task PublishAsync<T>(string topic, T payload)
+        private async Task PublishToDeviceAsync<T>(string serialNumber, string action, T payload)
         {
             if (_mqttClient is null || !_mqttClient.IsConnected)
             {
-                _logger.LogWarning("MQTT ulanmagan. Buyruq yuborilmadi: {Topic}", topic);
+                _logger.LogWarning("MQTT ulanmagan. Buyruq yuborilmadi: {Serial}/{Action}", serialNumber, action);
                 return;
             }
 
+            var topic = $"server/{serialNumber}/{action}";
             var json = JsonSerializer.Serialize(payload, JsonOpts);
+
+            string finalPayload;
+            if (_options.EnableEncryption)
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var deviceRepo = scope.ServiceProvider.GetRequiredService<IDeviceRepository>();
+                var device = await deviceRepo.GetBySerialNumberAsync(serialNumber);
+                if (device is null)
+                {
+                    _logger.LogWarning(
+                        "MQTT publish rad etildi — qurilma topilmadi: {Serial}", serialNumber);
+                    return;
+                }
+
+                finalPayload = SecureMqttEnvelope.Wrap(json, device.SecretKey);
+            }
+            else
+            {
+                finalPayload = json;
+            }
 
             var message = new MqttApplicationMessageBuilder()
                 .WithTopic(topic)
-                .WithPayload(json)
+                .WithPayload(finalPayload)
                 .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
                 .WithRetainFlag(false)
                 .Build();
 
             await _mqttClient.PublishAsync(message);
-            _logger.LogDebug("MQTT publish: {Topic} -> {Payload}", topic, json);
+            _logger.LogDebug("MQTT publish: {Topic} ({Len} bytes)", topic, finalPayload.Length);
         }
     }
 
