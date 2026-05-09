@@ -1,4 +1,5 @@
 using CommonConfiguration.Attributes;
+using Domain.Dtos.Base;
 using Domain.Dtos.Session;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -34,23 +35,26 @@ namespace UserApi.Controllers
 
         /// <summary>
         /// Yangi bo'sh sessiya yaratish.
-        /// UserId JWT dan olinadi.
+        /// UserId JWT dan olinadi. Body talab qilinmaydi.
         /// </summary>
         /// <response code="200">Sessiya yaratildi (sessionToken QR sifatida ishlatiladi)</response>
         /// <response code="403">Foydalanuvchi bloklangan</response>
         /// <response code="404">Foydalanuvchi topilmadi</response>
+        /// <response code="409">Foydalanuvchida allaqachon faol sessiya bor</response>
         [HttpPost]
         [HttpPost("/sessions")]
         [RequirePermission(Permissions.SessionCreate)]
+        [Idempotent]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> Create([FromBody] CreateSessionRequest request)
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Create()
         {
             if (!TryGetUserId(out var userId))
                 return Unauthorized();
 
-            var result = await _sessionService.CreateSessionAsync(request.ToDto(userId));
+            var result = await _sessionService.CreateSessionAsync(new CreateSessionDto { UserId = userId });
             if (!result.IsSuccess)
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
@@ -102,6 +106,90 @@ namespace UserApi.Controllers
                 return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
 
             return Ok(result.Result!.ToResponse());
+        }
+
+        /// <summary>
+        /// Foydalanuvchining hozirgi aktiv sessiyasini olish (resume uchun).
+        /// Aktiv sessiya yo'q bo'lsa <c>activeSession: null</c> qaytadi.
+        /// </summary>
+        [HttpGet]
+        [HttpGet("/sessions/current")]
+        [RequirePermission(Permissions.SessionRead)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> Current()
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var result = await _sessionService.GetCurrentAsync(userId);
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(new { activeSession = result.Result });
+        }
+
+        /// <summary>
+        /// Sessiya tafsilotlari (id bo'yicha). Faqat o'z sessiyangizni ko'ra olasiz.
+        /// </summary>
+        [HttpGet("{sessionId:long}")]
+        [HttpGet("/sessions/{sessionId:long}")]
+        [RequirePermission(Permissions.SessionRead)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetById(long sessionId)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var result = await _sessionService.GetByIdAsync(sessionId, userId);
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
+        }
+
+        /// <summary>
+        /// Sessiya tarixi (paginated). Filtrlash uchun ?from=&amp;to= ishlatish mumkin.
+        /// </summary>
+        [HttpGet]
+        [HttpGet("/sessions/history")]
+        [RequirePermission(Permissions.SessionRead)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> History([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+            var result = await _sessionService.GetHistoryAsync(userId, pagination, from, to);
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
+        }
+
+        /// <summary>
+        /// App foreground'da sliding idle timeout uchun ping. 30-60 soniyada bir marta yuboriladi.
+        /// </summary>
+        [HttpPost("{sessionId:long}")]
+        [HttpPost("/sessions/{sessionId:long}/heartbeat")]
+        [RequirePermission(Permissions.SessionHeartbeat)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Heartbeat(long sessionId)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var result = await _sessionService.HeartbeatAsync(sessionId, userId);
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
         }
 
         private bool TryGetUserId(out long userId)

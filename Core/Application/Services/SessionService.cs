@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Domain.Dtos.Base;
 using Domain.Dtos.Session;
 using Domain.Entities;
@@ -21,6 +22,7 @@ namespace Application.Services
         private readonly IDeviceCommandPublisher _commandPublisher;
         private readonly IDeviceLockService _deviceLock;
         private readonly IBillingService _billing;
+        private readonly IPushNotificationService _push;
 
         private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan DeviceOfflineThreshold = TimeSpan.FromSeconds(90);
@@ -33,7 +35,8 @@ namespace Application.Services
             ISessionNotifier notifier,
             IDeviceCommandPublisher commandPublisher,
             IDeviceLockService deviceLock,
-            IBillingService billing)
+            IBillingService billing,
+            IPushNotificationService push)
         {
             _sessionRepo = sessionRepo;
             _deviceRepo = deviceRepo;
@@ -43,6 +46,7 @@ namespace Application.Services
             _commandPublisher = commandPublisher;
             _deviceLock = deviceLock;
             _billing = billing;
+            _push = push;
         }
 
         public async Task<GenericDto<CreateSessionResultDto>> CreateSessionAsync(CreateSessionDto dto)
@@ -54,10 +58,19 @@ namespace Application.Services
             if (user.IsBlocked)
                 return GenericDto<CreateSessionResultDto>.Error(403, "Foydalanuvchi bloklangan.");
 
+            var hasActive = await _sessionRepo.HasActiveAsync(
+                dto.UserId,
+                SessionStatus.Created,
+                SessionStatus.Connected,
+                SessionStatus.InProcess);
+
+            if (hasActive)
+                return GenericDto<CreateSessionResultDto>.Error(409, "Sizda allaqachon faol sessiya bor. Avval uni yoping.");
+
             var session = new SessionEntity
             {
                 UserId = dto.UserId,
-                SessionToken = Guid.NewGuid().ToString("N"),
+                SessionToken = GenerateSessionToken(),
                 Status = SessionStatus.Created,
                 CreatedAt = DateTime.Now,
                 LastActivityAt = DateTime.Now
@@ -69,9 +82,19 @@ namespace Application.Services
             {
                 SessionId = created.Id,
                 SessionToken = created.SessionToken,
-                ExpiresAt = created.CreatedAt.Add(IdleTimeout),
+                IdleAfter = created.LastActivityAt.Add(IdleTimeout),
                 ResultMessage = "Sessiya yaratildi. Qurilma QR kodni skanerlab ulanishini kuting."
             });
+        }
+
+        // Sliding idle timeout: har activity'da yangilanadi, shuning uchun bu absolute "expiry" emas — keyingi activity-siz yopiladigan vaqt.
+        private static string GenerateSessionToken()
+        {
+            var bytes = RandomNumberGenerator.GetBytes(24);
+            return Convert.ToBase64String(bytes)
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
         }
 
         public async Task<GenericDto<DeviceConnectedResultDto>> DeviceConnectAsync(DeviceConnectedDto dto)
@@ -188,7 +211,119 @@ namespace Application.Services
                     total_cost = totalCost,
                     closed_at = session.ClosedAt
                 });
+
+                // App background/yopiq bo'lsa SignalR yetib bormaydi — push xabar.
+                await _push.SendAsync(session.UserId, new PushNotification
+                {
+                    Title = "Sessiya yopildi",
+                    Body = $"Sessiyangiz harakatsizlik tufayli yopildi. Jami: {totalCost:N2}",
+                    DeepLink = $"botenergy://sessions/{session.Id}"
+                });
             }
+        }
+
+        public async Task<GenericDto<CurrentSessionDto?>> GetCurrentAsync(long userId)
+        {
+            var session = await _sessionRepo.GetActiveByUserAsync(userId);
+            if (session is null)
+                return GenericDto<CurrentSessionDto?>.Success(null);
+
+            return GenericDto<CurrentSessionDto?>.Success(MapToCurrent(session));
+        }
+
+        public async Task<GenericDto<CurrentSessionDto>> GetByIdAsync(long sessionId, long userId)
+        {
+            var session = await _sessionRepo.GetByIdWithProcessesAsync(sessionId);
+            if (session is null)
+                return GenericDto<CurrentSessionDto>.Error(404, "Sessiya topilmadi.");
+
+            if (session.UserId != userId)
+                return GenericDto<CurrentSessionDto>.Error(403, "Bu sessiya sizga tegishli emas.");
+
+            return GenericDto<CurrentSessionDto>.Success(MapToCurrent(session)!);
+        }
+
+        public async Task<GenericDto<HeartbeatResultDto>> HeartbeatAsync(long sessionId, long userId)
+        {
+            var session = await _sessionRepo.GetByIdAsync(sessionId);
+            if (session is null)
+                return GenericDto<HeartbeatResultDto>.Error(404, "Sessiya topilmadi.");
+
+            if (session.UserId != userId)
+                return GenericDto<HeartbeatResultDto>.Error(403, "Bu sessiya sizga tegishli emas.");
+
+            if (session.Status == SessionStatus.Closed)
+                return GenericDto<HeartbeatResultDto>.Error(400, "Sessiya yopilgan, heartbeat qabul qilinmaydi.");
+
+            var affected = await _sessionRepo.TouchAsync(sessionId);
+            if (affected == 0)
+                return GenericDto<HeartbeatResultDto>.Error(409, "Sessiya holati o'zgargan.");
+
+            var now = DateTime.Now;
+            return GenericDto<HeartbeatResultDto>.Success(new HeartbeatResultDto
+            {
+                SessionId = sessionId,
+                LastActivityAt = now,
+                IdleAfter = now.Add(IdleTimeout)
+            });
+        }
+
+        public async Task<GenericDto<PagedResult<SessionHistoryItemDto>>> GetHistoryAsync(long userId, PaginationParams pagination, DateTime? from, DateTime? to)
+        {
+            var page = await _sessionRepo.GetHistoryByUserAsync(userId, pagination, from, to);
+
+            return GenericDto<PagedResult<SessionHistoryItemDto>>.Success(page.Map(s => new SessionHistoryItemDto
+            {
+                SessionId = s.Id,
+                Status = s.Status.ToString(),
+                CloseReason = s.CloseReason?.ToString(),
+                DeviceSerialNumber = s.Device?.SerialNumber,
+                CreatedAt = s.CreatedAt,
+                ClosedAt = s.ClosedAt
+            }));
+        }
+
+        internal CurrentSessionDto? MapToCurrent(SessionEntity? session)
+        {
+            if (session is null) return null;
+
+            var activeProcess = session.Processes?
+                .Where(p => p.Status != ProcessStatus.Ended)
+                .OrderByDescending(p => p.StartedAt)
+                .FirstOrDefault();
+
+            return new CurrentSessionDto
+            {
+                SessionId = session.Id,
+                SessionToken = session.SessionToken,
+                Status = session.Status.ToString(),
+                CreatedAt = session.CreatedAt,
+                ConnectedAt = session.ConnectedAt,
+                LastActivityAt = session.LastActivityAt,
+                IdleAfter = session.LastActivityAt.Add(IdleTimeout),
+                Device = session.Device is null ? null : new CurrentSessionDeviceDto
+                {
+                    DeviceId = session.Device.Id,
+                    SerialNumber = session.Device.SerialNumber,
+                    DeviceType = session.Device.DeviceType.ToString(),
+                    IsOnline = session.Device.IsOnline,
+                    LastSeenAt = session.Device.LastSeenAt
+                },
+                ActiveProcess = activeProcess is null ? null : new CurrentSessionProcessDto
+                {
+                    ProcessId = activeProcess.Id,
+                    ProductId = activeProcess.ProductId,
+                    ProductName = activeProcess.ProductName,
+                    Unit = activeProcess.Unit.ToString(),
+                    PricePerUnit = activeProcess.PricePerUnit,
+                    RequestedAmount = activeProcess.RequestedAmount,
+                    GivenAmount = activeProcess.GivenAmount,
+                    CurrentCost = activeProcess.GivenAmount * activeProcess.PricePerUnit,
+                    Status = activeProcess.Status.ToString(),
+                    StartedAt = activeProcess.StartedAt,
+                    PausedAt = activeProcess.PausedAt
+                }
+            };
         }
 
         public async Task CloseOfflineDeviceSessionsAsync()
@@ -218,6 +353,13 @@ namespace Application.Services
                         total_delivered = totalDelivered,
                         total_cost = totalCost,
                         closed_at = session.ClosedAt
+                    });
+
+                    await _push.SendAsync(session.UserId, new PushNotification
+                    {
+                        Title = "Qurilma bilan aloqa uzildi",
+                        Body = $"Qurilma {device.SerialNumber} javob bermayapti. Sessiya yopildi. Jami: {totalCost:N2}",
+                        DeepLink = $"botenergy://sessions/{session.Id}"
                     });
                 }
 

@@ -37,6 +37,7 @@ namespace UserApi.Controllers
         [HttpPost]
         [HttpPost("/processes/start")]
         [RequirePermission(Permissions.ProcessStart)]
+        [Idempotent]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]

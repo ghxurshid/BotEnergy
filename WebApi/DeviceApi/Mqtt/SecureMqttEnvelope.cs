@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -167,15 +168,21 @@ namespace DeviceApi.Mqtt
             return true;
         }
 
+        // Portable AAD format (ESP32/embedded clients ham reproduce qila olishi uchun):
+        //   [0..8)   ts as int64 BIG-ENDIAN
+        //   [8..8+N) nonce UTF-8 bytes (uzunlik nonce string'idan olinadi — odatda 16 hex chars = 16 bytes)
+        //   [..end]  iv raw bytes (12 bytes)
+        // Hech qanday length prefix yo'q — barcha qatlamlar bir xil format ishlatadi.
         private static byte[] BuildAad(long ts, string nonce, byte[] iv)
         {
-            using var ms = new MemoryStream();
-            using var bw = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
-            bw.Write(ts);
-            bw.Write(nonce);
-            bw.Write(iv);
-            bw.Flush();
-            return ms.ToArray();
+            var nonceBytes = Encoding.UTF8.GetBytes(nonce);
+            var aad = new byte[8 + nonceBytes.Length + iv.Length];
+
+            BinaryPrimitives.WriteInt64BigEndian(aad.AsSpan(0, 8), ts);
+            Buffer.BlockCopy(nonceBytes, 0, aad, 8, nonceBytes.Length);
+            Buffer.BlockCopy(iv, 0, aad, 8 + nonceBytes.Length, iv.Length);
+
+            return aad;
         }
 
         private static (byte[] aesKey, byte[] hmacKey) DeriveKeys(string deviceSecretKey)

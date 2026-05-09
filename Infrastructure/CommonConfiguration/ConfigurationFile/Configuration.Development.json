@@ -8,7 +8,13 @@
     "BrokerPort": 1883,
     "Username": "",
     "Password": "",
-    "ClientId": "botenergy-device-api-dev"
+    "ClientId": "botenergy-device-api-dev",
+    "UseTls": false,
+    "AllowUntrustedCertificates": false,
+    "ClientCertificatePath": null,
+    "ClientCertificatePassword": null,
+    "EnableEncryption": false,
+    "MaxClockSkewSeconds": 60
   },
   "RabbitMq": {
     "HostName": "localhost",

@@ -4,10 +4,16 @@
   },
   "Mqtt": {
     "BrokerHost": "localhost",
-    "BrokerPort": 1883,
-    "Username": "",
-    "Password": "",
-    "ClientId": "botenergy-device-api"
+    "BrokerPort": 8883,
+    "Username": "botenergy-device",
+    "Password": "BE_Mq_2026_pr0d_x9K4nP7vW2",
+    "ClientId": "botenergy-device-api",
+    "UseTls": true,
+    "AllowUntrustedCertificates": false,
+    "ClientCertificatePath": null,
+    "ClientCertificatePassword": null,
+    "EnableEncryption": true,
+    "MaxClockSkewSeconds": 60
   },
   "RabbitMq": {
     "HostName": "localhost",

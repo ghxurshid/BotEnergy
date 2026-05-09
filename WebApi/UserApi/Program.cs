@@ -10,6 +10,7 @@ builder.AddValidatedServiceProvider();
 builder.Services.AddControllers(options =>
 {
     options.Filters.Add<PermissionFilter>();
+    options.Filters.AddService<IdempotencyFilter>();
 });
 
 builder.Services.AddSignalR();

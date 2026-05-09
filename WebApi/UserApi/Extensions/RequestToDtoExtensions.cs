@@ -14,12 +14,6 @@ namespace UserApi.Extensions
                 PhoneId = request.PhoneId
             };
 
-        public static CreateSessionDto ToDto(this CreateSessionRequest request, long userId)
-            => new CreateSessionDto
-            {
-                UserId = userId
-            };
-
         public static CloseSessionDto ToDto(this CloseSessionRequest request, long userId)
             => new CloseSessionDto
             {

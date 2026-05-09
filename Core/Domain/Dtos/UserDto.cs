@@ -6,6 +6,7 @@ namespace Domain.Dtos
         public string PhoneId { get; set; } = string.Empty;
         public string Mail { get; set; } = string.Empty;
         public string PhoneNumber { get; set; } = string.Empty;
+        public string UserType { get; set; } = string.Empty;
         public decimal Balance { get; set; }
         public bool IsVerified { get; set; }
         public bool IsBlocked { get; set; }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using System.Security.Claims;
 
 namespace UserApi.Hubs
 {
@@ -8,6 +9,10 @@ namespace UserApi.Hubs
     /// Klient sessiya guruhiga qo'shilishi va undan chiqishi mumkin — boshqa hech qanday
     /// state-modifying operatsiya hub orqali qabul qilinmaydi (ownership-check va
     /// audit-trail uchun barcha buyruqlar REST endpoint orqali yuboriladi).
+    ///
+    /// Group sxemasi:
+    ///   - sessionToken — sessiyaga ulangan barcha klientlar
+    ///   - "user:{userId}" — JWT'dan olingan userId, ulanganda avtomatik join
     ///
     /// Server → Client eventlar:
     ///   DeviceConnected   { device_id, products, ... }
@@ -27,6 +32,20 @@ namespace UserApi.Hubs
             _logger = logger;
         }
 
+        public static string UserGroup(long userId) => $"user:{userId}";
+
+        public override async Task OnConnectedAsync()
+        {
+            var userId = GetUserId();
+            if (userId.HasValue)
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, UserGroup(userId.Value));
+                _logger.LogDebug("Client {ConnectionId} auto-joined user group {UserId}", Context.ConnectionId, userId);
+            }
+
+            await base.OnConnectedAsync();
+        }
+
         public async Task JoinSession(string sessionToken)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, sessionToken);
@@ -43,6 +62,12 @@ namespace UserApi.Hubs
         {
             _logger.LogDebug("Client {ConnectionId} disconnected", Context.ConnectionId);
             await base.OnDisconnectedAsync(exception);
+        }
+
+        private long? GetUserId()
+        {
+            var raw = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+            return long.TryParse(raw, out var id) ? id : null;
         }
     }
 }

@@ -1,5 +1,6 @@
 using Domain.Dtos;
 using Domain.Dtos.Base;
+using Domain.Entities;
 using Domain.Interfaces;
 using Domain.Repositories;
 
@@ -18,19 +19,24 @@ namespace Application.Services
             if (user is null)
                 return GenericDto<GetUserDto>.Error(404, "Foydalanuvchi topilmadi.");
 
-            return GenericDto<GetUserDto>.Success(new GetUserDto
-            {
-                Id = user.Id,
-                PhoneId = user.PhoneId,
-                Mail = user.Mail,
-                PhoneNumber = user.PhoneNumber,
-                IsVerified = user.IsVerified,
-                IsBlocked = user.IsBlocked,
-                LastLoginDate = user.LastLoginDate,
-                LastActiveDate = user.LastActiveDate,
-                CreatedDate = user.CreatedDate
-            });
+            return GenericDto<GetUserDto>.Success(MapToDto(user));
         }
+
+        internal static GetUserDto MapToDto(UserEntity user) => new()
+        {
+            Id = user.Id,
+            PhoneId = user.PhoneId,
+            Mail = user.Mail,
+            PhoneNumber = user.PhoneNumber,
+            UserType = user.UserType.ToString(),
+            // Balans faqat jismoniy shaxs uchun mavjud — yuridik/merchant uchun 0 qaytadi.
+            Balance = user is NaturalUserEntity natural ? natural.Balance : 0m,
+            IsVerified = user.IsVerified,
+            IsBlocked = user.IsBlocked,
+            LastLoginDate = user.LastLoginDate,
+            LastActiveDate = user.LastActiveDate,
+            CreatedDate = user.CreatedDate
+        };
 
         public async Task<GenericDto<UpdateUserResultDto>> UpdateCurrentUserAsync(long userId, UpdateUserDto dto)
         {

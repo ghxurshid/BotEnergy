@@ -11,7 +11,7 @@ namespace UserApi.Extensions
             {
                 SessionId = dto.SessionId,
                 SessionToken = dto.SessionToken,
-                ExpiresAt = dto.ExpiresAt,
+                IdleAfter = dto.IdleAfter,
                 Message = dto.ResultMessage
             };
 

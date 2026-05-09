@@ -186,6 +186,9 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddSingleton<InMemoryRefreshTokenStore>();
             services.AddSingleton<IRefreshTokenStore, ResilientRefreshTokenStore>();
 
+            services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
+            services.AddScoped<Filters.IdempotencyFilter>();
+
             return services;
         }
 
@@ -245,6 +248,8 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<ISessionRepository, SessionRepository>();
             services.AddScoped<IProcessService, ProcessService>();
             services.AddScoped<ISessionService, SessionService>();
+            services.AddScoped<IBootstrapService, BootstrapService>();
+            services.AddSingleton<IPushNotificationService, LoggingPushNotificationService>();
             // ISessionNotifier — UserApi Program.cs da ro'yxatdan o'tkaziladi
             services.AddHostedService<IdleSessionCleanerService>();
 
