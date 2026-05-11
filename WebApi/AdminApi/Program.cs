@@ -17,6 +17,8 @@ builder.Services.AddSwaggerWithJwtAuth(
 builder.Configuration.AddCommonConfiguration();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
+// IPaymentService — admin Reverse endpoint uchun (Payme chaqirilmaydi reverse'da, lekin DI uchun shart)
+builder.Services.AddPaymeClient(builder.Configuration);
 
 // Redis
 builder.Services.AddRedisServices(builder.Configuration);

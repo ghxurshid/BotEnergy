@@ -35,6 +35,8 @@ namespace Persistence.Context
             ConfigureSession(modelBuilder);
             ConfigureProductProcess(modelBuilder);
             ConfigureMerchant(modelBuilder);
+            ConfigurePaymentTransaction(modelBuilder);
+            ConfigurePaymentTransactionStep(modelBuilder);
 
             ApplyGlobalSoftDeleteFilter(modelBuilder);
 
@@ -487,6 +489,7 @@ namespace Persistence.Context
 
                 b.HasIndex(x => x.SessionId);
                 b.HasIndex(x => new { x.SessionId, x.Status });
+                b.HasIndex(x => x.StartedAt);
             });
         }
 
@@ -511,6 +514,102 @@ namespace Persistence.Context
 
                 b.HasIndex(x => x.PhoneNumber).IsUnique();
                 b.HasIndex(x => x.Inn).IsUnique();
+            });
+        }
+
+        private static void ConfigurePaymentTransaction(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<PaymentTransactionEntity>(b =>
+            {
+                b.ToTable("payment_transactions", AppSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.PayeeType).HasColumnName("payee_type").HasConversion<int>().IsRequired();
+                b.Property(x => x.UserId).HasColumnName("user_id");
+                b.Property(x => x.OrganizationId).HasColumnName("organization_id");
+                b.Property(x => x.InitiatedByUserId).HasColumnName("initiated_by_user_id").IsRequired();
+
+                b.Property(x => x.Amount).HasColumnName("amount").HasColumnType("numeric(18,2)").IsRequired();
+                b.Property(x => x.Currency).HasColumnName("currency").HasMaxLength(3).IsRequired();
+
+                b.Property(x => x.Status).HasColumnName("status").HasConversion<int>().IsRequired();
+                b.Property(x => x.Provider).HasColumnName("provider").HasConversion<int>().IsRequired();
+
+                b.Property(x => x.ProviderReceiptId).HasColumnName("provider_receipt_id").HasMaxLength(64);
+                b.Property(x => x.ProviderOrderId).HasColumnName("provider_order_id").HasMaxLength(64).IsRequired();
+                b.Property(x => x.ProviderState).HasColumnName("provider_state");
+
+                b.Property(x => x.DeviceSerial).HasColumnName("device_serial").HasMaxLength(100);
+                b.Property(x => x.SessionId).HasColumnName("session_id");
+                b.Property(x => x.IdempotencyKey).HasColumnName("idempotency_key").HasMaxLength(128);
+                b.Property(x => x.FailureReason).HasColumnName("failure_reason");
+
+                b.Property(x => x.CompletedAt).HasColumnName("completed_at").HasColumnType(TimestampWithoutTimeZone);
+
+                b.Property(x => x.CreatedDate).HasColumnName("created_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+                b.HasOne(x => x.User)
+                    .WithMany()
+                    .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasOne(x => x.Organization)
+                    .WithMany()
+                    .HasForeignKey(x => x.OrganizationId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasOne(x => x.Session)
+                    .WithMany()
+                    .HasForeignKey(x => x.SessionId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                b.HasMany(x => x.Steps)
+                    .WithOne(x => x.PaymentTransaction!)
+                    .HasForeignKey(x => x.PaymentTransactionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => x.ProviderOrderId).IsUnique();
+                b.HasIndex(x => x.ProviderReceiptId);
+                b.HasIndex(x => new { x.UserId, x.Status, x.CreatedDate });
+                b.HasIndex(x => new { x.OrganizationId, x.Status, x.CreatedDate });
+                b.HasIndex(x => new { x.InitiatedByUserId, x.CreatedDate });
+                b.HasIndex(x => new { x.Status, x.CreatedDate });
+            });
+        }
+
+        private static void ConfigurePaymentTransactionStep(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<PaymentTransactionStepEntity>(b =>
+            {
+                b.ToTable("payment_transaction_steps", AppSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.PaymentTransactionId).HasColumnName("payment_transaction_id").IsRequired();
+                b.Property(x => x.StepType).HasColumnName("step_type").HasConversion<int>().IsRequired();
+                b.Property(x => x.Status).HasColumnName("status").HasConversion<int>().IsRequired();
+
+                b.Property(x => x.RequestPayload).HasColumnName("request_payload").HasColumnType("jsonb");
+                b.Property(x => x.ResponsePayload).HasColumnName("response_payload").HasColumnType("jsonb");
+                b.Property(x => x.Message).HasColumnName("message");
+
+                b.Property(x => x.OccurredAt).HasColumnName("occurred_at")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+
+                b.Property(x => x.CreatedDate).HasColumnName("created_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+                b.HasIndex(x => new { x.PaymentTransactionId, x.OccurredAt });
             });
         }
     }

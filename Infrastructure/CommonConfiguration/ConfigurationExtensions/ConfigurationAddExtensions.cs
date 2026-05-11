@@ -1,9 +1,12 @@
 using Application.BackgroundServices;
 using Application.Services;
 using CommonConfiguration.Messaging;
+using CommonConfiguration.Payments.Payme;
 using CommonConfiguration.Redis;
+using CommonConfiguration.Reporting;
 using Domain.Enums;
 using Domain.Interfaces;
+using Domain.Interfaces.Payme;
 using Domain.Repositories;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -232,6 +235,15 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<IProductProcessRepository, ProductProcessRepository>();
             services.AddScoped<IBillingService, BillingService>();
 
+            // Payment (audit repo barcha API uchun ochiq;
+            // PaymentService va IPaymeClient esa AddPaymeClient orqali alohida ulanadi)
+            services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
+
+            // Reporting
+            services.AddScoped<IUsageReportRepository, UsageReportRepository>();
+            services.AddScoped<IUsageReportService, UsageReportService>();
+            services.AddSingleton<IExcelReportExporter, ClosedXmlReportExporter>();
+
             return services;
         }
 
@@ -262,6 +274,21 @@ namespace CommonConfiguration.ConfigurationExtensions
         public static IServiceCollection RegisterDeviceServices(this IServiceCollection services)
         {
             services.AddScoped<IDeviceRepository, DeviceRepository>();
+
+            return services;
+        }
+
+        /// <summary>
+        /// Payme Receipts API uchun typed HttpClient + PaymentService.
+        /// PaymentApi va UserApi'da chaqiriladi (boshqa API'larga keraksiz, ValidateOnBuild xatosini
+        /// keltirib chiqarishi mumkin chunki PaymentService IPaymeClient'ga bog'liq).
+        /// IPaymentTransactionRepository RegisterServices'da ro'yxatga olinishi shart.
+        /// </summary>
+        public static IServiceCollection AddPaymeClient(this IServiceCollection services, IConfiguration config)
+        {
+            services.Configure<PaymeOptions>(config.GetSection("Payme"));
+            services.AddHttpClient<IPaymeClient, PaymeClient>();
+            services.AddScoped<IPaymentService, PaymentService>();
 
             return services;
         }

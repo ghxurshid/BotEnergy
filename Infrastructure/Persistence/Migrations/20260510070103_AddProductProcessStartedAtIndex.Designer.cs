@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Persistence.Context;
@@ -11,9 +12,11 @@ using Persistence.Context;
 namespace Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260510070103_AddProductProcessStartedAtIndex")]
+    partial class AddProductProcessStartedAtIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -240,184 +243,6 @@ namespace Persistence.Migrations
                     b.HasIndex("Name");
 
                     b.ToTable("organizations", "auth");
-                });
-
-            modelBuilder.Entity("Domain.Entities.PaymentTransactionEntity", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric(18,2)")
-                        .HasColumnName("amount");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("completed_at");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_date")
-                        .HasDefaultValueSql("LOCALTIMESTAMP");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("character varying(3)")
-                        .HasColumnName("currency");
-
-                    b.Property<string>("DeviceSerial")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("device_serial");
-
-                    b.Property<string>("FailureReason")
-                        .HasColumnType("text")
-                        .HasColumnName("failure_reason");
-
-                    b.Property<string>("IdempotencyKey")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("idempotency_key");
-
-                    b.Property<long>("InitiatedByUserId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("initiated_by_user_id");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_deleted");
-
-                    b.Property<long?>("OrganizationId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("organization_id");
-
-                    b.Property<int>("PayeeType")
-                        .HasColumnType("integer")
-                        .HasColumnName("payee_type");
-
-                    b.Property<int>("Provider")
-                        .HasColumnType("integer")
-                        .HasColumnName("provider");
-
-                    b.Property<string>("ProviderOrderId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("provider_order_id");
-
-                    b.Property<string>("ProviderReceiptId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("provider_receipt_id");
-
-                    b.Property<int?>("ProviderState")
-                        .HasColumnType("integer")
-                        .HasColumnName("provider_state");
-
-                    b.Property<long?>("SessionId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("session_id");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer")
-                        .HasColumnName("status");
-
-                    b.Property<DateTime>("UpdatedDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("updated_date")
-                        .HasDefaultValueSql("LOCALTIMESTAMP");
-
-                    b.Property<long?>("UserId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProviderOrderId")
-                        .IsUnique();
-
-                    b.HasIndex("ProviderReceiptId");
-
-                    b.HasIndex("SessionId");
-
-                    b.HasIndex("InitiatedByUserId", "CreatedDate");
-
-                    b.HasIndex("Status", "CreatedDate");
-
-                    b.HasIndex("OrganizationId", "Status", "CreatedDate");
-
-                    b.HasIndex("UserId", "Status", "CreatedDate");
-
-                    b.ToTable("payment_transactions", "app");
-                });
-
-            modelBuilder.Entity("Domain.Entities.PaymentTransactionStepEntity", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime>("CreatedDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_date")
-                        .HasDefaultValueSql("LOCALTIMESTAMP");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_deleted");
-
-                    b.Property<string>("Message")
-                        .HasColumnType("text")
-                        .HasColumnName("message");
-
-                    b.Property<DateTime>("OccurredAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("occurred_at")
-                        .HasDefaultValueSql("LOCALTIMESTAMP");
-
-                    b.Property<long>("PaymentTransactionId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("payment_transaction_id");
-
-                    b.Property<string>("RequestPayload")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("request_payload");
-
-                    b.Property<string>("ResponsePayload")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("response_payload");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer")
-                        .HasColumnName("status");
-
-                    b.Property<int>("StepType")
-                        .HasColumnType("integer")
-                        .HasColumnName("step_type");
-
-                    b.Property<DateTime>("UpdatedDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("updated_date")
-                        .HasDefaultValueSql("LOCALTIMESTAMP");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PaymentTransactionId", "OccurredAt");
-
-                    b.ToTable("payment_transaction_steps", "app");
                 });
 
             modelBuilder.Entity("Domain.Entities.PermissionEntity", b =>
@@ -1115,41 +940,6 @@ namespace Persistence.Migrations
                     b.Navigation("Station");
                 });
 
-            modelBuilder.Entity("Domain.Entities.PaymentTransactionEntity", b =>
-                {
-                    b.HasOne("Domain.Entities.OrganizationEntity", "Organization")
-                        .WithMany()
-                        .HasForeignKey("OrganizationId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Domain.Entities.SessionEntity", "Session")
-                        .WithMany()
-                        .HasForeignKey("SessionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("Domain.Entities.UserEntity", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Organization");
-
-                    b.Navigation("Session");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Domain.Entities.PaymentTransactionStepEntity", b =>
-                {
-                    b.HasOne("Domain.Entities.PaymentTransactionEntity", "PaymentTransaction")
-                        .WithMany("Steps")
-                        .HasForeignKey("PaymentTransactionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("PaymentTransaction");
-                });
-
             modelBuilder.Entity("Domain.Entities.ProductEntity", b =>
                 {
                     b.HasOne("Domain.Entities.DeviceEntity", "Device")
@@ -1319,11 +1109,6 @@ namespace Persistence.Migrations
                     b.Navigation("LegalUsers");
 
                     b.Navigation("Roles");
-                });
-
-            modelBuilder.Entity("Domain.Entities.PaymentTransactionEntity", b =>
-                {
-                    b.Navigation("Steps");
                 });
 
             modelBuilder.Entity("Domain.Entities.PermissionEntity", b =>

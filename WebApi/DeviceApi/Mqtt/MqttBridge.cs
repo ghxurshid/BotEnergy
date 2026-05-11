@@ -98,6 +98,8 @@ namespace DeviceApi.Mqtt
                             new MqttTopicFilterBuilder().WithTopic("device/+/heartbeat").WithAtMostOnceQoS().Build(), stoppingToken);
                         await _mqttClient.SubscribeAsync(
                             new MqttTopicFilterBuilder().WithTopic("device/+/status").WithAtLeastOnceQoS().Build(), stoppingToken);
+                        await _mqttClient.SubscribeAsync(
+                            new MqttTopicFilterBuilder().WithTopic("device/+/payment_qr").WithAtLeastOnceQoS().Build(), stoppingToken);
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
@@ -171,6 +173,27 @@ namespace DeviceApi.Mqtt
             {
                 type = "stop",
                 process_id = processId
+            });
+
+        /// <summary>
+        /// To'lov natijasini qurilma displeyiga yuboradi (server/{serial}/payment_result).
+        /// </summary>
+        public Task PublishPaymentResultAsync(
+            string serialNumber,
+            long transactionId,
+            string status,
+            decimal amount,
+            decimal? newBalance,
+            string? message,
+            string? clientRef)
+            => PublishToDeviceAsync(serialNumber, "payment_result", new
+            {
+                transaction_id = transactionId,
+                status,
+                amount,
+                new_balance = newBalance,
+                message,
+                client_ref = clientRef
             });
 
         // ── MQTT xabarlarni qabul qilish → RabbitMQ ga uzatish ───────
@@ -273,6 +296,10 @@ namespace DeviceApi.Mqtt
                         HandleDeviceStatus(serialNumber, payload);
                         break;
 
+                    case "payment_qr":
+                        HandlePaymentQr(serialNumber, payload);
+                        break;
+
                     default:
                         _logger.LogDebug("Noma'lum MQTT topic: {Topic}", topic);
                         break;
@@ -370,6 +397,35 @@ namespace DeviceApi.Mqtt
             });
         }
 
+        private void HandlePaymentQr(string serialNumber, string payload)
+        {
+            var data = JsonSerializer.Deserialize<PaymentQrPayload>(payload, JsonOpts);
+            if (data is null)
+            {
+                _logger.LogWarning("Bo'sh payment_qr payload — Serial: {Serial}", serialNumber);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(data.SessionToken) ||
+                string.IsNullOrEmpty(data.PaymeToken) ||
+                data.Amount <= 0)
+            {
+                _logger.LogWarning(
+                    "Yaroqsiz payment_qr payload — Serial: {Serial}, SessionToken bo'shmi/PaymeToken bo'shmi/Amount {Amount}",
+                    serialNumber, data.Amount);
+                return;
+            }
+
+            _rabbitPublisher.Publish(QueueNames.PaymentEventQueue, new DevicePaymentRequest
+            {
+                SerialNumber = serialNumber,
+                SessionToken = data.SessionToken,
+                Amount = data.Amount,
+                PaymeToken = data.PaymeToken,
+                ClientRef = data.ClientRef
+            });
+        }
+
         // ── Yordamchi ─────────────────────────────────────────────────
 
         private async Task PublishToDeviceAsync<T>(string serialNumber, string action, T payload)
@@ -443,5 +499,13 @@ namespace DeviceApi.Mqtt
         public long ProcessId { get; set; }
         public string? Command { get; set; }
         public string? Status { get; set; }
+    }
+
+    internal sealed class PaymentQrPayload : DeviceAuthPayload
+    {
+        public string SessionToken { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string PaymeToken { get; set; } = string.Empty;
+        public string? ClientRef { get; set; }
     }
 }

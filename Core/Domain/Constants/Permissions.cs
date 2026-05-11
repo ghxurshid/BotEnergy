@@ -71,6 +71,18 @@ namespace Domain.Constants
         public const string BalanceGetMyBalance = "Balance.GetMyBalance";
         public const string BalanceTopUp = "Balance.TopUp";
 
+        // ── PaymentApi — Payme orqali QR to'lov ──────────────────────
+        public const string PaymentTopUpSelf = "Payment.TopUpSelf";
+        public const string PaymentTopUpOrganization = "Payment.TopUpOrganization";
+        public const string PaymentGetMyTransactions = "Payment.GetMyTransactions";
+        public const string PaymentGetOrganizationTransactions = "Payment.GetOrganizationTransactions";
+
+        // ── AdminApi — To'lov audit ──────────────────────────────────
+        public const string PaymentAdminGetAll = "PaymentAdmin.GetAll";
+        public const string PaymentAdminGetById = "PaymentAdmin.GetById";
+        public const string PaymentAdminGetSteps = "PaymentAdmin.GetSteps";
+        public const string PaymentAdminReverse = "PaymentAdmin.Reverse";
+
         // ── UserApi — Sessiya boshqaruvi ─────────────────────────────
         public const string SessionCreate = "Session.Create";
         public const string SessionClose = "Session.Close";
@@ -88,6 +100,18 @@ namespace Domain.Constants
         public const string UserUpdateMe = "User.UpdateMe";
         public const string UserBootstrap = "User.Bootstrap";
         public const string DeviceConnectionGetProducts = "DeviceConnection.GetProducts";
+
+        // ── UserApi — Foydalanish hisoboti ───────────────────────────
+        public const string ReportMyUsage = "Report.MyUsage";
+        public const string ReportMyUsageExport = "Report.MyUsageExport";
+
+        // ── AdminApi — Yuridik tashkilot hisoboti ────────────────────
+        public const string OrganizationReportUsage = "OrganizationReport.Usage";
+        public const string OrganizationReportUsageExport = "OrganizationReport.UsageExport";
+
+        // ── AdminApi — Merchant savdo hisoboti ───────────────────────
+        public const string MerchantReportSales = "MerchantReport.Sales";
+        public const string MerchantReportSalesExport = "MerchantReport.SalesExport";
 
         /// <summary>
         /// Barcha permissionlar ro'yxati — DataSeeder uchun.
@@ -130,6 +154,12 @@ namespace Domain.Constants
             // Billing
             BalanceGetMyBalance, BalanceTopUp,
 
+            // Payment (Payme QR top-up)
+            PaymentTopUpSelf, PaymentTopUpOrganization,
+            PaymentGetMyTransactions, PaymentGetOrganizationTransactions,
+            PaymentAdminGetAll, PaymentAdminGetById,
+            PaymentAdminGetSteps, PaymentAdminReverse,
+
             // Session
             SessionCreate, SessionClose, SessionRead, SessionHeartbeat,
 
@@ -138,6 +168,11 @@ namespace Domain.Constants
 
             // User Profile
             UserMe, UserUpdateMe, UserBootstrap, DeviceConnectionGetProducts,
+
+            // Reports
+            ReportMyUsage, ReportMyUsageExport,
+            OrganizationReportUsage, OrganizationReportUsageExport,
+            MerchantReportSales, MerchantReportSalesExport,
         };
     }
 }

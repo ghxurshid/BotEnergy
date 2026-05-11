@@ -28,5 +28,11 @@
   "InternalApi": {
     "SharedSecret": "botenergy-internal-secret-2026",
     "UserApiBaseUrl": "http://localhost:5006"
+  },
+  "Payme": {
+    "BaseUrl": "https://checkout.paycom.uz/api",
+    "MerchantId": "",
+    "Key": "",
+    "TimeoutSeconds": 30
   }
 }

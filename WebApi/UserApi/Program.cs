@@ -22,6 +22,7 @@ builder.Configuration.AddCommonConfiguration();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
 builder.Services.RegisterSessionServices();
+builder.Services.AddPaymeClient(builder.Configuration);
 
 // RabbitMQ
 builder.Services.AddRabbitMq(builder.Configuration);
@@ -35,6 +36,7 @@ builder.Services.AddScoped<IDeviceCommandPublisher, RabbitMqDeviceCommandPublish
 
 // RabbitMQ Consumer — DeviceApi dan kelgan eventlarni qayta ishlaydi
 builder.Services.AddHostedService<DeviceEventConsumer>();
+builder.Services.AddHostedService<DevicePaymentEventConsumer>();
 
 builder.Services.AddJwtAuthentication(builder.Configuration, signalRHubPath: "/hubs");
 

@@ -34,6 +34,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<MqttBridge>());
 
 // RabbitMQ Consumer — UserApi dan kelgan buyruqlarni MQTT ga yuboradi
 builder.Services.AddHostedService<DeviceCommandConsumer>();
+builder.Services.AddHostedService<DevicePaymentResultConsumer>();
 
 var app = builder.Build();
 
