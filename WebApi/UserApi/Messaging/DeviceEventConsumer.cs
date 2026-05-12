@@ -1,6 +1,5 @@
 using CommonConfiguration.Messaging;
 using Domain.Dtos.Process;
-using Domain.Dtos.Session;
 using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Messaging;
@@ -12,7 +11,8 @@ namespace UserApi.Messaging
 {
     /// <summary>
     /// DeviceApi dan RabbitMQ orqali kelgan eventlarni qayta ishlaydi.
-    /// EventQueue: Qurilma → MQTT → DeviceApi → RabbitMQ → UserApi → SessionService/ProcessService → SignalR
+    /// EventQueue: Qurilma → MQTT → DeviceApi → RabbitMQ → UserApi → SessionService/ProcessService → SignalR.
+    /// Connected event'da sessiya allaqachon DeviceApi tomonidan DB'da yaratilgan — UserApi faqat SignalR push qiladi.
     /// </summary>
     public sealed class DeviceEventConsumer : RabbitMqConsumerBase<DeviceEvent>
     {
@@ -70,11 +70,15 @@ namespace UserApi.Messaging
             using var scope = _scopeFactory.CreateScope();
             var sessionService = scope.ServiceProvider.GetRequiredService<ISessionService>();
 
-            await sessionService.DeviceConnectAsync(new DeviceConnectedDto
+            // Sessiya allaqachon DeviceApi tomonidan DB'da Connected statusda yaratilgan —
+            // bu yerda faqat SignalR orqali mobile'ga push qilamiz.
+            var result = await sessionService.NotifyDeviceConnectedAsync(e.SessionToken ?? string.Empty);
+            if (!result.IsSuccess)
             {
-                SessionToken = e.SessionToken ?? string.Empty,
-                SerialNumber = e.SerialNumber
-            });
+                _logger.LogWarning(
+                    "NotifyDeviceConnected muvaffaqiyatsiz: SessionToken=*** Serial={Serial} — {Error}",
+                    e.SerialNumber, result.ErrorObj?.ErrorMessage);
+            }
         }
 
         private async Task HandleTelemetryAsync(DeviceEvent e)

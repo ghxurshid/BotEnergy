@@ -189,6 +189,10 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddSingleton<InMemoryRefreshTokenStore>();
             services.AddSingleton<IRefreshTokenStore, ResilientRefreshTokenStore>();
 
+            services.AddSingleton<RedisPendingSessionStore>();
+            services.AddSingleton<InMemoryPendingSessionStore>();
+            services.AddSingleton<IPendingSessionStore, ResilientPendingSessionStore>();
+
             services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
             services.AddScoped<Filters.IdempotencyFilter>();
 
@@ -269,11 +273,15 @@ namespace CommonConfiguration.ConfigurationExtensions
         }
 
         /// <summary>
-        /// DeviceApi uchun faqat qurilma repositorysi.
+        /// DeviceApi uchun qurilma va sessiya repository'lari. DeviceApi sessiyani DB'ga
+        /// yozuvchi tomonga aylandi, shuning uchun <see cref="ISessionRepository"/> ham kerak.
+        /// <see cref="DeviceApi.Services.IDeviceSessionService"/> esa Program.cs'da gRPC client'i
+        /// bilan birga ro'yxatga olinadi (DeviceApi'ga bog'liqlik bu yerda yo'q).
         /// </summary>
         public static IServiceCollection RegisterDeviceServices(this IServiceCollection services)
         {
             services.AddScoped<IDeviceRepository, DeviceRepository>();
+            services.AddScoped<ISessionRepository, SessionRepository>();
 
             return services;
         }

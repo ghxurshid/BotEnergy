@@ -15,11 +15,15 @@ namespace UserApi.Controllers
     /// Foydalanuvchi (Android/iOS) tomonidan chaqiriladigan sessiya endpointlari.
     ///
     /// **Sessiya jarayoni:**
-    /// 1. <c>POST /api/Session/Create</c> — bo'sh sessiya yaratiladi, session_token (QR) qaytariladi
-    /// 2. Qurilma QR ni o'qib MQTT orqali sessiyaga ulanadi → SignalR `DeviceConnected` event
-    /// 3. <c>POST /api/Process/Start</c> — foydalanuvchi mahsulot tanlaydi, qurilmaga start yuboriladi
-    /// 4. SignalR orqali real-time `ProcessUpdated` eventlar
-    /// 5. Sessiya yopilishi: <c>POST /api/Session/Close</c> — barcha aktiv jarayonlar to'xtatiladi
+    /// 1. <c>POST /api/Session/Create</c> — pending sessiya yaratiladi (cache, 30 min TTL), DB'ga yozilmaydi.
+    ///    Response: <c>{ userId, sessionToken }</c> → QR kod sifatida ko'rsatiladi.
+    /// 2. Qurilma reader QR ni o'qib MQTT orqali DeviceApi'ga yuboradi.
+    /// 3. DeviceApi gRPC orqali UserApi'dan tokenni so'raydi, solishtiradi, mos kelsa DB'da sessiyani
+    ///    Connected statusda yaratadi va RabbitMQ orqali "connected" event yuboradi.
+    /// 4. UserApi event'ni qabul qilib SignalR <c>DeviceConnected</c> event'ini mobile'ga yuboradi.
+    /// 5. <c>POST /api/Process/Start</c> — foydalanuvchi mahsulot tanlaydi, qurilmaga start yuboriladi.
+    /// 6. SignalR orqali real-time <c>ProcessUpdated</c> eventlar.
+    /// 7. Sessiya yopilishi: <c>POST /api/Session/Close</c> — barcha aktiv jarayonlar to'xtatiladi.
     /// </summary>
     [Route("api/[controller]/[action]")]
     [ApiController]
@@ -34,13 +38,14 @@ namespace UserApi.Controllers
         }
 
         /// <summary>
-        /// Yangi bo'sh sessiya yaratish.
-        /// UserId JWT dan olinadi. Body talab qilinmaydi.
+        /// Pending sessiya yaratish (cache'da, 30 min TTL). DB'ga yozilmaydi — sessiya
+        /// qurilma ulanganda DeviceApi tomonidan yaratiladi. UserId JWT dan olinadi.
+        /// Body talab qilinmaydi. Pending mavjud bo'lsa idempotent qaytariladi.
         /// </summary>
-        /// <response code="200">Sessiya yaratildi (sessionToken QR sifatida ishlatiladi)</response>
+        /// <response code="200">Pending sessiya yaratildi yoki mavjud token qaytarildi (QR uchun userId+sessionToken)</response>
         /// <response code="403">Foydalanuvchi bloklangan</response>
         /// <response code="404">Foydalanuvchi topilmadi</response>
-        /// <response code="409">Foydalanuvchida allaqachon faol sessiya bor</response>
+        /// <response code="409">Foydalanuvchida allaqachon DB'da faol sessiya bor</response>
         [HttpPost]
         [HttpPost("/sessions")]
         [RequirePermission(Permissions.SessionCreate)]

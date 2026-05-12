@@ -23,8 +23,10 @@ namespace Application.Services
         private readonly IDeviceLockService _deviceLock;
         private readonly IBillingService _billing;
         private readonly IPushNotificationService _push;
+        private readonly IPendingSessionStore _pendingStore;
 
         private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan PendingSessionTtl = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan DeviceOfflineThreshold = TimeSpan.FromSeconds(90);
 
         public SessionService(
@@ -36,7 +38,8 @@ namespace Application.Services
             IDeviceCommandPublisher commandPublisher,
             IDeviceLockService deviceLock,
             IBillingService billing,
-            IPushNotificationService push)
+            IPushNotificationService push,
+            IPendingSessionStore pendingStore)
         {
             _sessionRepo = sessionRepo;
             _deviceRepo = deviceRepo;
@@ -47,6 +50,7 @@ namespace Application.Services
             _deviceLock = deviceLock;
             _billing = billing;
             _push = push;
+            _pendingStore = pendingStore;
         }
 
         public async Task<GenericDto<CreateSessionResultDto>> CreateSessionAsync(CreateSessionDto dto)
@@ -58,6 +62,7 @@ namespace Application.Services
             if (user.IsBlocked)
                 return GenericDto<CreateSessionResultDto>.Error(403, "Foydalanuvchi bloklangan.");
 
+            // DB'da aktiv sessiya bor bo'lsa — yangi pending yaratmaymiz (avval yopish kerak).
             var hasActive = await _sessionRepo.HasActiveAsync(
                 dto.UserId,
                 SessionStatus.Created,
@@ -67,27 +72,31 @@ namespace Application.Services
             if (hasActive)
                 return GenericDto<CreateSessionResultDto>.Error(409, "Sizda allaqachon faol sessiya bor. Avval uni yoping.");
 
-            var session = new SessionEntity
+            // Pending cache'da bo'lsa — xuddi shu tokenni qaytarish (idempotent retry).
+            var existing = await _pendingStore.GetAsync(dto.UserId);
+            if (existing is not null)
             {
-                UserId = dto.UserId,
-                SessionToken = GenerateSessionToken(),
-                Status = SessionStatus.Created,
-                CreatedAt = DateTime.Now,
-                LastActivityAt = DateTime.Now
-            };
+                return GenericDto<CreateSessionResultDto>.Success(new CreateSessionResultDto
+                {
+                    UserId = dto.UserId,
+                    SessionToken = existing.SessionToken,
+                    IdleAfter = existing.ExpiresAt,
+                    ResultMessage = "Mavjud pending sessiya tokeni qaytarildi."
+                });
+            }
 
-            var created = await _sessionRepo.CreateAsync(session);
+            var token = GenerateSessionToken();
+            await _pendingStore.SetAsync(dto.UserId, token, PendingSessionTtl);
 
             return GenericDto<CreateSessionResultDto>.Success(new CreateSessionResultDto
             {
-                SessionId = created.Id,
-                SessionToken = created.SessionToken,
-                IdleAfter = created.LastActivityAt.Add(IdleTimeout),
-                ResultMessage = "Sessiya yaratildi. Qurilma QR kodni skanerlab ulanishini kuting."
+                UserId = dto.UserId,
+                SessionToken = token,
+                IdleAfter = DateTime.Now.Add(PendingSessionTtl),
+                ResultMessage = "Pending sessiya yaratildi. QR ni qurilmaga ko'rsating."
             });
         }
 
-        // Sliding idle timeout: har activity'da yangilanadi, shuning uchun bu absolute "expiry" emas — keyingi activity-siz yopiladigan vaqt.
         private static string GenerateSessionToken()
         {
             var bytes = RandomNumberGenerator.GetBytes(24);
@@ -97,25 +106,19 @@ namespace Application.Services
                 .Replace('/', '_');
         }
 
-        public async Task<GenericDto<DeviceConnectedResultDto>> DeviceConnectAsync(DeviceConnectedDto dto)
+        public async Task<GenericDto<DeviceConnectedResultDto>> NotifyDeviceConnectedAsync(string sessionToken)
         {
-            var session = await _sessionRepo.GetByTokenAsync(dto.SessionToken);
+            var session = await _sessionRepo.GetByTokenAsync(sessionToken);
             if (session is null)
                 return GenericDto<DeviceConnectedResultDto>.Error(404, "Sessiya topilmadi.");
 
-            if (session.Status != SessionStatus.Created)
-                return GenericDto<DeviceConnectedResultDto>.Error(400, "Sessiya allaqachon ulangan yoki yopilgan.");
+            if (session.Device is null)
+                return GenericDto<DeviceConnectedResultDto>.Error(500, "Sessiya qurilmasiz ko'rinadi.");
 
-            var device = await _deviceRepo.GetBySerialNumberAsync(dto.SerialNumber);
+            // Mahsulotlarni alohida yuklash kerak — GetByTokenAsync Device.Products'ni include qilmaydi.
+            var device = await _deviceRepo.GetBySerialNumberAsync(session.Device.SerialNumber);
             if (device is null)
                 return GenericDto<DeviceConnectedResultDto>.Error(404, "Qurilma topilmadi yoki faol emas.");
-
-            session.DeviceId = device.Id;
-            session.Status = SessionStatus.Connected;
-            session.ConnectedAt = DateTime.Now;
-            session.LastActivityAt = DateTime.Now;
-
-            await _sessionRepo.UpdateAsync(session);
 
             var capabilities = (device.Products ?? Enumerable.Empty<ProductEntity>())
                 .Where(p => p.IsActive)
@@ -136,7 +139,7 @@ namespace Application.Services
                 DeviceSerialNumber = device.SerialNumber,
                 DeviceType = device.DeviceType.ToString(),
                 Products = capabilities,
-                ResultMessage = "Qurilma sessiyaga ulandi. Mahsulot tanlash uchun /Process/Start ga murojaat qiling."
+                ResultMessage = "Qurilma sessiyaga ulandi."
             };
 
             await _notifier.NotifyDeviceConnectedAsync(session.SessionToken, new
@@ -148,6 +151,9 @@ namespace Application.Services
                 products = capabilities,
                 connected_at = session.ConnectedAt
             });
+
+            // Pending cache shu paytdan keraksiz — TTL bilan o'chmasin, darhol tozalaymiz.
+            await _pendingStore.DeleteAsync(session.UserId);
 
             return GenericDto<DeviceConnectedResultDto>.Success(result);
         }

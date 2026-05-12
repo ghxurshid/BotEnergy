@@ -2,11 +2,20 @@ using CommonConfiguration.ConfigurationExtensions;
 using CommonConfiguration.ConfigurationServices;
 using CommonConfiguration.Filters;
 using Domain.Interfaces;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using UserApi.Grpc;
 using UserApi.Hubs;
 using UserApi.Messaging;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddValidatedServiceProvider();
+
+// REST (HTTP/1.1) va gRPC (HTTP/2) bir port'da yashashi uchun Kestrel'ga ikkala protokolni
+// yoqamiz. Plain HTTP'da .NET 8 default'i faqat HTTP/1.1 — gRPC ishlamaydi.
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ConfigureEndpointDefaults(endpoint => endpoint.Protocols = HttpProtocols.Http1AndHttp2);
+});
 builder.Services.AddControllers(options =>
 {
     options.Filters.Add<PermissionFilter>();
@@ -14,6 +23,7 @@ builder.Services.AddControllers(options =>
 });
 
 builder.Services.AddSignalR();
+builder.Services.AddGrpc();
 builder.Services.AddSwaggerWithJwtAuth(
     "User API", "v1",
     "Foydalanuvchi profili, sessiya boshqaruvi, SignalR real-time, RabbitMQ orqali DeviceApi bilan aloqa");
@@ -56,5 +66,6 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<SessionHub>("/hubs/session");
+app.MapGrpcService<PendingSessionGrpcService>();
 
 app.RunApi("UserApi", 5006);

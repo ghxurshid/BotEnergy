@@ -9,7 +9,7 @@ namespace UserApi.Extensions
         public static CreateSessionResponse ToResponse(this CreateSessionResultDto dto)
             => new CreateSessionResponse
             {
-                SessionId = dto.SessionId,
+                UserId = dto.UserId,
                 SessionToken = dto.SessionToken,
                 IdleAfter = dto.IdleAfter,
                 Message = dto.ResultMessage

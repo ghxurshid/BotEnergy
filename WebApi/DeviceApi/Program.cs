@@ -1,8 +1,14 @@
 using CommonConfiguration.ConfigurationExtensions;
 using CommonConfiguration.ConfigurationServices;
 using CommonConfiguration.Filters;
+using CommonConfiguration.Grpc;
 using DeviceApi.Messaging;
 using DeviceApi.Mqtt;
+using DeviceApi.Services;
+
+// Dev rejimda UserApi gRPC server plain HTTP/2 ustida ishlaydi — Kestrel TLS'siz boshlanadi.
+// Production'da HTTPS yoqilganda bu switch xavfsiz (default holatda HTTPS qo'llab-quvvatlanadi).
+AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddValidatedServiceProvider();
@@ -26,6 +32,17 @@ builder.Services.AddRabbitMq(builder.Configuration);
 
 // Redis
 builder.Services.AddRedisServices(builder.Configuration);
+
+// gRPC client — UserApi'dagi pending sessiya cache'iga so'rov yuborish uchun
+var userApiBaseUrl = builder.Configuration["InternalApi:UserApiBaseUrl"]
+    ?? throw new InvalidOperationException("InternalApi:UserApiBaseUrl konfiguratsiyada belgilanmagan.");
+builder.Services.AddGrpcClient<PendingSessionService.PendingSessionServiceClient>(o =>
+{
+    o.Address = new Uri(userApiBaseUrl);
+});
+
+// Sessiya yaratish servisi — MqttBridge connect oqimida chaqiriladi
+builder.Services.AddScoped<IDeviceSessionService, DeviceSessionService>();
 
 // MQTT Bridge
 builder.Services.Configure<MqttOptions>(builder.Configuration.GetSection("Mqtt"));

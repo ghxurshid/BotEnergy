@@ -3,6 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using CommonConfiguration.Messaging;
+using DeviceApi.Services;
 using Domain.Messaging;
 using Domain.Messaging.Events;
 using Domain.Repositories;
@@ -22,11 +23,15 @@ namespace DeviceApi.Mqtt
     ///
     /// **Topiclar:**
     ///  Server → Device:  server/{serial}/command
-    ///  Device → Server:  device/{serial}/event       — connected / stopped / error / out_of_resource
+    ///                    server/{serial}/connect_ack — sessiyaga ulanish urinishi natijasi
+    ///                    server/{serial}/payment_result
+    ///  Device → Server:  device/{serial}/connect    — sessiyaga ulanish so'rovi ({ userId, sessionToken })
+    ///                    device/{serial}/event       — stopped / error / out_of_resource / completed (jarayon yakuni)
     ///                    device/{serial}/telemetry  — har 5s
     ///                    device/{serial}/response   — buyruqlarga ack
     ///                    device/{serial}/heartbeat  — har 30s, LastSeenAt yangilanishi uchun
     ///                    device/{serial}/status     — diagnostika (auth/encryption talab qilinmaydi)
+    ///                    device/{serial}/payment_qr — QR to'lov so'rovi
     ///
     /// **Xavfsizlik qatlamlari (sozlamaga ko'ra):**
     ///  - TLS (UseTls=true) — MQTT broker bilan shifrlangan TCP
@@ -88,6 +93,8 @@ namespace DeviceApi.Mqtt
                             "MQTT brokerga ulandi: {Host}:{Port} (TLS={Tls}, Encryption={Enc})",
                             _options.BrokerHost, _options.BrokerPort, _options.UseTls, _options.EnableEncryption);
 
+                        await _mqttClient.SubscribeAsync(
+                            new MqttTopicFilterBuilder().WithTopic("device/+/connect").WithAtLeastOnceQoS().Build(), stoppingToken);
                         await _mqttClient.SubscribeAsync(
                             new MqttTopicFilterBuilder().WithTopic("device/+/event").WithAtLeastOnceQoS().Build(), stoppingToken);
                         await _mqttClient.SubscribeAsync(
@@ -173,6 +180,18 @@ namespace DeviceApi.Mqtt
             {
                 type = "stop",
                 process_id = processId
+            });
+
+        /// <summary>
+        /// Sessiya ulanish urinishi natijasini qurilmaga qaytaradi (server/{serial}/connect_ack).
+        /// Qurilma displey shu javob orqali "ulanish muvaffaqiyatli" yoki "xatolik" ekranini ko'rsatadi.
+        /// </summary>
+        public Task PublishConnectAckAsync(string serialNumber, bool ok, long? sessionId, string? reason)
+            => PublishToDeviceAsync(serialNumber, "connect_ack", new
+            {
+                ok,
+                session_id = sessionId,
+                reason
             });
 
         /// <summary>
@@ -276,6 +295,10 @@ namespace DeviceApi.Mqtt
 
                 switch (action)
                 {
+                    case "connect":
+                        await HandleConnectAsync(serialNumber, payload);
+                        break;
+
                     case "event":
                         HandleDeviceEvent(serialNumber, payload);
                         break;
@@ -318,17 +341,6 @@ namespace DeviceApi.Mqtt
 
             var type = (data.Type ?? string.Empty).ToLowerInvariant();
 
-            if (type is "connect" or "connected")
-            {
-                _rabbitPublisher.Publish(QueueNames.EventQueue, new DeviceEvent
-                {
-                    EventType = DeviceEventTypes.Connected,
-                    SerialNumber = serialNumber,
-                    SessionToken = data.SessionToken
-                });
-                return;
-            }
-
             if (type is "stopped" or "error" or "out_of_resource" or "completed")
             {
                 _rabbitPublisher.Publish(QueueNames.EventQueue, new DeviceEvent
@@ -344,6 +356,26 @@ namespace DeviceApi.Mqtt
             }
 
             _logger.LogDebug("Noma'lum device event turi: {Type}", type);
+        }
+
+        private async Task HandleConnectAsync(string serialNumber, string payload)
+        {
+            var data = JsonSerializer.Deserialize<DeviceConnectPayload>(payload, JsonOpts);
+            if (data is null || data.UserId is null or 0 || string.IsNullOrEmpty(data.SessionToken))
+            {
+                _logger.LogWarning(
+                    "Connect payload yaroqsiz — userId yoki sessionToken bo'sh. Serial: {Serial}", serialNumber);
+                await PublishConnectAckAsync(serialNumber, ok: false, sessionId: null, reason: "invalid_payload");
+                return;
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+            var sessionService = scope.ServiceProvider.GetRequiredService<IDeviceSessionService>();
+
+            var result = await sessionService.TryConnectAsync(
+                serialNumber, data.UserId.Value, data.SessionToken, CancellationToken.None);
+
+            await PublishConnectAckAsync(serialNumber, result.Success, result.SessionId, result.Reason);
         }
 
         private void HandleTelemetry(string serialNumber, string payload)
@@ -484,6 +516,16 @@ namespace DeviceApi.Mqtt
         public string? SessionToken { get; set; }
         public long? ProcessId { get; set; }
         public decimal? FinalQuantity { get; set; }
+    }
+
+    /// <summary>
+    /// device/{serial}/connect topic'idan keladi. Qurilma reader QR'dan o'qigan
+    /// userId va sessionToken'ni jamlaydi.
+    /// </summary>
+    internal sealed class DeviceConnectPayload : DeviceAuthPayload
+    {
+        public long? UserId { get; set; }
+        public string? SessionToken { get; set; }
     }
 
     internal sealed class TelemetryPayload : DeviceAuthPayload
