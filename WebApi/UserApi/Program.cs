@@ -11,17 +11,23 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddBotEnergyLogging("UserApi");
 builder.AddValidatedServiceProvider();
 
-// REST (HTTP/1.1) va gRPC (HTTP/2) bir port'da yashashi uchun aniq Listen() bilan
-// protokollarni majburiy belgilaymiz. ConfigureEndpointDefaults yolg'iz URL-based
-// binding (app.Run(url) / ASPNETCORE_URLS)'da har doim qo'llanmaydi — production'da
-// HTTP/2 oqimi server tomonidan rad etilib HTTP_1_1_REQUIRED qaytariladi.
+// Kestrel cleartext (TLS'siz) rejimida bir portda ham HTTP/1.1 ham HTTP/2'ni avtomatik
+// muzokara qilolmaydi — `Http1AndHttp2` cleartext'da HTTP/1.1 sifatida ishlaydi va HTTP/2
+// stream'lar HTTP_1_1_REQUIRED bilan rad etiladi. Shu sababli alohida ikkita listener:
+//   - userApiPort      → HTTP/1.1 only (REST + SignalR, tashqi traffik)
+//   - userApiGrpcPort  → HTTP/2 only  (gRPC, faqat localhost — DeviceApi → UserApi)
 builder.Configuration.AddCommonConfiguration();
-var userApiPort = int.TryParse(builder.Configuration["Hosting:Ports:UserApi"], out var p) ? p : 5006;
+var userApiPort     = int.TryParse(builder.Configuration["Hosting:Ports:UserApi"],     out var p1) ? p1 : 5006;
+var userApiGrpcPort = int.TryParse(builder.Configuration["Hosting:Ports:UserApiGrpc"], out var p2) ? p2 : 5106;
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenAnyIP(userApiPort, listenOptions =>
     {
-        listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+        listenOptions.Protocols = HttpProtocols.Http1;
+    });
+    options.ListenLocalhost(userApiGrpcPort, listenOptions =>
+    {
+        listenOptions.Protocols = HttpProtocols.Http2;
     });
 });
 builder.Services.AddControllers(options =>

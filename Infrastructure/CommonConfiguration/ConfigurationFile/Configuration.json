@@ -18,7 +18,8 @@
       "BillingApi": 5003,
       "DeviceApi": 5004,
       "PaymentApi": 5005,
-      "UserApi": 5006
+      "UserApi": 5006,
+      "UserApiGrpc": 5106
     }
   }
 }
