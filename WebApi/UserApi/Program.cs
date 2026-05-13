@@ -51,6 +51,8 @@ builder.Services.AddHostedService<DevicePaymentEventConsumer>();
 
 builder.Services.AddJwtAuthentication(builder.Configuration, signalRHubPath: "/hubs");
 
+builder.Services.AddSimulatorCors();
+
 var app = builder.Build();
 
 await app.ApplyMigrationsAsync();
@@ -61,6 +63,8 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseHttpsIfEnabled();
+
+app.UseSimulatorCors();
 
 app.UseAuthentication();
 app.UseAuthorization();

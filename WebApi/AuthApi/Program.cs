@@ -23,6 +23,8 @@ builder.Services.RegisterServices();
 // Redis
 builder.Services.AddRedisServices(builder.Configuration);
 
+builder.Services.AddSimulatorCors();
+
 var app = builder.Build();
 
 await app.ApplyMigrationsAsync();
@@ -34,6 +36,8 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseHttpsIfEnabled();
+
+app.UseSimulatorCors();
 
 app.UseAuthorization();
 

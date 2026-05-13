@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Persistence.Context;
 using Persistence.Seed;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 
 namespace CommonConfiguration.ConfigurationExtensions
 {
@@ -41,6 +42,33 @@ namespace CommonConfiguration.ConfigurationExtensions
         {
             return app.UseMiddleware<ExceptionMiddleware>();
         }
+
+        public const string SimulatorCorsPolicy = "BotEnergySimulatorCors";
+
+        /// <summary>
+        /// Brauzerda ishlaydigan simulyatorlar uchun CORS siyosati. Kerakli kelib chiqishlarni
+        /// (origin) qo'shadi. Credentials qo'shilgan, shuning uchun '*' o'rniga aniq originlar
+        /// va SetIsOriginAllowed ishlatiladi.
+        /// </summary>
+        public static IServiceCollection AddSimulatorCors(this IServiceCollection services)
+        {
+            services.AddCors(options =>
+            {
+                options.AddPolicy(SimulatorCorsPolicy, policy =>
+                {
+                    policy
+                        .SetIsOriginAllowed(_ => true)
+                        .AllowAnyHeader()
+                        .AllowAnyMethod()
+                        .AllowCredentials()
+                        .WithExposedHeaders("Idempotent-Replay");
+                });
+            });
+            return services;
+        }
+
+        public static IApplicationBuilder UseSimulatorCors(this IApplicationBuilder app)
+            => app.UseCors(SimulatorCorsPolicy);
 
         /// <summary>
         /// Hosting:UseHttps true bo'lsagina UseHttpsRedirection qo'shadi.

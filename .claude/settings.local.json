@@ -16,7 +16,9 @@
       "Bash(dotnet clean:*)",
       "Bash(Get-ChildItem -Path \"d:\\\\WorkPath\\\\VisualStudio\\\\22\\\\BotEnergy\" -Directory)",
       "Bash(Select-Object Name)",
-      "Bash(xargs grep -l \"DbContext\")"
+      "Bash(xargs grep -l \"DbContext\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
