@@ -3,6 +3,7 @@ using CommonConfiguration.ConfigurationServices;
 using CommonConfiguration.Filters;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddBotEnergyLogging("BillingApi");
 builder.AddValidatedServiceProvider();
 
 builder.Services.AddControllers(options =>

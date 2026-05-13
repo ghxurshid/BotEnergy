@@ -8,6 +8,7 @@ using UserApi.Hubs;
 using UserApi.Messaging;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddBotEnergyLogging("UserApi");
 builder.AddValidatedServiceProvider();
 
 // REST (HTTP/1.1) va gRPC (HTTP/2) bir port'da yashashi uchun Kestrel'ga ikkala protokolni

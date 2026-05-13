@@ -11,6 +11,7 @@ using DeviceApi.Services;
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddBotEnergyLogging("DeviceApi");
 builder.AddValidatedServiceProvider();
 
 builder.Services.AddControllers(options =>
