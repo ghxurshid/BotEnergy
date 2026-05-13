@@ -11,15 +11,14 @@
     "wwwroot"
   ],
   "Hosting": {
-    "UseHttps": false,
+    "UseHttps": true,
     "Ports": {
       "AdminApi": 5001,
       "AuthApi": 5002,
       "BillingApi": 5003,
       "DeviceApi": 5004,
       "PaymentApi": 5005,
-      "UserApi": 5006,
-      "UserApiGrpc": 5106
+      "UserApi": 5006
     }
   }
 }

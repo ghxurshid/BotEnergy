@@ -5,10 +5,8 @@ using CommonConfiguration.Grpc;
 using DeviceApi.Messaging;
 using DeviceApi.Mqtt;
 using DeviceApi.Services;
-
-// Dev rejimda UserApi gRPC server plain HTTP/2 ustida ishlaydi — Kestrel TLS'siz boshlanadi.
-// Production'da HTTPS yoqilganda bu switch xavfsiz (default holatda HTTPS qo'llab-quvvatlanadi).
-AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
+using System.Net.Http;
+using System.Net.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddBotEnergyLogging("DeviceApi");
@@ -40,6 +38,16 @@ var userApiBaseUrl = builder.Configuration["InternalApi:UserApiBaseUrl"]
 builder.Services.AddGrpcClient<PendingSessionService.PendingSessionServiceClient>(o =>
 {
     o.Address = new Uri(userApiBaseUrl);
+})
+// Internal gRPC kanali (DeviceApi → UserApi) loopback orqali boradi va self-signed
+// sertifikatlardan foydalanadi — TLS sertifikat tekshiruvi o'tkazib yuboriladi.
+// Tashqi traffic'ga ta'sir qilmaydi (faqat shu gRPC client uchun handler).
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    SslOptions = new SslClientAuthenticationOptions
+    {
+        RemoteCertificateValidationCallback = (_, _, _, _) => true
+    }
 });
 
 // Sessiya yaratish servisi — MqttBridge connect oqimida chaqiriladi

@@ -25,7 +25,15 @@
   },
   "InternalApi": {
     "SharedSecret": "botenergy-internal-secret-2026",
-    "UserApiBaseUrl": "http://localhost:5106"
+    "UserApiBaseUrl": "https://localhost:5006"
+  },
+  "Kestrel": {
+    "Certificates": {
+      "Default": {
+        "Path": "/etc/botenergy/certs/botenergy.pfx",
+        "Password": "botenergy-dev"
+      }
+    }
   },
   "Payme": {
     "BaseUrl": "https://checkout.paycom.uz/api",
