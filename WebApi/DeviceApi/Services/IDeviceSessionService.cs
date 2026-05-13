@@ -15,8 +15,13 @@ namespace DeviceApi.Services
     }
 
     /// <summary>
-    /// <c>Success=true</c> bo'lsa <c>SessionId</c> to'ldiriladi, <c>Reason</c> null.
-    /// Aks holda <c>Reason</c> qurilmaga MQTT ack ichida qaytariladi (debug uchun).
+    /// Connect oqimining yakuniy natijasi. <c>Code</c> har doim to'ldiriladi
+    /// (<see cref="ConnectResultCodes"/> dan), <c>Message</c> ham (lokalizatsiya kelajakda mumkin),
+    /// <c>SessionId</c> faqat Success holatida.
     /// </summary>
-    public sealed record DeviceConnectResult(bool Success, long? SessionId, string? Reason);
+    public sealed record DeviceConnectResult(
+        bool Success,
+        string Code,
+        string Message,
+        long? SessionId);
 }

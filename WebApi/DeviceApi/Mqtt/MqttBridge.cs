@@ -183,16 +183,18 @@ namespace DeviceApi.Mqtt
             });
 
         /// <summary>
-        /// Sessiya ulanish urinishi natijasini qurilmaga qaytaradi (server/{serial}/connect_ack).
-        /// Qurilma displey shu javob orqali "ulanish muvaffaqiyatli" yoki "xatolik" ekranini ko'rsatadi.
+        /// Sessiya ulanish urinishi natijasini qurilmaga qaytaradi (server/{serial}/connect_ack)
+        /// standart <see cref="MqttResultEnvelope{T}"/> shaklida. Qurilma displey
+        /// <c>code</c> bo'yicha tegishli ekranni ko'rsatadi, <c>message</c> debug uchun.
         /// </summary>
-        public Task PublishConnectAckAsync(string serialNumber, bool ok, long? sessionId, string? reason)
-            => PublishToDeviceAsync(serialNumber, "connect_ack", new
-            {
-                ok,
-                session_id = sessionId,
-                reason
-            });
+        public Task PublishConnectAckAsync(string serialNumber, MqttResultEnvelope<ConnectAckData> envelope)
+        {
+            _logger.LogInformation(
+                "[CONNECT-ACK] serial={Serial} ok={Ok} code={Code} sessionId={SessionId}",
+                serialNumber, envelope.Ok, envelope.Code, envelope.Data?.SessionId);
+
+            return PublishToDeviceAsync(serialNumber, "connect_ack", envelope);
+        }
 
         /// <summary>
         /// To'lov natijasini qurilma displeyiga yuboradi (server/{serial}/payment_result).
@@ -222,9 +224,18 @@ namespace DeviceApi.Mqtt
             var topic = args.ApplicationMessage.Topic;
             var rawPayload = Encoding.UTF8.GetString(args.ApplicationMessage.PayloadSegment);
 
+            _logger.LogInformation(
+                "[MQTT-IN] Topic={Topic} payloadLen={Len} encryption={Enc}",
+                topic, rawPayload.Length, _options.EnableEncryption);
+
             var parts = topic.Split('/');
             if (parts.Length < 3 || parts[0] != "device")
+            {
+                _logger.LogWarning(
+                    "[MQTT-IN] Topic prefiksi noto'g'ri — kutilgan: 'device/{{serial}}/{{action}}'. Olingan: {Topic}",
+                    topic);
                 return;
+            }
 
             var serialNumber = parts[1];
             var action = parts[2];
@@ -249,7 +260,12 @@ namespace DeviceApi.Mqtt
                         var device = await deviceRepo.GetBySerialNumberAsync(serialNumber);
                         if (device is null)
                         {
-                            _logger.LogWarning("MQTT xabar rad etildi — qurilma topilmadi: {Serial}", serialNumber);
+                            _logger.LogWarning(
+                                "[MQTT-IN] Qurilma topilmadi serial={Serial} topic={Topic}",
+                                serialNumber, topic);
+
+                            // connect topic'iga noma'lum serial kelsa, ack qaytarish foydasiz —
+                            // qurilma ro'yxatga olinmagan, SecretKey ham bilmaymiz.
                             return;
                         }
 
@@ -261,13 +277,18 @@ namespace DeviceApi.Mqtt
                                 out var error))
                         {
                             _logger.LogWarning(
-                                "MQTT envelope rad etildi — {Reason}. Serial: {Serial}, Topic: {Topic}",
+                                "[MQTT-IN] Envelope rad etildi reason={Reason} serial={Serial} topic={Topic}",
                                 error, serialNumber, topic);
+
+                            if (action == "connect")
+                                await PublishConnectAckAsync(serialNumber, MqttResultEnvelope.Fail<ConnectAckData>(
+                                    ConnectResultCodes.InvalidPayload, "Envelope shifrlanmagan yoki yaroqsiz."));
                             return;
                         }
 
                         // Envelope HMAC+GCM tag muvaffaqiyatli — identity tasdiqlandi.
                         await deviceRepo.TouchLastSeenAsync(serialNumber);
+                        _logger.LogDebug("[MQTT-IN] Envelope unwrap OK serial={Serial}", serialNumber);
                     }
                     else
                     {
@@ -275,7 +296,12 @@ namespace DeviceApi.Mqtt
                         var basePayload = JsonSerializer.Deserialize<DeviceAuthPayload>(rawPayload, JsonOpts);
                         if (string.IsNullOrEmpty(basePayload?.DeviceToken))
                         {
-                            _logger.LogWarning("MQTT xabar rad etildi — device_token yo'q. Topic: {Topic}", topic);
+                            _logger.LogWarning(
+                                "[MQTT-IN] device_token yo'q topic={Topic}", topic);
+
+                            if (action == "connect")
+                                await PublishConnectAckAsync(serialNumber, MqttResultEnvelope.Fail<ConnectAckData>(
+                                    ConnectResultCodes.InvalidPayload, "device_token field yo'q."));
                             return;
                         }
 
@@ -283,13 +309,18 @@ namespace DeviceApi.Mqtt
                         if (!isValid)
                         {
                             _logger.LogWarning(
-                                "MQTT xabar rad etildi — noto'g'ri device_token. Serial: {Serial}, Topic: {Topic}",
+                                "[MQTT-IN] device_token yaroqsiz serial={Serial} topic={Topic}",
                                 serialNumber, topic);
+
+                            if (action == "connect")
+                                await PublishConnectAckAsync(serialNumber, MqttResultEnvelope.Fail<ConnectAckData>(
+                                    ConnectResultCodes.InvalidPayload, "device_token noto'g'ri."));
                             return;
                         }
 
                         await deviceRepo.TouchLastSeenAsync(serialNumber);
                         payload = rawPayload;
+                        _logger.LogDebug("[MQTT-IN] Legacy auth OK serial={Serial}", serialNumber);
                     }
                 }
 
@@ -360,12 +391,31 @@ namespace DeviceApi.Mqtt
 
         private async Task HandleConnectAsync(string serialNumber, string payload)
         {
-            var data = JsonSerializer.Deserialize<DeviceConnectPayload>(payload, JsonOpts);
+            _logger.LogInformation(
+                "[CONNECT] device/{Serial}/connect payload: {Payload}", serialNumber, payload);
+
+            DeviceConnectPayload? data;
+            try
+            {
+                data = JsonSerializer.Deserialize<DeviceConnectPayload>(payload, JsonOpts);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex,
+                    "[CONNECT] Payload JSON parse xatoligi serial={Serial}", serialNumber);
+                await PublishConnectAckAsync(serialNumber, MqttResultEnvelope.Fail<ConnectAckData>(
+                    ConnectResultCodes.InvalidPayload, "Payload JSON formati buzuq."));
+                return;
+            }
+
             if (data is null || data.UserId is null or 0 || string.IsNullOrEmpty(data.SessionToken))
             {
                 _logger.LogWarning(
-                    "Connect payload yaroqsiz — userId yoki sessionToken bo'sh. Serial: {Serial}", serialNumber);
-                await PublishConnectAckAsync(serialNumber, ok: false, sessionId: null, reason: "invalid_payload");
+                    "[CONNECT] Payload yaroqsiz — userId={UserId} tokenEmpty={Empty} serial={Serial}",
+                    data?.UserId, string.IsNullOrEmpty(data?.SessionToken), serialNumber);
+                await PublishConnectAckAsync(serialNumber, MqttResultEnvelope.Fail<ConnectAckData>(
+                    ConnectResultCodes.InvalidPayload,
+                    "user_id (>0) va session_token (bo'sh emas) majburiy. Snake_case formatda yuboring."));
                 return;
             }
 
@@ -375,7 +425,11 @@ namespace DeviceApi.Mqtt
             var result = await sessionService.TryConnectAsync(
                 serialNumber, data.UserId.Value, data.SessionToken, CancellationToken.None);
 
-            await PublishConnectAckAsync(serialNumber, result.Success, result.SessionId, result.Reason);
+            var envelope = result.Success
+                ? MqttResultEnvelope.Success(result.Code, result.Message, new ConnectAckData(result.SessionId!.Value))
+                : MqttResultEnvelope.Fail<ConnectAckData>(result.Code, result.Message);
+
+            await PublishConnectAckAsync(serialNumber, envelope);
         }
 
         private void HandleTelemetry(string serialNumber, string payload)
@@ -520,13 +574,19 @@ namespace DeviceApi.Mqtt
 
     /// <summary>
     /// device/{serial}/connect topic'idan keladi. Qurilma reader QR'dan o'qigan
-    /// userId va sessionToken'ni jamlaydi.
+    /// user_id va session_token'ni jamlaydi.
     /// </summary>
     internal sealed class DeviceConnectPayload : DeviceAuthPayload
     {
         public long? UserId { get; set; }
         public string? SessionToken { get; set; }
     }
+
+    /// <summary>
+    /// server/{serial}/connect_ack envelope ichidagi data. Success holatda <c>SessionId</c>
+    /// to'ldiriladi, Fail holatda envelope.Data null bo'ladi.
+    /// </summary>
+    public sealed record ConnectAckData(long SessionId);
 
     internal sealed class TelemetryPayload : DeviceAuthPayload
     {
