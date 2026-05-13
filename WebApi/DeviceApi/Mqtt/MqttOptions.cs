@@ -13,9 +13,5 @@ namespace DeviceApi.Mqtt
         public bool AllowUntrustedCertificates { get; set; } = false;
         public string? ClientCertificatePath { get; set; }
         public string? ClientCertificatePassword { get; set; }
-
-        // ── Application-level encryption ───────────────────────────────
-        public bool EnableEncryption { get; set; } = false;
-        public int MaxClockSkewSeconds { get; set; } = 60;
     }
 }

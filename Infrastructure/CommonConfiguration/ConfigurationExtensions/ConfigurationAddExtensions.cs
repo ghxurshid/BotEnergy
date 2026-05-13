@@ -193,6 +193,8 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddSingleton<InMemoryPendingSessionStore>();
             services.AddSingleton<IPendingSessionStore, ResilientPendingSessionStore>();
 
+            services.AddSingleton<IMqttMessageIdStore, RedisMqttMessageIdStore>();
+
             services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
             services.AddScoped<Filters.IdempotencyFilter>();
 

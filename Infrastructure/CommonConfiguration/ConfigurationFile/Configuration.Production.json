@@ -11,9 +11,7 @@
     "UseTls": true,
     "AllowUntrustedCertificates": false,
     "ClientCertificatePath": null,
-    "ClientCertificatePassword": null,
-    "EnableEncryption": true,
-    "MaxClockSkewSeconds": 60
+    "ClientCertificatePassword": null
   },
   "RabbitMq": {
     "HostName": "localhost",
