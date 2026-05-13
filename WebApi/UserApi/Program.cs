@@ -11,11 +11,18 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddBotEnergyLogging("UserApi");
 builder.AddValidatedServiceProvider();
 
-// REST (HTTP/1.1) va gRPC (HTTP/2) bir port'da yashashi uchun Kestrel'ga ikkala protokolni
-// yoqamiz. Plain HTTP'da .NET 8 default'i faqat HTTP/1.1 — gRPC ishlamaydi.
+// REST (HTTP/1.1) va gRPC (HTTP/2) bir port'da yashashi uchun aniq Listen() bilan
+// protokollarni majburiy belgilaymiz. ConfigureEndpointDefaults yolg'iz URL-based
+// binding (app.Run(url) / ASPNETCORE_URLS)'da har doim qo'llanmaydi — production'da
+// HTTP/2 oqimi server tomonidan rad etilib HTTP_1_1_REQUIRED qaytariladi.
+builder.Configuration.AddCommonConfiguration();
+var userApiPort = int.TryParse(builder.Configuration["Hosting:Ports:UserApi"], out var p) ? p : 5006;
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ConfigureEndpointDefaults(endpoint => endpoint.Protocols = HttpProtocols.Http1AndHttp2);
+    options.ListenAnyIP(userApiPort, listenOptions =>
+    {
+        listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+    });
 });
 builder.Services.AddControllers(options =>
 {
@@ -29,7 +36,6 @@ builder.Services.AddSwaggerWithJwtAuth(
     "User API", "v1",
     "Foydalanuvchi profili, sessiya boshqaruvi, SignalR real-time, RabbitMQ orqali DeviceApi bilan aloqa");
 
-builder.Configuration.AddCommonConfiguration();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
 builder.Services.RegisterSessionServices();
@@ -55,6 +61,10 @@ builder.Services.AddSimulatorCors();
 
 var app = builder.Build();
 
+// ASPNETCORE_URLS env var / --urls argi orqali kelgan binding'larni o'chiramiz —
+// faqat yuqorida aniq belgilangan ListenAnyIP(...) ishlatiladi (HTTP/1 + HTTP/2).
+app.Urls.Clear();
+
 await app.ApplyMigrationsAsync();
 
 app.UseCustomExceptionMiddleware();
@@ -73,4 +83,5 @@ app.MapControllers();
 app.MapHub<SessionHub>("/hubs/session");
 app.MapGrpcService<PendingSessionGrpcService>();
 
-app.RunApi("UserApi", 5006);
+// URL ConfigureKestrel ichidagi ListenAnyIP orqali tayinlangan.
+app.Run();
