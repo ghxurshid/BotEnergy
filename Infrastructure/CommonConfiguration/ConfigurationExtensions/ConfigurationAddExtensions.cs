@@ -255,7 +255,8 @@ namespace CommonConfiguration.ConfigurationExtensions
 
         /// <summary>
         /// SessionApi uchun sessiya bilan bog'liq servislar.
-        /// SessionService, repository lar, BootstrapService va idle session cleaner.
+        /// SessionService, repository lar, BootstrapService, idle session cleaner va
+        /// MQTT connect oqimini boshqaruvchi <c>DeviceSessionService</c>.
         /// </summary>
         public static IServiceCollection RegisterSessionServices(this IServiceCollection services)
         {
@@ -268,22 +269,21 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<ISessionService, SessionService>();
             services.AddScoped<IBootstrapService, BootstrapService>();
             services.AddSingleton<IPushNotificationService, LoggingPushNotificationService>();
-            // ISessionNotifier — SessionApi Program.cs da ro'yxatdan o'tkaziladi
+            // ISessionNotifier va IDeviceSessionService — SessionApi Program.cs da
+            // ro'yxatdan o'tkaziladi (ular SessionApi'ga bog'liq).
             services.AddHostedService<IdleSessionCleanerService>();
 
             return services;
         }
 
         /// <summary>
-        /// DeviceApi uchun qurilma va sessiya repository'lari. DeviceApi sessiyani DB'ga
-        /// yozuvchi tomonga aylandi, shuning uchun <see cref="ISessionRepository"/> ham kerak.
-        /// <see cref="DeviceApi.Services.IDeviceSessionService"/> esa Program.cs'da gRPC client'i
-        /// bilan birga ro'yxatga olinadi (DeviceApi'ga bog'liqlik bu yerda yo'q).
+        /// DeviceApi uchun qurilma repository'si. DeviceApi endi faqat HTTP REST
+        /// (qurilma autentifikatsiyasi, CRUD) bilan ishlaydi — MQTT/sessiya logikasi
+        /// SessionApi'ga ko'chirilgan.
         /// </summary>
         public static IServiceCollection RegisterDeviceServices(this IServiceCollection services)
         {
             services.AddScoped<IDeviceRepository, DeviceRepository>();
-            services.AddScoped<ISessionRepository, SessionRepository>();
 
             return services;
         }

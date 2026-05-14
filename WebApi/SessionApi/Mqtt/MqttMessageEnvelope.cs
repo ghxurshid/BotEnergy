@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-namespace DeviceApi.Mqtt
+namespace SessionApi.Mqtt
 {
     /// <summary>
     /// MQTT xabarlari uchun yagona shablon (device ↔ server, har ikki yo'nalish ham).

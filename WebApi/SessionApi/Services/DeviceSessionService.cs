@@ -1,34 +1,34 @@
 using System.Security.Cryptography;
 using System.Text;
-using CommonConfiguration.Grpc;
 using CommonConfiguration.Messaging;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Interfaces;
 using Domain.Messaging;
 using Domain.Messaging.Events;
 using Domain.Repositories;
 using Microsoft.Extensions.Logging;
 
-namespace DeviceApi.Services
+namespace SessionApi.Services
 {
     public sealed class DeviceSessionService : IDeviceSessionService
     {
         private readonly IDeviceRepository _deviceRepo;
         private readonly ISessionRepository _sessionRepo;
-        private readonly PendingSessionService.PendingSessionServiceClient _pendingClient;
+        private readonly IPendingSessionStore _pendingStore;
         private readonly RabbitMqPublisher _rabbitPublisher;
         private readonly ILogger<DeviceSessionService> _logger;
 
         public DeviceSessionService(
             IDeviceRepository deviceRepo,
             ISessionRepository sessionRepo,
-            PendingSessionService.PendingSessionServiceClient pendingClient,
+            IPendingSessionStore pendingStore,
             RabbitMqPublisher rabbitPublisher,
             ILogger<DeviceSessionService> logger)
         {
             _deviceRepo = deviceRepo;
             _sessionRepo = sessionRepo;
-            _pendingClient = pendingClient;
+            _pendingStore = pendingStore;
             _rabbitPublisher = rabbitPublisher;
             _logger = logger;
         }
@@ -51,39 +51,26 @@ namespace DeviceApi.Services
                     return Fail(ConnectResultCodes.InvalidPayload);
                 }
 
-                // ── Step 1: UserApi cache'idan tokenni olish ──
+                // ── Step 1: Pending sessiya cache'idan tokenni olish ──
                 _logger.LogInformation(
-                    "[CONNECT] Step 1 — gRPC: GetPendingToken(userId={UserId})", userId);
+                    "[CONNECT] Step 1 — pending store: GetAsync(userId={UserId})", userId);
 
-                GetPendingTokenResponse response;
-                try
-                {
-                    response = await _pendingClient.GetPendingTokenAsync(
-                        new GetPendingTokenRequest { UserId = userId },
-                        cancellationToken: ct);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex,
-                        "[CONNECT] Step 1 — gRPC chaqiruv uzilishi userId={UserId}", userId);
-                    return Fail(ConnectResultCodes.PendingServiceUnavailable);
-                }
-
-                _logger.LogInformation(
-                    "[CONNECT] Step 1 — gRPC javob: exists={Exists} cachedTokenLen={Len}",
-                    response.Exists, response.SessionToken?.Length ?? 0);
-
-                if (!response.Exists)
+                var entry = await _pendingStore.GetAsync(userId);
+                if (entry is null)
                 {
                     _logger.LogWarning(
                         "[CONNECT] Step 1 — pending sessiya topilmadi userId={UserId}", userId);
                     return Fail(ConnectResultCodes.NoPendingSession);
                 }
 
+                _logger.LogInformation(
+                    "[CONNECT] Step 1 — cache topildi cachedTokenLen={Len}",
+                    entry.SessionToken?.Length ?? 0);
+
                 // ── Step 2: Constant-time token comparison ──
                 _logger.LogInformation("[CONNECT] Step 2 — token solishtirilmoqda.");
 
-                var cachedBytes = Encoding.UTF8.GetBytes(response.SessionToken ?? string.Empty);
+                var cachedBytes = Encoding.UTF8.GetBytes(entry.SessionToken ?? string.Empty);
                 var receivedBytes = Encoding.UTF8.GetBytes(sessionToken);
                 if (cachedBytes.Length != receivedBytes.Length ||
                     !CryptographicOperations.FixedTimeEquals(cachedBytes, receivedBytes))

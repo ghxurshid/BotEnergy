@@ -25,8 +25,7 @@
     "ConnectionString": "localhost:6379"
   },
   "InternalApi": {
-    "SharedSecret": "botenergy-internal-secret-2026",
-    "SessionApiBaseUrl": "http://localhost:5007"
+    "SharedSecret": "botenergy-internal-secret-2026"
   },
   "Payme": {
     "BaseUrl": "https://checkout.test.paycom.uz/api",

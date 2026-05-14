@@ -1,4 +1,4 @@
-namespace DeviceApi.Services
+namespace SessionApi.Services
 {
     /// <summary>
     /// Qurilma reader QR kodni o'qib MQTT orqali userId+sessionToken yuborganda chaqiriladi.

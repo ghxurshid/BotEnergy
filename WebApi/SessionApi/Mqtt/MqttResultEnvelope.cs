@@ -1,4 +1,4 @@
-namespace DeviceApi.Mqtt
+namespace SessionApi.Mqtt
 {
     /// <summary>
     /// Qurilmaga yuboriladigan har qanday MQTT javobi uchun standart shablon.

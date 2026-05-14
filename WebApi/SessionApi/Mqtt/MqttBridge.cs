@@ -3,7 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using CommonConfiguration.Messaging;
-using DeviceApi.Services;
+using SessionApi.Services;
 using Domain.Interfaces;
 using Domain.Messaging;
 using Domain.Messaging.Events;
@@ -15,7 +15,7 @@ using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Client;
 
-namespace DeviceApi.Mqtt
+namespace SessionApi.Mqtt
 {
     /// <summary>
     /// MQTT bilan bevosita bog'lanish — qurilmalardan event/telemetry/heartbeat qabul qiladi,

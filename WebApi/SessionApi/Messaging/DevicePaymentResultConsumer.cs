@@ -1,10 +1,10 @@
 using CommonConfiguration.Messaging;
-using DeviceApi.Mqtt;
+using SessionApi.Mqtt;
 using Domain.Messaging;
 using Domain.Messaging.Commands;
 using Microsoft.Extensions.Logging;
 
-namespace DeviceApi.Messaging
+namespace SessionApi.Messaging
 {
     /// <summary>
     /// UserApi'dan RabbitMQ orqali kelgan to'lov natijasini MQTT orqali qurilmaga yuboradi.

@@ -3,17 +3,17 @@ using CommonConfiguration.ConfigurationServices;
 using CommonConfiguration.Filters;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
-using SessionApi.Grpc;
 using SessionApi.Hubs;
 using SessionApi.Messaging;
+using SessionApi.Mqtt;
+using SessionApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddBotEnergyLogging("SessionApi");
 builder.AddValidatedServiceProvider();
 
-// HTTP (cleartext) rejimida bitta port REST (HTTP/1.1) + gRPC (HTTP/2 h2c) + SignalR
-// uchun ishlaydi. Kestrel HTTP/1 va HTTP/2 ni bitta plain portda multiplekslaydi
-// (gRPC client h2c uchun Http2UnencryptedSupport switch yoqilgan bo'lishi kerak).
+// HTTP rejimida REST (HTTP/1.1) + SignalR uchun bitta port. Kestrel HTTP/1+HTTP/2
+// ni bitta plain portda multiplekslaydi (SignalR HTTP/1.1 da ham, HTTP/2 da ham ishlaydi).
 builder.Configuration.AddCommonConfiguration();
 var sessionApiPort = int.TryParse(builder.Configuration["Hosting:Ports:SessionApi"], out var p1) ? p1 : 5007;
 builder.WebHost.ConfigureKestrel(options =>
@@ -30,10 +30,9 @@ builder.Services.AddControllers(options =>
 });
 
 builder.Services.AddSignalR();
-builder.Services.AddGrpc();
 builder.Services.AddSwaggerWithJwtAuth(
     "Session API", "v1",
-    "Sessiya/process/payment boshqaruvi, SignalR real-time, RabbitMQ orqali DeviceApi bilan aloqa");
+    "Sessiya/process/payment boshqaruvi, MQTT bridge, SignalR real-time, RabbitMQ");
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
@@ -50,9 +49,20 @@ builder.Services.AddRedisServices(builder.Configuration);
 builder.Services.AddScoped<ISessionNotifier, SignalRSessionNotifier>();
 builder.Services.AddScoped<IDeviceCommandPublisher, RabbitMqDeviceCommandPublisher>();
 
-// RabbitMQ Consumer — DeviceApi dan kelgan eventlarni qayta ishlaydi
+// MQTT connect oqimini boshqaruvchi servis (MqttBridge tomonidan scope orqali chaqiriladi)
+builder.Services.AddScoped<IDeviceSessionService, DeviceSessionService>();
+
+// MQTT Bridge — qurilmadan event/telemetry/heartbeat qabul qiladi, server buyruqlarini publish qiladi
+builder.Services.Configure<MqttOptions>(builder.Configuration.GetSection("Mqtt"));
+builder.Services.AddSingleton<MqttBridge>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MqttBridge>());
+
+// RabbitMQ Consumerlar
 builder.Services.AddHostedService<DeviceEventConsumer>();
 builder.Services.AddHostedService<DevicePaymentEventConsumer>();
+// Server → qurilma yo'nalishi: SessionApi'ning ichida RabbitMQ dan MQTT'ga uzatish
+builder.Services.AddHostedService<DeviceCommandConsumer>();
+builder.Services.AddHostedService<DevicePaymentResultConsumer>();
 
 builder.Services.AddJwtAuthentication(builder.Configuration, signalRHubPath: "/hubs");
 
@@ -60,8 +70,6 @@ builder.Services.AddSimulatorCors();
 
 var app = builder.Build();
 
-// ASPNETCORE_URLS env var / --urls argi orqali kelgan binding'larni o'chiramiz —
-// faqat yuqorida aniq belgilangan ListenAnyIP(...) ishlatiladi (HTTP/1 + HTTP/2).
 app.Urls.Clear();
 
 await app.ApplyMigrationsAsync();
@@ -80,7 +88,5 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<SessionHub>("/hubs/session");
-app.MapGrpcService<PendingSessionGrpcService>();
 
-// URL ConfigureKestrel ichidagi ListenAnyIP orqali tayinlangan.
 app.Run();

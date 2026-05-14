@@ -1,4 +1,4 @@
-namespace DeviceApi.Mqtt
+namespace SessionApi.Mqtt
 {
     public class MqttOptions
     {

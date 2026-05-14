@@ -1,4 +1,4 @@
-namespace DeviceApi.Services
+namespace SessionApi.Services
 {
     /// <summary>
     /// Connect oqimining barcha mumkin bo'lgan natijalari uchun kodlar (machine-readable).
