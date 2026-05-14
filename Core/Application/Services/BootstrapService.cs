@@ -17,13 +17,16 @@ namespace Application.Services
 
         public async Task<GenericDto<BootstrapResultDto>> GetAsync(long userId)
         {
-            // DbContext bitta vaqtda faqat bitta operatsiyani qo'llaydi — bu ikki query
-            // bir xil scoped AppDbContext'ni ulashadi, shuning uchun ketma-ket bajaramiz.
-            var userResult = await _userService.GetCurrentUserAsync(userId);
+            var userTask = _userService.GetCurrentUserAsync(userId);
+            var sessionTask = _sessionService.GetCurrentAsync(userId);
+
+            await Task.WhenAll(userTask, sessionTask);
+
+            var userResult = await userTask;
             if (!userResult.IsSuccess)
                 return GenericDto<BootstrapResultDto>.Error(userResult.ErrorObj!.Code, userResult.ErrorObj.ErrorMessage);
 
-            var sessionResult = await _sessionService.GetCurrentAsync(userId);
+            var sessionResult = await sessionTask;
             // Aktiv sessiya yo'qligi xato emas — null qaytaramiz.
             var activeSession = sessionResult.IsSuccess ? sessionResult.Result : null;
 
