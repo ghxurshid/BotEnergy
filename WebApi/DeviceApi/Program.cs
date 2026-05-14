@@ -34,12 +34,12 @@ builder.Services.AddRabbitMq(builder.Configuration);
 // Redis
 builder.Services.AddRedisServices(builder.Configuration);
 
-// gRPC client — UserApi'dagi pending sessiya cache'iga so'rov yuborish uchun
-var userApiBaseUrl = builder.Configuration["InternalApi:UserApiBaseUrl"]
-    ?? throw new InvalidOperationException("InternalApi:UserApiBaseUrl konfiguratsiyada belgilanmagan.");
+// gRPC client — SessionApi'dagi pending sessiya cache'iga so'rov yuborish uchun
+var sessionApiBaseUrl = builder.Configuration["InternalApi:SessionApiBaseUrl"]
+    ?? throw new InvalidOperationException("InternalApi:SessionApiBaseUrl konfiguratsiyada belgilanmagan.");
 builder.Services.AddGrpcClient<PendingSessionService.PendingSessionServiceClient>(o =>
 {
-    o.Address = new Uri(userApiBaseUrl);
+    o.Address = new Uri(sessionApiBaseUrl);
 });
 
 // Sessiya yaratish servisi — MqttBridge connect oqimida chaqiriladi

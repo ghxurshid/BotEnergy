@@ -1,8 +1,8 @@
 using Domain.Dtos.Process;
 using Domain.Dtos.Session;
-using UserApi.Models.Responses;
+using SessionApi.Models.Responses;
 
-namespace UserApi.Extensions
+namespace SessionApi.Extensions
 {
     public static class DtoToResponseExtensions
     {

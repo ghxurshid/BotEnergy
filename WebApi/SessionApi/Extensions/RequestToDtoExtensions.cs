@@ -1,19 +1,11 @@
-using Domain.Dtos;
 using Domain.Dtos.Process;
 using Domain.Dtos.Session;
-using UserApi.Models.Requests;
+using SessionApi.Models.Requests;
 
-namespace UserApi.Extensions
+namespace SessionApi.Extensions
 {
     public static class RequestToDtoExtensions
     {
-        public static UpdateUserDto ToDto(this UpdateMeRequest request)
-            => new UpdateUserDto
-            {
-                Mail = request.Mail,
-                PhoneId = request.PhoneId
-            };
-
         public static CloseSessionDto ToDto(this CloseSessionRequest request, long userId)
             => new CloseSessionDto
             {

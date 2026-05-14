@@ -1,4 +1,4 @@
-namespace UserApi.Models.Responses
+namespace SessionApi.Models.Responses
 {
     public class StartProcessResponse
     {

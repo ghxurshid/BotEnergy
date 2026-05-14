@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
 
-namespace UserApi.Hubs
+namespace SessionApi.Hubs
 {
     /// <summary>
     /// Server → Client real-time push uchun ishlatiladi.

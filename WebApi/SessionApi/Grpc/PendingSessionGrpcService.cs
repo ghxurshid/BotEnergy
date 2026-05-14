@@ -3,7 +3,7 @@ using Domain.Interfaces;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
 
-namespace UserApi.Grpc
+namespace SessionApi.Grpc
 {
     /// <summary>
     /// DeviceApi'ga pending sessiya tokenini qaytaradi. Token solishtirish DeviceApi'da bo'ladi.

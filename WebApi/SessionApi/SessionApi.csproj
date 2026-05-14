@@ -11,12 +11,17 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <PackageReference Include="Grpc.AspNetCore" Version="2.66.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Infrastructure\CommonConfiguration\CommonConfiguration.csproj" />
     <ProjectReference Include="..\..\Infrastructure\External\External.csproj" />
     <ProjectReference Include="..\..\Infrastructure\Persistence\Persistence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="..\..\Infrastructure\CommonConfiguration\Protos\pending_session.proto" GrpcServices="Server" Link="Protos\pending_session.proto" />
   </ItemGroup>
 
 </Project>

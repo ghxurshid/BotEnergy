@@ -9,7 +9,7 @@ using Domain.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace UserApi.Messaging
+namespace SessionApi.Messaging
 {
     /// <summary>
     /// Qurilmadan kelgan QR to'lov so'rovini qayta ishlaydi.

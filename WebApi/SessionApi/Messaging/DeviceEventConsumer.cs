@@ -7,7 +7,7 @@ using Domain.Messaging.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace UserApi.Messaging
+namespace SessionApi.Messaging
 {
     /// <summary>
     /// DeviceApi dan RabbitMQ orqali kelgan eventlarni qayta ishlaydi.

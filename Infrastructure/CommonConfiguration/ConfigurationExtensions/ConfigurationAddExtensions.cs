@@ -254,8 +254,8 @@ namespace CommonConfiguration.ConfigurationExtensions
         }
 
         /// <summary>
-        /// UserApi uchun sessiya bilan bog'liq servislar.
-        /// SessionService, repository lar va idle session cleaner.
+        /// SessionApi uchun sessiya bilan bog'liq servislar.
+        /// SessionService, repository lar, BootstrapService va idle session cleaner.
         /// </summary>
         public static IServiceCollection RegisterSessionServices(this IServiceCollection services)
         {
@@ -268,7 +268,7 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<ISessionService, SessionService>();
             services.AddScoped<IBootstrapService, BootstrapService>();
             services.AddSingleton<IPushNotificationService, LoggingPushNotificationService>();
-            // ISessionNotifier — UserApi Program.cs da ro'yxatdan o'tkaziladi
+            // ISessionNotifier — SessionApi Program.cs da ro'yxatdan o'tkaziladi
             services.AddHostedService<IdleSessionCleanerService>();
 
             return services;
@@ -290,7 +290,7 @@ namespace CommonConfiguration.ConfigurationExtensions
 
         /// <summary>
         /// Payme Receipts API uchun typed HttpClient + PaymentService.
-        /// PaymentApi va UserApi'da chaqiriladi (boshqa API'larga keraksiz, ValidateOnBuild xatosini
+        /// PaymentApi va SessionApi'da chaqiriladi (boshqa API'larga keraksiz, ValidateOnBuild xatosini
         /// keltirib chiqarishi mumkin chunki PaymentService IPaymeClient'ga bog'liq).
         /// IPaymentTransactionRepository RegisterServices'da ro'yxatga olinishi shart.
         /// </summary>

@@ -4,7 +4,7 @@ using Domain.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace UserApi.Controllers
+namespace SessionApi.Controllers
 {
     /// <summary>
     /// Qurilmaga ulanishdan oldingi ma'lumotlar.

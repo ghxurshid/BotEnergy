@@ -1,4 +1,4 @@
-namespace UserApi.Models.Requests
+namespace SessionApi.Models.Requests
 {
     public class StartProcessRequest
     {

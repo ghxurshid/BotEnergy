@@ -1,4 +1,4 @@
-namespace UserApi.Models.Requests
+namespace SessionApi.Models.Requests
 {
     /// <summary>
     /// Process Stop / Pause / Resume operatsiyalari uchun umumiy so'rov.

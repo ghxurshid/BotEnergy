@@ -1,6 +1,6 @@
 using Domain.Enums;
 
-namespace UserApi.Models.Requests
+namespace SessionApi.Models.Requests
 {
     /// <summary>
     /// QR orqali balansni to'ldirish so'rovi.

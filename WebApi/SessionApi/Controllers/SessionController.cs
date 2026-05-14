@@ -5,11 +5,11 @@ using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-using UserApi.Extensions;
-using UserApi.Models.Requests;
+using SessionApi.Extensions;
+using SessionApi.Models.Requests;
 using Permissions = Domain.Constants.Permissions;
 
-namespace UserApi.Controllers
+namespace SessionApi.Controllers
 {
     /// <summary>
     /// Foydalanuvchi (Android/iOS) tomonidan chaqiriladigan sessiya endpointlari.
@@ -31,10 +31,37 @@ namespace UserApi.Controllers
     public class SessionController : ControllerBase
     {
         private readonly ISessionService _sessionService;
+        private readonly IBootstrapService _bootstrapService;
 
-        public SessionController(ISessionService sessionService)
+        public SessionController(ISessionService sessionService, IBootstrapService bootstrapService)
         {
             _sessionService = sessionService;
+            _bootstrapService = bootstrapService;
+        }
+
+        /// <summary>
+        /// App ishga tushgandagi yagona "single-call" endpoint.
+        /// Profil + balans + aktiv sessiya + serverning hozirgi vaqtini bitta javobda qaytaradi.
+        /// Resume flow uchun mo'ljallangan: app o'chib yongandan keyin shu chaqiriladi.
+        /// </summary>
+        /// <response code="200">Bootstrap ma'lumotlari (activeSession null bo'lishi mumkin)</response>
+        /// <response code="401">Token yo'q yoki yaroqsiz</response>
+        /// <response code="404">Foydalanuvchi topilmadi</response>
+        [HttpGet]
+        [RequirePermission(Permissions.UserBootstrap)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> Bootstrap()
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var result = await _bootstrapService.GetAsync(userId);
+            if (!result.IsSuccess)
+                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+
+            return Ok(result.Result);
         }
 
         /// <summary>

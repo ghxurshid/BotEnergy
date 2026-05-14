@@ -3,7 +3,7 @@ using Domain.Interfaces;
 using Domain.Messaging;
 using Domain.Messaging.Commands;
 
-namespace UserApi.Messaging
+namespace SessionApi.Messaging
 {
     /// <summary>
     /// IDeviceCommandPublisher ning RabbitMQ implementatsiyasi.

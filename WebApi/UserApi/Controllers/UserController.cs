@@ -1,11 +1,10 @@
 using CommonConfiguration.Attributes;
+using Domain.Dtos;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-using UserApi.Extensions;
 using UserApi.Models.Requests;
-using Permissions = Domain.Constants.Permissions;
 
 namespace UserApi.Controllers
 {
@@ -24,10 +23,9 @@ namespace UserApi.Controllers
     [Route("api/[controller]/[action]")]
     [ApiController]
     [Authorize]
-    public class UserController(IUserService userService, IBootstrapService bootstrapService) : ControllerBase
+    public class UserController(IUserService userService) : ControllerBase
     {
         private readonly IUserService _userService = userService;
-        private readonly IBootstrapService _bootstrapService = bootstrapService;
 
         /// <summary>
         /// Joriy foydalanuvchi profilini olish.
@@ -89,36 +87,15 @@ namespace UserApi.Controllers
             if (!TryGetUserId(out var userId))
                 return Unauthorized();
 
-            var result = await _userService.UpdateCurrentUserAsync(userId, request.ToDto());
+            var result = await _userService.UpdateCurrentUserAsync(userId, new UpdateUserDto
+            {
+                Mail = request.Mail,
+                PhoneId = request.PhoneId
+            });
             if (!result.IsSuccess)
                 return NotFound(result);
 
             return Ok(result);
-        }
-
-        /// <summary>
-        /// App ishga tushgandagi yagona "single-call" endpoint.
-        /// Profil + balans + aktiv sessiya + serverning hozirgi vaqtini bitta javobda qaytaradi.
-        /// Resume flow uchun mo'ljallangan: app o'chib yongandan keyin shu chaqiriladi.
-        /// </summary>
-        /// <response code="200">Bootstrap ma'lumotlari (activeSession null bo'lishi mumkin)</response>
-        /// <response code="401">Token yo'q yoki yaroqsiz</response>
-        /// <response code="404">Foydalanuvchi topilmadi</response>
-        [HttpGet]
-        [RequirePermission(Permissions.UserBootstrap)]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> Bootstrap()
-        {
-            if (!TryGetUserId(out var userId))
-                return Unauthorized();
-
-            var result = await _bootstrapService.GetAsync(userId);
-            if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
-
-            return Ok(result.Result);
         }
 
         private bool TryGetUserId(out long userId)

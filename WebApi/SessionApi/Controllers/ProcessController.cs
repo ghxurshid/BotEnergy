@@ -3,11 +3,11 @@ using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-using UserApi.Extensions;
-using UserApi.Models.Requests;
+using SessionApi.Extensions;
+using SessionApi.Models.Requests;
 using Permissions = Domain.Constants.Permissions;
 
-namespace UserApi.Controllers
+namespace SessionApi.Controllers
 {
     /// <summary>
     /// Sessiya ichidagi mahsulot berish jarayonlarini boshqaruvi.

@@ -1,7 +1,7 @@
 using Domain.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 
-namespace UserApi.Hubs
+namespace SessionApi.Hubs
 {
     /// <summary>
     /// ISessionNotifier ning SignalR implementatsiyasi.

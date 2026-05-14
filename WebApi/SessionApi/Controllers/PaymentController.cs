@@ -8,10 +8,10 @@ using Domain.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-using UserApi.Models.Requests;
+using SessionApi.Models.Requests;
 using Permissions = Domain.Constants.Permissions;
 
-namespace UserApi.Controllers
+namespace SessionApi.Controllers
 {
     /// <summary>
     /// Mobile app uchun Payme orqali QR balans to'ldirish endpointlari.
