@@ -11,7 +11,7 @@
     "wwwroot"
   ],
   "Hosting": {
-    "UseHttps": true,
+    "UseHttps": false,
     "Ports": {
       "AdminApi": 5001,
       "AuthApi": 5002,

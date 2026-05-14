@@ -11,9 +11,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddBotEnergyLogging("UserApi");
 builder.AddValidatedServiceProvider();
 
-// HTTPS rejimida bitta port REST (HTTP/1.1) + gRPC (HTTP/2) + SignalR uchun ishlaydi:
-// TLS ALPN'i protokolni avtomatik tanlaydi. Sertifikat Kestrel:Certificates:Default
-// orqali yuklanadi (Configuration.{env}.json).
+// HTTP (cleartext) rejimida bitta port REST (HTTP/1.1) + gRPC (HTTP/2 h2c) + SignalR
+// uchun ishlaydi. Kestrel HTTP/1 va HTTP/2 ni bitta plain portda multiplekslaydi
+// (gRPC client h2c uchun Http2UnencryptedSupport switch yoqilgan bo'lishi kerak).
 builder.Configuration.AddCommonConfiguration();
 var userApiPort = int.TryParse(builder.Configuration["Hosting:Ports:UserApi"], out var p1) ? p1 : 5006;
 builder.WebHost.ConfigureKestrel(options =>
@@ -21,7 +21,6 @@ builder.WebHost.ConfigureKestrel(options =>
     options.ListenAnyIP(userApiPort, listenOptions =>
     {
         listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
-        listenOptions.UseHttps();
     });
 });
 builder.Services.AddControllers(options =>

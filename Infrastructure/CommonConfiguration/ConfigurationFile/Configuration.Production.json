@@ -25,7 +25,7 @@
   },
   "InternalApi": {
     "SharedSecret": "botenergy-internal-secret-2026",
-    "UserApiBaseUrl": "https://localhost:5006"
+    "UserApiBaseUrl": "http://localhost:5006"
   },
   "Kestrel": {
     "Certificates": {

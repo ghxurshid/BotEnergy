@@ -5,8 +5,10 @@ using CommonConfiguration.Grpc;
 using DeviceApi.Messaging;
 using DeviceApi.Mqtt;
 using DeviceApi.Services;
-using System.Net.Http;
-using System.Net.Security;
+
+// gRPC client UserApi'ga cleartext HTTP/2 (h2c) orqali ulanadi — .NET'da bu
+// AppContext switch yoqilishini talab qiladi.
+AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddBotEnergyLogging("DeviceApi");
@@ -38,16 +40,6 @@ var userApiBaseUrl = builder.Configuration["InternalApi:UserApiBaseUrl"]
 builder.Services.AddGrpcClient<PendingSessionService.PendingSessionServiceClient>(o =>
 {
     o.Address = new Uri(userApiBaseUrl);
-})
-// Internal gRPC kanali (DeviceApi → UserApi) loopback orqali boradi va self-signed
-// sertifikatlardan foydalanadi — TLS sertifikat tekshiruvi o'tkazib yuboriladi.
-// Tashqi traffic'ga ta'sir qilmaydi (faqat shu gRPC client uchun handler).
-.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-{
-    SslOptions = new SslClientAuthenticationOptions
-    {
-        RemoteCertificateValidationCallback = (_, _, _, _) => true
-    }
 });
 
 // Sessiya yaratish servisi — MqttBridge connect oqimida chaqiriladi
