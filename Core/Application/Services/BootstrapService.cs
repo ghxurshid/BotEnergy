@@ -17,16 +17,14 @@ namespace Application.Services
 
         public async Task<GenericDto<BootstrapResultDto>> GetAsync(long userId)
         {
-            var userTask = _userService.GetCurrentUserAsync(userId);
-            var sessionTask = _sessionService.GetCurrentAsync(userId);
-
-            await Task.WhenAll(userTask, sessionTask);
-
-            var userResult = await userTask;
+            // Ikkala chaqiruv bitta scoped AppDbContext ustida ishlaydi — Task.WhenAll
+            // bilan parallel awaitlash "A second operation was started on this context"
+            // xatosini keltirib chiqaradi. Shuning uchun sekvensial await.
+            var userResult = await _userService.GetCurrentUserAsync(userId);
             if (!userResult.IsSuccess)
                 return GenericDto<BootstrapResultDto>.Error(userResult.ErrorObj!.Code, userResult.ErrorObj.ErrorMessage);
 
-            var sessionResult = await sessionTask;
+            var sessionResult = await _sessionService.GetCurrentAsync(userId);
             // Aktiv sessiya yo'qligi xato emas — null qaytaramiz.
             var activeSession = sessionResult.IsSuccess ? sessionResult.Result : null;
 
