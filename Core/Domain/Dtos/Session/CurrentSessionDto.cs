@@ -23,8 +23,10 @@ namespace Domain.Dtos.Session
         public long DeviceId { get; set; }
         public string SerialNumber { get; set; } = string.Empty;
         public string DeviceType { get; set; } = string.Empty;
+        public string? Model { get; set; }
         public bool IsOnline { get; set; }
         public DateTime? LastSeenAt { get; set; }
+        public List<DeviceProductCapabilityDto> Products { get; set; } = new();
     }
 
     public class CurrentSessionProcessDto

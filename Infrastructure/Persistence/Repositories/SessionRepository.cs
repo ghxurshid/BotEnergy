@@ -90,6 +90,7 @@ namespace Persistence.Repositories
         {
             return await _context.Sessions
                 .Include(s => s.Device)
+                    .ThenInclude(d => d!.Products!.Where(p => p.IsActive))
                 .Include(s => s.Processes!.OrderByDescending(p => p.StartedAt))
                 .Where(s => s.UserId == userId && s.Status != SessionStatus.Closed)
                 .OrderByDescending(s => s.CreatedAt)

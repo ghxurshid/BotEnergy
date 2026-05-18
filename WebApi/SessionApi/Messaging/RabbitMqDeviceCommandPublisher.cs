@@ -16,8 +16,8 @@ namespace SessionApi.Messaging
         public RabbitMqDeviceCommandPublisher(RabbitMqPublisher publisher)
             => _publisher = publisher;
 
-        public void PublishStart(string serialNumber, long processId, long productId, decimal amount)
-            => Send(DeviceCommandTypes.Start, serialNumber, processId, productId, amount);
+        public void PublishStart(string serialNumber, long processId, long productId, decimal amount, string? productName = null, string? unit = null, decimal? pricePerUnit = null)
+            => Send(DeviceCommandTypes.Start, serialNumber, processId, productId, amount, productName, unit, pricePerUnit);
 
         public void PublishStop(string serialNumber, long processId)
             => Send(DeviceCommandTypes.Stop, serialNumber, processId);
@@ -28,7 +28,7 @@ namespace SessionApi.Messaging
         public void PublishResume(string serialNumber, long processId)
             => Send(DeviceCommandTypes.Resume, serialNumber, processId);
 
-        private void Send(string type, string serialNumber, long processId, long? productId = null, decimal? amount = null)
+        private void Send(string type, string serialNumber, long processId, long? productId = null, decimal? amount = null, string? productName = null, string? unit = null, decimal? pricePerUnit = null)
         {
             _publisher.Publish(QueueNames.CommandQueue, new DeviceCommand
             {
@@ -36,7 +36,10 @@ namespace SessionApi.Messaging
                 SerialNumber = serialNumber,
                 ProcessId = processId,
                 ProductId = productId,
-                Amount = amount
+                Amount = amount,
+                ProductName = productName,
+                Unit = unit,
+                PricePerUnit = pricePerUnit
             });
         }
     }

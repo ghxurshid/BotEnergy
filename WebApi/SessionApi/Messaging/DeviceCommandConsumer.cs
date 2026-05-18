@@ -38,7 +38,10 @@ namespace SessionApi.Messaging
                         command.SerialNumber,
                         command.ProcessId,
                         command.ProductId ?? 0,
-                        command.Amount ?? 0);
+                        command.Amount ?? 0,
+                        command.ProductName,
+                        command.Unit,
+                        command.PricePerUnit);
                     break;
 
                 case DeviceCommandTypes.Pause:

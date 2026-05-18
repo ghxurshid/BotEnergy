@@ -312,8 +312,20 @@ namespace Application.Services
                     DeviceId = session.Device.Id,
                     SerialNumber = session.Device.SerialNumber,
                     DeviceType = session.Device.DeviceType.ToString(),
+                    Model = session.Device.Model,
                     IsOnline = session.Device.IsOnline,
-                    LastSeenAt = session.Device.LastSeenAt
+                    LastSeenAt = session.Device.LastSeenAt,
+                    Products = (session.Device.Products ?? Enumerable.Empty<ProductEntity>())
+                        .Where(p => p.IsActive)
+                        .Select(p => new DeviceProductCapabilityDto
+                        {
+                            ProductId = p.Id,
+                            Name = p.Name,
+                            Type = p.Type.ToString(),
+                            Unit = p.Unit.ToString(),
+                            Price = p.Price
+                        })
+                        .ToList()
                 },
                 ActiveProcess = activeProcess is null ? null : new CurrentSessionProcessDto
                 {

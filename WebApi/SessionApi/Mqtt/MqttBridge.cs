@@ -155,13 +155,16 @@ namespace SessionApi.Mqtt
 
         // ── Qurilmaga buyruq yuborish (unsolicited — server'ning o'z counterini ishlatadi) ──
 
-        public Task PublishStartCommandAsync(string serialNumber, long processId, long productId, decimal amount)
+        public Task PublishStartCommandAsync(string serialNumber, long processId, long productId, decimal amount, string? productName = null, string? unit = null, decimal? pricePerUnit = null)
             => PublishUnsolicitedAsync(serialNumber, "command", new
             {
                 type = "start",
                 process_id = processId,
                 product_id = productId,
-                amount
+                amount,
+                product_name = productName,
+                unit,
+                price_per_unit = pricePerUnit
             });
 
         public Task PublishPauseCommandAsync(string serialNumber, long processId)

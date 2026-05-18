@@ -100,7 +100,7 @@ namespace Application.Services
             session.LastActivityAt = DateTime.Now;
             await _sessionRepo.UpdateAsync(session);
 
-            _commandPublisher.PublishStart(session.Device.SerialNumber, process.Id, product.Id, limit);
+            _commandPublisher.PublishStart(session.Device.SerialNumber, process.Id, product.Id, limit, product.Name, product.Unit.ToString(), product.Price);
 
             await _notifier.NotifyProcessStartedAsync(session.SessionToken, new
             {

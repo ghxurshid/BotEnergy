@@ -11,6 +11,9 @@ namespace Domain.Messaging.Commands
         public long ProcessId { get; set; }
         public long? ProductId { get; set; }
         public decimal? Amount { get; set; }
+        public string? ProductName { get; set; }
+        public string? Unit { get; set; }
+        public decimal? PricePerUnit { get; set; }
     }
 
     public static class DeviceCommandTypes
