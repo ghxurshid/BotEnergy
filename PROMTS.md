@@ -227,6 +227,7 @@ Bitta sessiyada bir vaqtda **faqat bitta tugamagan jarayon** bo'la oladi.
 
 - Qurilma har tick (default ~1s) `device/{serial}/telemetry` topic'ga `{ session_token, process_id, sequence, total_given }` yuboradi. Envelope+HMAC.
 - **`total_given`** — jarayon boshidan beri qurilma jami bergan miqdor (**cumulative**, delta emas). Misol: t1=56, t2=59 → orada 3 unit berilgan.
+- **Real-time oqim:** `MqttBridge.HandleTelemetryAsync` → **to'g'ridan-to'g'ri** `ProcessService.ReportTelemetryAsync` (RabbitMQ orqali emas). Boshqa qurilma eventlari (connect, finished, payment_qr) RabbitMQ orqali, lekin telemetry latency uchun broker hop o'tkazib yuborildi.
 - Server `ReportTelemetryAsync`:
   - SessionToken va SerialNumber `process.Session` bilan mos kelishi shart (aks holda 403).
   - **Atomic + idempotent SQL UPDATE** — `GivenAmount = total_given` (SET, increment emas). Sequence asosida duplikat/eski xabar o'tkazib yuboriladi.

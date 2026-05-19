@@ -42,9 +42,8 @@ namespace SessionApi.Messaging
                     await HandleDeviceConnectedAsync(deviceEvent);
                     break;
 
-                case DeviceEventTypes.Telemetry:
-                    await HandleTelemetryAsync(deviceEvent);
-                    break;
+                // Telemetriya endi RabbitMQ orqali emas — MqttBridge ProcessService'ni
+                // to'g'ridan-to'g'ri chaqiradi (real-time latency minimum'ga tushiriladi).
 
                 case DeviceEventTypes.Finished:
                     await HandleFinishedAsync(deviceEvent);
@@ -80,21 +79,6 @@ namespace SessionApi.Messaging
                     "NotifyDeviceConnected muvaffaqiyatsiz: SessionToken=*** Serial={Serial} — {Error}",
                     e.SerialNumber, result.ErrorObj?.ErrorMessage);
             }
-        }
-
-        private async Task HandleTelemetryAsync(DeviceEvent e)
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var processService = scope.ServiceProvider.GetRequiredService<IProcessService>();
-
-            await processService.ReportTelemetryAsync(new ProcessTelemetryDto
-            {
-                SessionToken = e.SessionToken ?? string.Empty,
-                SerialNumber = e.SerialNumber,
-                ProcessId = e.ProcessId ?? 0,
-                TotalGiven = e.TotalGiven ?? 0,
-                Sequence = e.Sequence ?? 0
-            });
         }
 
         private async Task HandleFinishedAsync(DeviceEvent e)

@@ -108,19 +108,27 @@ Mobile → REST (SessionApi)
                                        → RabbitMQ (device.commands)
                                        → SessionApi DeviceCommandConsumer
                                        → MqttBridge (same process)
-                                       → MQTT topic station/{serial}/command/*
+                                       → MQTT topic device/{serial}/command
                                        → IoT device
 
-IoT device → MQTT topic station/{serial}/{telemetry,session/*,status}
-           → MqttBridge.OnMessage (device auth: serial+secret, in SessionApi)
-           → RabbitMQ (device.events)
-           → SessionApi DeviceEventConsumer
-           → ProcessService.ReportTelemetryAsync / ReportDeviceFinishedAsync
+IoT device → MQTT topic device/{serial}/telemetry
+           → MqttBridge.HandleTelemetryAsync (device auth: serial+secret)
+           → ProcessService.ReportTelemetryAsync (DIRECT call, no broker hop)
+           → DB update + ISessionNotifier (SignalR `ProcessUpdated`)
+           → Mobile
+
+IoT device → MQTT topic device/{serial}/{connect,event,heartbeat,payment_qr}
+           → MqttBridge.OnMessage
+           → RabbitMQ (device.events / device.payment-events)
+           → SessionApi consumers (DeviceEventConsumer / DevicePaymentEventConsumer)
+           → SessionService.NotifyDeviceConnectedAsync / ProcessService.ReportDeviceFinishedAsync / ...
            → DB update + ISessionNotifier (SignalR)
            → Mobile
 ```
 
-All four pieces — REST controllers, MqttBridge, RabbitMQ consumers, SignalR hub — live in the SessionApi process. The RabbitMQ hop between publisher and consumer stays inside the same process; it exists for backpressure/decoupling, not cross-service IPC.
+**Telemetry path is intentionally broker-less** — real-time latency matters (mobile UI updates per device tick), and MqttBridge + ProcessService share a process, so the broker hop adds nothing. Non-telemetry events (connect, finished, payment) still flow through RabbitMQ for backpressure/queue durability.
+
+All five pieces — REST controllers, MqttBridge, RabbitMQ consumers, ProcessService, SignalR hub — live in the SessionApi process.
 
 SignalR hub path: `/hubs/session`. Two group schemes:
 - `sessionToken` — tablet+phone watching same session.

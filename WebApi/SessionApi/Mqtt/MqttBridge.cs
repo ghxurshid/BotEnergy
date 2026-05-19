@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using CommonConfiguration.Messaging;
 using SessionApi.Services;
+using Domain.Dtos.Process;
 using Domain.Interfaces;
 using Domain.Messaging;
 using Domain.Messaging.Events;
@@ -279,7 +280,7 @@ namespace SessionApi.Mqtt
                         break;
 
                     case "telemetry":
-                        HandleTelemetry(serialNumber, payloadJson);
+                        await HandleTelemetryAsync(serialNumber, payloadJson);
                         break;
 
                     case "response":
@@ -373,19 +374,24 @@ namespace SessionApi.Mqtt
             _logger.LogDebug("Noma'lum device event turi: {Type}", type);
         }
 
-        private void HandleTelemetry(string serialNumber, string payloadJson)
+        private async Task HandleTelemetryAsync(string serialNumber, string payloadJson)
         {
             var data = JsonSerializer.Deserialize<TelemetryPayload>(payloadJson, JsonOpts);
             if (data is null) return;
 
-            _rabbitPublisher.Publish(QueueNames.EventQueue, new DeviceEvent
+            // Telemetriya RabbitMQ orqali emas — to'g'ridan-to'g'ri ProcessService chaqiriladi,
+            // u DB'ni yangilab darhol SignalR push qiladi. Bu real-time kechikishni minimum'da saqlaydi
+            // (telemetry uchun broker hop keraksiz, MqttBridge va ProcessService bir process ichida).
+            using var scope = _scopeFactory.CreateScope();
+            var processService = scope.ServiceProvider.GetRequiredService<IProcessService>();
+
+            await processService.ReportTelemetryAsync(new ProcessTelemetryDto
             {
-                EventType = DeviceEventTypes.Telemetry,
-                SerialNumber = serialNumber,
                 SessionToken = data.SessionToken,
+                SerialNumber = serialNumber,
                 ProcessId = data.ProcessId,
-                Sequence = data.Sequence,
-                TotalGiven = data.TotalGiven
+                TotalGiven = data.TotalGiven,
+                Sequence = data.Sequence
             });
         }
 
