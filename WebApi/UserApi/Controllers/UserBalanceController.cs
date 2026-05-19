@@ -8,16 +8,17 @@ namespace UserApi.Controllers
 {
     /// <summary>
     /// Foydalanuvchi balansi (mobil ilova uchun).
+    /// Balans tashqi servisdan emas, DB'dagi user/organization yozuvidan o'qiladi.
     /// </summary>
     [Route("api/[controller]/[action]")]
     [ApiController]
     [Authorize]
     public class UserBalanceController : ControllerBase
     {
-        private readonly IBillingService _billingService;
+        private readonly IUserService _userService;
 
-        public UserBalanceController(IBillingService billingService)
-            => _billingService = billingService;
+        public UserBalanceController(IUserService userService)
+            => _userService = userService;
 
         [HttpGet]
         [SkipPermissionCheck]
@@ -28,7 +29,7 @@ namespace UserApi.Controllers
             if (!TryGetUserId(out var userId))
                 return Unauthorized();
 
-            var result = await _billingService.GetBalanceAsync(userId);
+            var result = await _userService.GetMyBalanceAsync(userId);
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 

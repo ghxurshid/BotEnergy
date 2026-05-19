@@ -29,14 +29,39 @@ namespace Application.Services
             Mail = user.Mail,
             PhoneNumber = user.PhoneNumber,
             UserType = user.UserType.ToString(),
-            // Balans faqat jismoniy shaxs uchun mavjud — yuridik/merchant uchun 0 qaytadi.
-            Balance = user is NaturalUserEntity natural ? natural.Balance : 0m,
+            // NaturalUser → o'z balansi, LegalUser → tashkilot balansi, MerchantUser → 0.
+            Balance = user switch
+            {
+                NaturalUserEntity natural => natural.Balance,
+                LegalUserEntity legal => legal.Organization?.Balance ?? 0m,
+                _ => 0m
+            },
             IsVerified = user.IsVerified,
             IsBlocked = user.IsBlocked,
             LastLoginDate = user.LastLoginDate,
             LastActiveDate = user.LastActiveDate,
             CreatedDate = user.CreatedDate
         };
+
+        public async Task<GenericDto<GetBalanceResultDto>> GetMyBalanceAsync(long userId)
+        {
+            var user = await _userRepository.GetByIdAsync(userId);
+            if (user is null)
+                return GenericDto<GetBalanceResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+
+            var balance = user switch
+            {
+                NaturalUserEntity natural => natural.Balance,
+                LegalUserEntity legal => legal.Organization?.Balance ?? 0m,
+                _ => 0m
+            };
+
+            return GenericDto<GetBalanceResultDto>.Success(new GetBalanceResultDto
+            {
+                UserId = userId,
+                Balance = balance
+            });
+        }
 
         public async Task<GenericDto<UpdateUserResultDto>> UpdateCurrentUserAsync(long userId, UpdateUserDto dto)
         {
