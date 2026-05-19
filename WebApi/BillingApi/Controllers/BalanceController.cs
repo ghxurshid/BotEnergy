@@ -6,26 +6,13 @@ using CommonConfiguration.Attributes;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace BillingApi.Controllers
 {
     /// <summary>
-    /// Balans boshqaruvi.
-    /// Foydalanuvchi o'z balansini ko'radi, admin esa foydalanuvchi balansini to'ldiradi.
-    ///
-    /// **Imkoniyatlar:**
-    /// - GetMyBalance — joriy foydalanuvchi balansini ko'rish (JWT talab qilinadi)
-    /// - TopUp — berilgan foydalanuvchi balansini to'ldirish (admin permission talab qilinadi)
-    ///
-    /// **Balans turlari:**
-    /// - NaturalUser (jismoniy shaxs) → to'g'ridan-to'g'ri `user.balance`
-    /// - LegalUser (yuridik shaxs) → `organization.balance` (tashkilot balansi)
-    ///
-    /// **Cheklovlar:**
-    /// - JWT token talab qilinadi
-    /// - TopUp faqat tegishli permissionga ega admin bajarishi mumkin
-    /// - Balans manfiy bo'la olmaydi
+    /// Balans boshqaruvi (admin).
+    /// Admin foydalanuvchi balansini to'ldiradi.
+    /// Foydalanuvchi o'z balansini ko'rish uchun UserApi `/api/UserBalance/GetMyBalance` ishlatadi.
     /// </summary>
     [Route("api/[controller]/[action]")]
     [ApiController]
@@ -36,35 +23,6 @@ namespace BillingApi.Controllers
 
         public BalanceController(IBillingService billingService)
             => _billingService = billingService;
-
-        /// <summary>
-        /// Joriy foydalanuvchi balansini ko'rish.
-        /// JWT tokendagi user_id bo'yicha balans qaytariladi.
-        /// </summary>
-        /// <remarks>
-        /// Namuna so'rov:
-        ///
-        ///     GET /api/Balance/GetMyBalance
-        ///     Headers: Authorization: Bearer eyJhbGciOiJI...
-        ///
-        /// **Javobda qaytadi:**
-        /// - `balance` — joriy balans (so'mda)
-        /// - `currency` — valyuta
-        /// </remarks>
-        /// <response code="200">Balans ma'lumotlari</response>
-        /// <response code="401">Token yo'q yoki yaroqsiz</response>
-        [HttpGet]
-        [SkipPermissionCheck]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> GetMyBalance()
-        {
-            if (!TryGetUserId(out var userId))
-                return Unauthorized();
-
-            var result = await _billingService.GetBalanceAsync(userId);
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
-        }
 
         /// <summary>
         /// Foydalanuvchi balansini to'ldirish (admin).
@@ -98,12 +56,6 @@ namespace BillingApi.Controllers
         {
             var result = await _billingService.TopUpAsync(request.ToDto());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
-        }
-
-        private bool TryGetUserId(out long userId)
-        {
-            var raw = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            return long.TryParse(raw, out userId);
         }
     }
 }
