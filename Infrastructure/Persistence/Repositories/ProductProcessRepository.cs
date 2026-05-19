@@ -68,11 +68,13 @@ namespace Persistence.Repositories
         /// <summary>
         /// Atomic SQL-level UPDATE — race-safe.
         /// GivenAmount qurilmadan kelgan cumulative qiymatga o'rnatiladi (delta emas).
+        /// Status ham InProcess'ga o'tkaziladi (Started bo'lsa).
         /// Faqat aktiv (Started/InProcess) jarayonlarda va incoming sequence eski sequence-dan
         /// katta bo'lganda bajariladi (idempotency).
         /// </summary>
         public Task<int> SetGivenAmountAsync(long processId, decimal totalGiven, long sequence)
         {
+            var now = DateTime.Now;
             return _context.ProductProcesses
                 .Where(p => p.Id == processId &&
                             (p.Status == ProcessStatus.Started || p.Status == ProcessStatus.InProcess) &&
@@ -80,7 +82,26 @@ namespace Persistence.Repositories
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(p => p.GivenAmount, totalGiven)
                     .SetProperty(p => p.LastTelemetrySequence, sequence)
-                    .SetProperty(p => p.UpdatedDate, DateTime.Now));
+                    .SetProperty(p => p.Status, ProcessStatus.InProcess)
+                    .SetProperty(p => p.UpdatedDate, now));
         }
+
+        /// <summary>
+        /// Atomic completion — race-safe. Bitta thread yutadi (boshqalari 0 qaytaradi).
+        /// </summary>
+        public Task<int> CompleteProcessAsync(long processId, decimal totalGiven, ProcessEndReason endReason, DateTime endedAt)
+        {
+            return _context.ProductProcesses
+                .Where(p => p.Id == processId && p.Status != ProcessStatus.Ended)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(p => p.GivenAmount, totalGiven)
+                    .SetProperty(p => p.Status, ProcessStatus.Ended)
+                    .SetProperty(p => p.EndReason, (ProcessEndReason?)endReason)
+                    .SetProperty(p => p.EndedAt, (DateTime?)endedAt)
+                    .SetProperty(p => p.UpdatedDate, endedAt));
+        }
+
+        public Task ReloadAsync(ProductProcessEntity process)
+            => _context.Entry(process).ReloadAsync();
     }
 }

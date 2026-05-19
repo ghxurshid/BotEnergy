@@ -79,7 +79,15 @@ namespace Application.Services
         public async Task<decimal> DeductForProcessAsync(long processId)
         {
             var process = await _processRepo.GetByIdWithSessionAsync(processId);
-            if (process is null || process.IsBalanceDeducted)
+            if (process is null)
+                return 0;
+
+            // ExecuteUpdateAsync orqali ushbu scope ichida row allaqachon yangilangan bo'lishi mumkin
+            // (telemetry hot path), shuning uchun freshlatib olamiz — IsBalanceDeducted va GivenAmount
+            // haqiqiy DB qiymati bo'lishi kerak.
+            await _processRepo.ReloadAsync(process);
+
+            if (process.IsBalanceDeducted)
                 return 0;
 
             var cost = process.GivenAmount * process.PricePerUnit;

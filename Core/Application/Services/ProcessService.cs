@@ -252,7 +252,10 @@ namespace Application.Services
             if (process.Session.Device?.SerialNumber != dto.SerialNumber)
                 return GenericDto<ProcessTelemetryResultDto>.Error(403, "Qurilma bu jarayonga tegishli emas.");
 
-            // Atomic + idempotent SET — qurilma cumulative qiymat yuboradi.
+            // Hot path — tracker SaveChanges chaqirilmaydi, hammasi atomic SQL bilan.
+            // (ExecuteUpdateAsync xmin'ni siljitganidan keyin tracker'dagi entity stale bo'lib qoladi,
+            //  shuning uchun in-memory mutatsiya qilmaymiz — keyingi SaveChanges 0 row affected qaytarib yiqilardi.)
+
             var affected = await _processRepo.SetGivenAmountAsync(process.Id, dto.TotalGiven, dto.Sequence);
             if (affected == 0)
                 return GenericDto<ProcessTelemetryResultDto>.Success(new ProcessTelemetryResultDto
@@ -260,56 +263,48 @@ namespace Application.Services
                     ResultMessage = "Telemetry ignored (duplicate yoki jarayon aktiv emas)."
                 });
 
-            // In-memory entity'ni atomik SET natijasiga moslash — keyingi UpdateAsync stale
-            // GivenAmount/LastTelemetrySequence bilan ustidan yozib yubormasligi uchun.
-            process.GivenAmount = dto.TotalGiven;
-            process.LastTelemetrySequence = dto.Sequence;
-
-            // Statusni Started → InProcess ga o'tkazish (birinchi telemetry kelganda).
-            if (process.Status == ProcessStatus.Started)
-            {
-                process.Status = ProcessStatus.InProcess;
-                await _processRepo.UpdateAsync(process);
-            }
-
-            await TouchSessionAsync(process.Session);
+            // Sessiya idle-timer'ini atomik yangilash (TouchAsync ExecuteUpdateAsync, SaveChanges chaqirmaydi).
+            await _sessionRepo.TouchAsync(process.Session.Id);
 
             var totalGiven = dto.TotalGiven;
             var currentCost = totalGiven * process.PricePerUnit;
+            var sessionToken = process.Session.SessionToken;
+            var serial = process.Session.Device?.SerialNumber;
+            var userId = process.Session.UserId;
 
-            if (process.Status != ProcessStatus.Ended && totalGiven >= process.RequestedAmount && process.RequestedAmount > 0)
+            if (totalGiven >= process.RequestedAmount && process.RequestedAmount > 0)
             {
-                process.GivenAmount = totalGiven;
-                process.Status = ProcessStatus.Ended;
-                process.EndReason = ProcessEndReason.Completed;
-                process.EndedAt = DateTime.Now;
-                await _processRepo.UpdateAsync(process);
+                var endedAt = DateTime.Now;
+                var completed = await _processRepo.CompleteProcessAsync(
+                    process.Id, totalGiven, ProcessEndReason.Completed, endedAt);
 
-                var serial = process.Session.Device?.SerialNumber;
-                if (!string.IsNullOrWhiteSpace(serial))
+                if (completed > 0)
                 {
-                    _commandPublisher.PublishStop(serial!, process.Id);
-                    await _deviceLock.UnlockDeviceAsync(serial!, process.Session.UserId);
+                    if (!string.IsNullOrWhiteSpace(serial))
+                    {
+                        _commandPublisher.PublishStop(serial!, process.Id);
+                        await _deviceLock.UnlockDeviceAsync(serial!, userId);
+                    }
+
+                    var deductedOnAutoComplete = await _billing.DeductForProcessAsync(process.Id);
+
+                    await _notifier.NotifyProcessEndedAsync(sessionToken, new
+                    {
+                        process_id = process.Id,
+                        end_reason = nameof(ProcessEndReason.Completed),
+                        total_given = totalGiven,
+                        total_cost = deductedOnAutoComplete,
+                        ended_at = endedAt
+                    });
+
+                    return GenericDto<ProcessTelemetryResultDto>.Success(new ProcessTelemetryResultDto
+                    {
+                        ResultMessage = "Telemetry qabul qilindi va jarayon avtomatik yakunlandi."
+                    });
                 }
-
-                var deductedOnAutoComplete = await _billing.DeductForProcessAsync(process.Id);
-
-                await _notifier.NotifyProcessEndedAsync(process.Session.SessionToken, new
-                {
-                    process_id = process.Id,
-                    end_reason = nameof(ProcessEndReason.Completed),
-                    total_given = process.GivenAmount,
-                    total_cost = deductedOnAutoComplete,
-                    ended_at = process.EndedAt
-                });
-
-                return GenericDto<ProcessTelemetryResultDto>.Success(new ProcessTelemetryResultDto
-                {
-                    ResultMessage = "Telemetry qabul qilindi va jarayon avtomatik yakunlandi."
-                });
             }
 
-            await _notifier.NotifyProcessUpdatedAsync(process.Session.SessionToken, new
+            await _notifier.NotifyProcessUpdatedAsync(sessionToken, new
             {
                 process_id = process.Id,
                 total_given = totalGiven,
@@ -395,8 +390,9 @@ namespace Application.Services
         private async Task TouchSessionAsync(SessionEntity? session)
         {
             if (session is null) return;
-            session.LastActivityAt = DateTime.Now;
-            await _sessionRepo.UpdateAsync(session);
+            // Atomic UPDATE — SaveChanges chaqirmaydi, shuning uchun tracker'da modified bo'lib
+            // turgan boshqa entitylarni yozishga urinmaydi (race-safe va concurrency-safe).
+            await _sessionRepo.TouchAsync(session.Id);
         }
     }
 }
