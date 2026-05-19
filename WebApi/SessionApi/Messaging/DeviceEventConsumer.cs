@@ -10,9 +10,10 @@ using Microsoft.Extensions.Logging;
 namespace SessionApi.Messaging
 {
     /// <summary>
-    /// DeviceApi dan RabbitMQ orqali kelgan eventlarni qayta ishlaydi.
-    /// EventQueue: Qurilma → MQTT → DeviceApi → RabbitMQ → UserApi → SessionService/ProcessService → SignalR.
-    /// Connected event'da sessiya allaqachon DeviceApi tomonidan DB'da yaratilgan — UserApi faqat SignalR push qiladi.
+    /// SessionApi MqttBridge tomonidan RabbitMQ EventQueue'ga yuborilgan qurilma eventlarini iste'mol qiladi.
+    /// Oqim: Qurilma → MQTT → MqttBridge → RabbitMQ → bu consumer → SessionService/ProcessService → SignalR.
+    /// Connected event'da sessiya allaqachon MqttBridge (DeviceSessionService) tomonidan DB'da yaratilgan —
+    /// bu consumer faqat SignalR push qiladi.
     /// </summary>
     public sealed class DeviceEventConsumer : RabbitMqConsumerBase<DeviceEvent>
     {
@@ -91,7 +92,7 @@ namespace SessionApi.Messaging
                 SessionToken = e.SessionToken ?? string.Empty,
                 SerialNumber = e.SerialNumber,
                 ProcessId = e.ProcessId ?? 0,
-                Quantity = e.Quantity ?? 0,
+                TotalGiven = e.TotalGiven ?? 0,
                 Sequence = e.Sequence ?? 0
             });
         }
@@ -106,7 +107,7 @@ namespace SessionApi.Messaging
                 SessionToken = e.SessionToken ?? string.Empty,
                 SerialNumber = e.SerialNumber,
                 ProcessId = e.ProcessId ?? 0,
-                FinalQuantity = e.FinalQuantity ?? 0,
+                TotalGiven = e.TotalGiven ?? 0,
                 EndReason = MapEndReason(e.EndReason)
             });
         }

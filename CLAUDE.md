@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project context
 
-BotEnergy — IoT charging/dispenser station backend. .NET 8, PostgreSQL, Redis, RabbitMQ, MQTT, SignalR. Six independently-runnable Web APIs in one solution sharing a Clean Architecture core.
+BotEnergy — IoT charging/dispenser station backend. .NET 8, PostgreSQL, Redis, RabbitMQ, MQTT, SignalR. Seven independently-runnable Web APIs in one solution sharing a Clean Architecture core.
 
 For deep API reference and business flows see `README.md` (1700+ lines, the canonical doc) and `ARCHITECTURE.md` (older, partially stale — trust the code over it).
 
@@ -38,10 +38,11 @@ Production deploy is a self-hosted GitHub Actions runner that executes `deploy.s
 | API | Port | Purpose |
 |---|---|---|
 | `AuthApi` | 5002 | Public — register/OTP/login/refresh. No `[Authorize]`, no `PermissionFilter`. |
-| `UserApi` | 5006 | Mobile app endpoints. JWT + permissions + SignalR hub + RabbitMQ consumer for device events. |
+| `UserApi` | 5006 | Mobile app endpoints — profile, balance read, reports. JWT + permissions. |
 | `AdminApi` | 5001 | Admin/operator endpoints. JWT + permissions. |
-| `DeviceApi` | 5004 | Owns the MQTT bridge. Translates MQTT ↔ RabbitMQ. |
-| `BillingApi` | 5003 | Balance/top-up endpoints. |
+| `DeviceApi` | 5004 | Device identity & CRUD (DeviceAuth, DeviceController). DeviceProcess/DevicePayment are legacy HTTP stubs. MQTT bridge moved to SessionApi. |
+| `SessionApi` | 5007 | Owns sessions, processes, payments, MQTT bridge (qurilma ↔ server), SignalR hub `/hubs/session`, and all device-event RabbitMQ consumers. |
+| `BillingApi` | 5003 | Admin balance top-up (`/api/Balance/TopUp`). User balance read lives in UserApi. |
 | `PaymentApi` | 5005 | Stub (Payme integration planned). |
 
 All APIs share `Persistence/AppDbContext` (single PostgreSQL DB) and `CommonConfiguration` (DI extensions, filters, middleware, Redis/RabbitMQ wiring).
@@ -63,14 +64,14 @@ Configuration lives in `Infrastructure/CommonConfiguration/ConfigurationFile/Con
 In `CommonConfiguration/ConfigurationExtensions/ConfigurationAddExtensions.cs`:
 
 - `RegisterServices()` — shared by all APIs (Auth, User, Role, Device, Product, Merchant, Billing services + repos).
-- `RegisterSessionServices()` — UserApi-only (`ISessionService`, `IProcessService`, `IBootstrapService`, `IPushNotificationService`, `IdleSessionCleanerService` HostedService).
-- `RegisterDeviceServices()` — DeviceApi-only.
+- `RegisterSessionServices()` — SessionApi-only (`ISessionService`, `IProcessService`, `IBootstrapService`, `IPushNotificationService`, `IdleSessionCleanerService` HostedService).
+- `RegisterDeviceServices()` — DeviceApi-only (legacy; DeviceApi no longer carries live traffic).
 - `AddRedisServices()` — Redis multiplexer + `IRefreshTokenStore` (resilient: Redis primary, in-memory fallback) + `IIdempotencyStore` + `IdempotencyFilter`.
 - `AddRabbitMq()` — connection manager + publisher.
 
-`ISessionNotifier` is *not* registered in any shared extension — UserApi `Program.cs` registers `SignalRSessionNotifier` itself, because it depends on the SignalR hub which only UserApi hosts.
+`ISessionNotifier` is *not* registered in any shared extension — SessionApi `Program.cs` registers `SignalRSessionNotifier` itself, because it depends on the SignalR hub which only SessionApi hosts.
 
-If you put a service into `RegisterServices` that depends on `ISessionService`, AuthApi/AdminApi will fail at `ValidateOnBuild` (DI graph is validated on build in Development).
+If you put a service into `RegisterServices` that depends on `ISessionService`, every API except SessionApi will fail at `ValidateOnBuild` (DI graph is validated on build in Development).
 
 ### Permission system uses string convention `{Controller}.{Action}`
 
@@ -102,22 +103,24 @@ Sessions and processes are separate services with distinct responsibilities:
 ### Message flow (mobile ↔ device) is async via two brokers
 
 ```
-Mobile → REST (UserApi)
+Mobile → REST (SessionApi)
        → SessionService/ProcessService → DB + IDeviceCommandPublisher
                                        → RabbitMQ (device.commands)
-                                       → DeviceApi consumer
-                                       → MqttBridge
+                                       → SessionApi DeviceCommandConsumer
+                                       → MqttBridge (same process)
                                        → MQTT topic station/{serial}/command/*
                                        → IoT device
 
 IoT device → MQTT topic station/{serial}/{telemetry,session/*,status}
-           → MqttBridge.OnMessage (device auth: serial+secret)
+           → MqttBridge.OnMessage (device auth: serial+secret, in SessionApi)
            → RabbitMQ (device.events)
-           → UserApi DeviceEventConsumer
+           → SessionApi DeviceEventConsumer
            → ProcessService.ReportTelemetryAsync / ReportDeviceFinishedAsync
            → DB update + ISessionNotifier (SignalR)
            → Mobile
 ```
+
+All four pieces — REST controllers, MqttBridge, RabbitMQ consumers, SignalR hub — live in the SessionApi process. The RabbitMQ hop between publisher and consumer stays inside the same process; it exists for backpressure/decoupling, not cross-service IPC.
 
 SignalR hub path: `/hubs/session`. Two group schemes:
 - `sessionToken` — tablet+phone watching same session.
@@ -129,7 +132,7 @@ Every entity inherits `Entity` (`Id`, `CreatedDate`, `UpdatedDate`, `IsDeleted`)
 
 ### Idempotency for retry-safe POSTs
 
-`[Idempotent]` attribute + `IdempotencyFilter` (registered globally in UserApi `Program.cs` via `options.Filters.AddService<IdempotencyFilter>()`):
+`[Idempotent]` attribute + `IdempotencyFilter` (registered globally in SessionApi `Program.cs` via `options.Filters.AddService<IdempotencyFilter>()`):
 
 - Reads `Idempotency-Key` request header. If `Required = true` and missing → 400.
 - Cache key is `{userId}:{action}:{header}`. Stored in Redis under `idem:` prefix.
@@ -144,11 +147,11 @@ Currently applied to `Session.Create` and `Process.Start`. Apply to other state-
 
 ### `Bootstrap` endpoint is the canonical "app start" call
 
-`GET /api/User/Bootstrap` (composed by `BootstrapService`) runs `IUserService.GetCurrentUserAsync` and `ISessionService.GetCurrentAsync` in parallel and returns `{ user, activeSession?, serverTime }`. Mobile app should call this on every cold start (whether resuming an active session or freshly logged in).
+`GET /api/Session/Bootstrap` (SessionApi, composed by `BootstrapService`) runs `IUserService.GetCurrentUserAsync` and `ISessionService.GetCurrentAsync` in parallel and returns `{ user, activeSession?, serverTime }`. Mobile app should call this on every cold start (whether resuming an active session or freshly logged in).
 
 ## Things to avoid
 
-- **Don't put new shared services into `RegisterServices` if they need `ISessionService`/`IProcessService`** — those are UserApi-only and `ValidateOnBuild` will fail other APIs.
+- **Don't put new shared services into `RegisterServices` if they need `ISessionService`/`IProcessService`** — those are SessionApi-only and `ValidateOnBuild` will fail other APIs.
 - **Don't write `appsettings.json` for new config** — add to `Infrastructure/CommonConfiguration/ConfigurationFile/Configuration.{env}.json`.
 - **Don't switch `DateTime.Now` → `DateTime.UtcNow`** in isolation — the whole stack is local-time and PostgreSQL columns are `timestamp without time zone`. User has explicitly declined this change.
 - **Don't call `DELETE FROM`** — soft delete only (`IsDeleted = true`).

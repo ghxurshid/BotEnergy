@@ -65,7 +65,6 @@ namespace Domain.Constants
             Permissions.OrganizationAdminGetById,
             Permissions.OrganizationAdminUpdate,
 
-            Permissions.BalanceGetMyBalance,
             Permissions.BalanceTopUp
         };
 

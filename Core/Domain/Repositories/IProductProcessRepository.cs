@@ -13,10 +13,12 @@ namespace Domain.Repositories
         Task<bool> HasActiveProcessAsync(long sessionId);
 
         /// <summary>
-        /// Atomic increment — race-safe usulda GivenAmount ni oshirish.
-        /// Faqat aktiv (Started/InProcess) jarayonlarda ishlaydi.
+        /// Atomic SET — race-safe usulda GivenAmount ni cumulative qiymatga o'rnatish.
+        /// Qurilma har telemetry'da jami bergan miqdorni (cumulative) yuboradi, shuning uchun delta
+        /// emas, to'g'ridan-to'g'ri o'rnatish kerak. Faqat aktiv (Started/InProcess) jarayonlarda va
+        /// kirgan sequence eski sequence'dan kattaroq bo'lsa bajariladi (idempotency).
         /// Qaytariladigan qiymat: o'zgartirilgan satrlar soni (0 yoki 1).
         /// </summary>
-        Task<int> IncrementGivenAmountAsync(long processId, decimal delta, long sequence);
+        Task<int> SetGivenAmountAsync(long processId, decimal totalGiven, long sequence);
     }
 }

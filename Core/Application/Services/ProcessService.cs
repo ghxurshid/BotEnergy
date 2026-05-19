@@ -239,8 +239,8 @@ namespace Application.Services
 
         public async Task<GenericDto<ProcessTelemetryResultDto>> ReportTelemetryAsync(ProcessTelemetryDto dto)
         {
-            if (dto.ProcessId <= 0 || dto.Quantity <= 0)
-                return GenericDto<ProcessTelemetryResultDto>.Error(400, "ProcessId va Quantity 0 dan katta bo'lishi shart.");
+            if (dto.ProcessId <= 0 || dto.TotalGiven < 0)
+                return GenericDto<ProcessTelemetryResultDto>.Error(400, "ProcessId musbat va TotalGiven manfiy bo'lmasligi shart.");
 
             var process = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
             if (process is null)
@@ -252,13 +252,18 @@ namespace Application.Services
             if (process.Session.Device?.SerialNumber != dto.SerialNumber)
                 return GenericDto<ProcessTelemetryResultDto>.Error(403, "Qurilma bu jarayonga tegishli emas.");
 
-            // Atomic + idempotent SQL update.
-            var affected = await _processRepo.IncrementGivenAmountAsync(process.Id, dto.Quantity, dto.Sequence);
+            // Atomic + idempotent SET — qurilma cumulative qiymat yuboradi.
+            var affected = await _processRepo.SetGivenAmountAsync(process.Id, dto.TotalGiven, dto.Sequence);
             if (affected == 0)
                 return GenericDto<ProcessTelemetryResultDto>.Success(new ProcessTelemetryResultDto
                 {
                     ResultMessage = "Telemetry ignored (duplicate yoki jarayon aktiv emas)."
                 });
+
+            // In-memory entity'ni atomik SET natijasiga moslash — keyingi UpdateAsync stale
+            // GivenAmount/LastTelemetrySequence bilan ustidan yozib yubormasligi uchun.
+            process.GivenAmount = dto.TotalGiven;
+            process.LastTelemetrySequence = dto.Sequence;
 
             // Statusni Started → InProcess ga o'tkazish (birinchi telemetry kelganda).
             if (process.Status == ProcessStatus.Started)
@@ -269,11 +274,10 @@ namespace Application.Services
 
             await TouchSessionAsync(process.Session);
 
-            // Yangi qiymatni o'qish — atomic update natijasi uchun.
-            var refreshed = await _processRepo.GetByIdAsync(process.Id);
-            var totalGiven = refreshed?.GivenAmount ?? process.GivenAmount + dto.Quantity;
+            var totalGiven = dto.TotalGiven;
+            var currentCost = totalGiven * process.PricePerUnit;
 
-            if (process.Status != ProcessStatus.Ended && totalGiven >= process.RequestedAmount)
+            if (process.Status != ProcessStatus.Ended && totalGiven >= process.RequestedAmount && process.RequestedAmount > 0)
             {
                 process.GivenAmount = totalGiven;
                 process.Status = ProcessStatus.Ended;
@@ -294,7 +298,7 @@ namespace Application.Services
                 {
                     process_id = process.Id,
                     end_reason = nameof(ProcessEndReason.Completed),
-                    total_delivered = process.GivenAmount,
+                    total_given = process.GivenAmount,
                     total_cost = deductedOnAutoComplete,
                     ended_at = process.EndedAt
                 });
@@ -308,12 +312,11 @@ namespace Application.Services
             await _notifier.NotifyProcessUpdatedAsync(process.Session.SessionToken, new
             {
                 process_id = process.Id,
-                quantity = dto.Quantity,
-                total_quantity = totalGiven,
+                total_given = totalGiven,
+                current_cost = currentCost,
                 product_id = process.ProductId,
                 unit = process.Unit.ToString(),
-                price_per_unit = process.PricePerUnit,
-                current_cost = totalGiven * process.PricePerUnit
+                price_per_unit = process.PricePerUnit
             });
 
             return GenericDto<ProcessTelemetryResultDto>.Success(new ProcessTelemetryResultDto
@@ -343,8 +346,8 @@ namespace Application.Services
                     TotalCost = process.GivenAmount * process.PricePerUnit
                 });
 
-            if (dto.FinalQuantity > process.GivenAmount)
-                process.GivenAmount = dto.FinalQuantity;
+            if (dto.TotalGiven > process.GivenAmount)
+                process.GivenAmount = dto.TotalGiven;
 
             process.Status = ProcessStatus.Ended;
             process.EndReason = dto.EndReason;
@@ -363,7 +366,7 @@ namespace Application.Services
             {
                 process_id = process.Id,
                 end_reason = dto.EndReason.ToString(),
-                total_delivered = process.GivenAmount,
+                total_given = process.GivenAmount,
                 total_cost = deducted,
                 ended_at = process.EndedAt
             });

@@ -209,28 +209,29 @@ Bitta sessiyada bir vaqtda **faqat bitta tugamagan jarayon** bo'la oladi.
 #### Pause / Resume
 - `POST /api/Process/Pause/{processId}` va `Resume/{processId}` — egalik tekshiriladi.
 - Pause faqat `Started/InProcess`'dan ishlaydi; Resume faqat `Paused`'dan.
-- Statusni o'zgartiradi, MQTT command yuboradi (`pause`/`resume`), SignalR `ProcessUpdated` (`status`, `paused_at?`).
+- Statusni o'zgartiradi, MQTT command yuboradi (`pause`/`resume`), SignalR `ProcessUpdated` (`status`, `paused_at?`, `total_given`, `current_cost`).
 
 #### Stop (foydalanuvchi)
 - `POST /api/Process/Stop/{processId}` yoki `/processes/{id}/stop`.
 - MQTT `stop`, status `Ended` + `EndReason=UserStopped`, `EndedAt`. Balansdan yechiladi (`GivenAmount * PricePerUnit`, lekin balansdan **ortiqcha emas** — `Math.Min`). Device lock bo'shatiladi.
-- SignalR `ProcessEnded` (`process_id`, `end_reason`, `total_delivered`, `total_cost`, `ended_at`).
+- SignalR `ProcessEnded` (`process_id`, `end_reason`, `total_given`, `total_cost`, `ended_at`).
 
 #### Auto-complete (limit yetganda)
-- Telemetry kelganda `totalGiven >= requestedAmount` bo'lsa server **avtomatik**: `EndReason=Completed`, MQTT stop, balansdan yechiladi, SignalR `ProcessEnded`.
+- Telemetry kelganda `total_given >= requestedAmount` bo'lsa server **avtomatik**: `EndReason=Completed`, MQTT stop, balansdan yechiladi, SignalR `ProcessEnded`.
 
 #### Device tomonidan tugatish
-- Qurilma `device/{serial}/event` topic'ga `{ type: "completed|stopped|out_of_resource", session_token, process_id, final_quantity }` yuboradi.
+- Qurilma `device/{serial}/event` topic'ga `{ type: "completed|stopped|out_of_resource", session_token, process_id, total_given }` yuboradi.
 - Server: `ReportDeviceFinishedAsync` → idempotent (allaqachon `Ended` bo'lsa qayta yechmaydi). `EndReason` mapping: `completed→Completed`, `stopped→UserStopped`, `out_of_resource→OutOfResource`, boshqa → `DeviceError`.
 
 ### 5.7 Telemetriya
 
-- Qurilma har tick (default ~1s) `device/{serial}/telemetry` topic'ga `{ session_token, process_id, sequence, quantity }` yuboradi. Envelope+HMAC.
+- Qurilma har tick (default ~1s) `device/{serial}/telemetry` topic'ga `{ session_token, process_id, sequence, total_given }` yuboradi. Envelope+HMAC.
+- **`total_given`** — jarayon boshidan beri qurilma jami bergan miqdor (**cumulative**, delta emas). Misol: t1=56, t2=59 → orada 3 unit berilgan.
 - Server `ReportTelemetryAsync`:
   - SessionToken va SerialNumber `process.Session` bilan mos kelishi shart (aks holda 403).
-  - **Atomic + idempotent SQL UPDATE** (sequence asosida duplikatni o'tkazib yuboradi).
+  - **Atomic + idempotent SQL UPDATE** — `GivenAmount = total_given` (SET, increment emas). Sequence asosida duplikat/eski xabar o'tkazib yuboriladi.
   - Birinchi telemetry: `Status=Started → InProcess`.
-  - SignalR `ProcessUpdated`: `{ process_id, quantity, total_quantity, product_id, unit, price_per_unit, current_cost }`.
+  - SignalR `ProcessUpdated`: `{ process_id, total_given, current_cost, product_id, unit, price_per_unit }`.
 
 ### 5.8 Heartbeat va Status (qurilma tomondan)
 
@@ -257,8 +258,8 @@ Ikkita alohida tushuncha:
 - **Payment** — Payme orqali QR balans to'ldirish (foydalanuvchi o'zi).
 
 ### 6.1 Billing — Balans
-- `GET /api/Balance/GetMyBalance` (JWT shart, permission `Balance.GetMyBalance` yoki `[SkipPermissionCheck]`). NaturalUser → `user.Balance`, LegalUser → `organization.Balance`.
-- `POST /api/Balance/TopUp` — admin uchun: `{ userId, amount }` (`amount > 0`).
+- `GET /api/UserBalance/GetMyBalance` (UserApi, JWT shart, `[SkipPermissionCheck]`). NaturalUser → `user.Balance`, LegalUser → `organization.Balance`.
+- `POST /api/Balance/TopUp` (BillingApi) — admin uchun: `{ userId, amount }` (`amount > 0`), permission `Balance.TopUp`.
 - **Balansdan yechish** (`DeductForProcessAsync`) automatik chaqiriladi process tugaganda. Idempotent (`IsBalanceDeducted` flag). Balansdan ortiq yechmaydi (cost > balans bo'lsa balans 0 ga tushadi va shuncha yechiladi).
 
 ### 6.2 Payment — Payme QR top-up
@@ -324,7 +325,7 @@ Hammada bir xil model: davr filtri + paginatsiya yoki Excel eksport. Davr 1 yild
 
 ## Umumiy kontrakt
 
-- **JSON case**: API javoblari camelCase; SignalR payload'lari **snake_case** (`process_id`, `total_quantity`); MQTT envelope payload'lari ham snake_case.
+- **JSON case**: API javoblari camelCase; SignalR payload'lari **snake_case** (`process_id`, `total_given`); MQTT envelope payload'lari ham snake_case.
 - **Vaqt**: Server `DateTime.Now` (lokal), PostgreSQL `timestamp without time zone`. UTC ga o'zgartirish — alohida loyiha qarori.
 - **Soft delete**: barcha entity'larda `IsDeleted` global query filter; `DELETE FROM` hech qachon ishlatilmaydi.
 - **Idempotency**: `[Idempotent]` filter — `Idempotency-Key` header bilan. Redis'da `idem:{userId}:{action}:{key}` 24h, reservation lock 30s.

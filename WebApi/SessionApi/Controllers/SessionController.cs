@@ -15,12 +15,12 @@ namespace SessionApi.Controllers
     /// Foydalanuvchi (Android/iOS) tomonidan chaqiriladigan sessiya endpointlari.
     ///
     /// **Sessiya jarayoni:**
-    /// 1. <c>POST /api/Session/Create</c> — pending sessiya yaratiladi (cache, 30 min TTL), DB'ga yozilmaydi.
+    /// 1. <c>POST /api/Session/Create</c> — pending sessiya yaratiladi (IPendingSessionStore, 30 min TTL), DB'ga yozilmaydi.
     ///    Response: <c>{ userId, sessionToken }</c> → QR kod sifatida ko'rsatiladi.
-    /// 2. Qurilma reader QR ni o'qib MQTT orqali DeviceApi'ga yuboradi.
-    /// 3. DeviceApi gRPC orqali UserApi'dan tokenni so'raydi, solishtiradi, mos kelsa DB'da sessiyani
-    ///    Connected statusda yaratadi va RabbitMQ orqali "connected" event yuboradi.
-    /// 4. UserApi event'ni qabul qilib SignalR <c>DeviceConnected</c> event'ini mobile'ga yuboradi.
+    /// 2. Qurilma reader QR ni o'qib MQTT orqali SessionApi'ga (MqttBridge) yuboradi.
+    /// 3. SessionApi pending store'dan tokenni oladi, solishtiradi, mos kelsa DB'da sessiyani
+    ///    Connected statusda yaratadi va RabbitMQ orqali "connected" event chiqaradi.
+    /// 4. DeviceEventConsumer (SessionApi'ning o'zida) event'ni qabul qilib SignalR <c>DeviceConnected</c> event'ini mobile'ga yuboradi.
     /// 5. <c>POST /api/Process/Start</c> — foydalanuvchi mahsulot tanlaydi, qurilmaga start yuboriladi.
     /// 6. SignalR orqali real-time <c>ProcessUpdated</c> eventlar.
     /// 7. Sessiya yopilishi: <c>POST /api/Session/Close</c> — barcha aktiv jarayonlar to'xtatiladi.

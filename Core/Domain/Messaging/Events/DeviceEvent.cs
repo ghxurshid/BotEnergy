@@ -1,8 +1,8 @@
 namespace Domain.Messaging.Events
 {
     /// <summary>
-    /// DeviceApi → RabbitMQ → UserApi orqali keladigan qurilma hodisalari.
-    /// MQTT dan kelgan xabarlar shu formatda RabbitMQ ga uzatiladi.
+    /// SessionApi MqttBridge → RabbitMQ → DeviceEventConsumer orqali keladigan qurilma hodisalari.
+    /// <see cref="TotalGiven"/> — telemetry yoki finished eventda qurilma jami bergan miqdor (cumulative).
     /// </summary>
     public class DeviceEvent
     {
@@ -11,8 +11,7 @@ namespace Domain.Messaging.Events
         public string? SessionToken { get; set; }
         public long? ProcessId { get; set; }
         public long? Sequence { get; set; }
-        public decimal? Quantity { get; set; }
-        public decimal? FinalQuantity { get; set; }
+        public decimal? TotalGiven { get; set; }
         public string? EndReason { get; set; }
         public string? StatusPayload { get; set; }
     }

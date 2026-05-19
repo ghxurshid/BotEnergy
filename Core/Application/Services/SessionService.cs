@@ -432,7 +432,7 @@ namespace Application.Services
                 {
                     process_id = process.Id,
                     end_reason = endReason.ToString(),
-                    total_delivered = process.GivenAmount,
+                    total_given = process.GivenAmount,
                     total_cost = deducted,
                     ended_at = process.EndedAt
                 });

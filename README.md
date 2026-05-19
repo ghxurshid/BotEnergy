@@ -1120,6 +1120,27 @@ Permission: Yo'q (SkipPermissionCheck)
 }
 ```
 
+#### Mening balansim
+
+```
+GET /api/UserBalance/GetMyBalance
+Permission: Yo'q (SkipPermissionCheck)
+```
+
+**Response:**
+```json
+{
+  "isSuccess": true,
+  "result": {
+    "userId": 1,
+    "balance": 50000.00,
+    "currency": "UZS"
+  }
+}
+```
+
+> NaturalUser → o'z balansi, LegalUser → Organization balansi. Balans to'ldirish admin uchun BillingApi'da: `POST /api/Balance/TopUp` (4-bo'limga qarang).
+
 ---
 
 ### 3.2 Qurilmaga ulanish
@@ -1317,21 +1338,21 @@ Payload: { "product_id": 1, "amount": 100.0 }
 Qurilma ishlash jarayonida telemetry ma'lumot yuboradi:
 
 ```
-MQTT Topic: station/{serialNumber}/telemetry
-Payload: { "session_token": "...", "device_token": "...", "quantity": 5.0 }
+MQTT Topic: device/{serialNumber}/telemetry
+Payload: { "session_token": "...", "process_id": 12, "sequence": 5, "total_given": 25.0 }
 ```
 
-Har bir telemetry kelganda `DeliveredQuantity += quantity` yangilanadi va SignalR orqali:
+`total_given` — jarayon boshidan beri qurilma jami bergan miqdor (**cumulative**, delta emas). Server uni `GivenAmount` ga to'g'ridan-to'g'ri o'rnatadi (SET, increment emas). Sequence asosida duplikat va eski xabarlar o'tkazib yuboriladi.
 
-**SignalR Event: `ProgressUpdate`**
+**SignalR Event: `ProcessUpdated`**
 ```json
 {
-  "quantity": 5.0,
-  "total_quantity": 25.0,
+  "process_id": 12,
+  "total_given": 25.0,
+  "current_cost": 1250.00,
   "product_id": 1,
   "unit": "Second",
-  "price_per_unit": 50.00,
-  "current_cost": 1250.00
+  "price_per_unit": 50.00
 }
 ```
 
@@ -1370,7 +1391,7 @@ Permission: Session.Close
 
 ```
 MQTT Topic: station/{serialNumber}/session/completed
-Payload: { "session_token": "...", "final_quantity": 100.0, "end_reason": "limit_reached" }
+Payload: { "session_token": "...", "process_id": 12, "total_given": 100.0, "type": "completed" }
 ```
 
 **Server logikasi:**
@@ -1422,10 +1443,13 @@ Pending → DeviceConnected → InProgress → Completed
 
 **Port:** `5003` | **Full Base URL:** `http://localhost:5003/api/Balance`
 
-### Balansni ko'rish
+### Balansni ko'rish (UserApi)
+
+> Mobil ilova foydalanuvchining o'z balansini **UserApi** orqali oladi (BillingApi'da bu endpoint mavjud emas).
 
 ```
-GET /api/Balance/GetMyBalance
+GET /api/UserBalance/GetMyBalance
+Port: 5006 (UserApi)
 Permission: Yo'q (SkipPermissionCheck)
 Authorize: JWT
 ```
@@ -1444,10 +1468,11 @@ Authorize: JWT
 
 > NaturalUser → o'z balansi, LegalUser → Organization balansi.
 
-### Balansni to'ldirish
+### Balansni to'ldirish (admin)
 
 ```
 POST /api/Balance/TopUp
+Port: 5003 (BillingApi)
 Permission: Balance.TopUp
 ```
 

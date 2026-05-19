@@ -26,7 +26,7 @@ namespace SessionApi.Services
             ConnectResultCodes.TokenMismatch => "QR tokeni mos kelmadi.",
             ConnectResultCodes.DeviceUnknown => "Qurilma serial raqami tizimda topilmadi yoki faol emas.",
             ConnectResultCodes.ActiveSessionExists => "Foydalanuvchida allaqachon faol sessiya bor — avval uni yopish kerak.",
-            ConnectResultCodes.PendingServiceUnavailable => "UserApi gRPC servisi javob bermayapti.",
+            ConnectResultCodes.PendingServiceUnavailable => "Pending sessiya servisi javob bermayapti.",
             ConnectResultCodes.InternalError => "Server ichki xatosi.",
             _ => "Noma'lum xatolik."
         };

@@ -32,8 +32,8 @@ namespace SessionApi.Mqtt
     /// <para><b>Topiclar:</b></para>
     /// <list type="bullet">
     /// <item><c>device/{serial}/connect</c>     — payload: <c>{ user_id, session_token }</c></item>
-    /// <item><c>device/{serial}/event</c>       — payload: <c>{ type, session_token, process_id?, final_quantity? }</c></item>
-    /// <item><c>device/{serial}/telemetry</c>   — payload: <c>{ session_token, process_id, sequence, quantity }</c></item>
+    /// <item><c>device/{serial}/event</c>       — payload: <c>{ type, session_token, process_id?, total_given? }</c></item>
+    /// <item><c>device/{serial}/telemetry</c>   — payload: <c>{ session_token, process_id, sequence, total_given }</c></item>
     /// <item><c>device/{serial}/response</c>    — payload: <c>{ process_id, command, status }</c> (diagnostika)</item>
     /// <item><c>device/{serial}/heartbeat</c>   — payload: <c>{}</c></item>
     /// <item><c>device/{serial}/payment_qr</c>  — payload: <c>{ session_token, amount, payme_token, client_ref? }</c></item>
@@ -364,7 +364,7 @@ namespace SessionApi.Mqtt
                     SerialNumber = serialNumber,
                     SessionToken = data.SessionToken,
                     ProcessId = data.ProcessId,
-                    FinalQuantity = data.FinalQuantity,
+                    TotalGiven = data.TotalGiven,
                     EndReason = type
                 });
                 return;
@@ -385,7 +385,7 @@ namespace SessionApi.Mqtt
                 SessionToken = data.SessionToken,
                 ProcessId = data.ProcessId,
                 Sequence = data.Sequence,
-                Quantity = data.Quantity
+                TotalGiven = data.TotalGiven
             });
         }
 
@@ -508,22 +508,24 @@ namespace SessionApi.Mqtt
         public string? SessionToken { get; set; }
     }
 
-    /// <summary>device/{serial}/event payload (jarayon tugashi)</summary>
+    /// <summary>device/{serial}/event payload (jarayon tugashi).
+    /// <c>total_given</c> — qurilma yakunda jami bergan miqdor (cumulative).</summary>
     internal sealed class DeviceEventPayload
     {
         public string? Type { get; set; }
         public string? SessionToken { get; set; }
         public long? ProcessId { get; set; }
-        public decimal? FinalQuantity { get; set; }
+        public decimal? TotalGiven { get; set; }
     }
 
-    /// <summary>device/{serial}/telemetry payload</summary>
+    /// <summary>device/{serial}/telemetry payload.
+    /// <c>total_given</c> — qurilma jarayon boshidan beri jami bergan miqdor (cumulative).</summary>
     internal sealed class TelemetryPayload
     {
         public string SessionToken { get; set; } = string.Empty;
         public long ProcessId { get; set; }
         public long Sequence { get; set; }
-        public decimal Quantity { get; set; }
+        public decimal TotalGiven { get; set; }
     }
 
     /// <summary>device/{serial}/response payload (command ack)</summary>

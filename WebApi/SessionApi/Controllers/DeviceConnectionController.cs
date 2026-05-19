@@ -13,7 +13,7 @@ namespace SessionApi.Controllers
     /// **Jarayon:**
     /// 1. Foydalanuvchi ilovada QR kodni skanerlaydi (QR ichida qurilma serial_number bor)
     /// 2. GetProducts → qurilma turidan kelib chiqib ruxsat berilgan mahsulot turlari qaytadi
-    /// 3. Foydalanuvchi mahsulotni tanlaydi → UsageSessionApi orqali sessiya yaratadi
+    /// 3. Foydalanuvchi mahsulotni tanlaydi → SessionApi orqali sessiya yaratadi
     ///
     /// **Cheklovlar:**
     /// - JWT token talab qilinadi

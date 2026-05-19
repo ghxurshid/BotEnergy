@@ -4,15 +4,16 @@ namespace Domain.Dtos.Process
 {
     /// <summary>
     /// Qurilma o'zining tomonidan jarayonni tugatishi yoki to'xtatish javobi.
-    /// MQTT da `device/{serial}/event` (stopped/error/out_of_resource) yoki
+    /// MQTT da `device/{serial}/event` (stopped/error/out_of_resource/completed) yoki
     /// `device/{serial}/response` (Stop/Pause/Resume buyrug'iga ack) topiclari orqali keladi.
+    /// <see cref="TotalGiven"/> — qurilma yakunda jami bergan miqdor (cumulative).
     /// </summary>
     public class DeviceProcessReportDto
     {
         public string SessionToken { get; set; } = string.Empty;
         public string SerialNumber { get; set; } = string.Empty;
         public long ProcessId { get; set; }
-        public decimal FinalQuantity { get; set; }
+        public decimal TotalGiven { get; set; }
         public ProcessEndReason EndReason { get; set; }
     }
 

@@ -67,17 +67,18 @@ namespace Persistence.Repositories
 
         /// <summary>
         /// Atomic SQL-level UPDATE — race-safe.
+        /// GivenAmount qurilmadan kelgan cumulative qiymatga o'rnatiladi (delta emas).
         /// Faqat aktiv (Started/InProcess) jarayonlarda va incoming sequence eski sequence-dan
         /// katta bo'lganda bajariladi (idempotency).
         /// </summary>
-        public Task<int> IncrementGivenAmountAsync(long processId, decimal delta, long sequence)
+        public Task<int> SetGivenAmountAsync(long processId, decimal totalGiven, long sequence)
         {
             return _context.ProductProcesses
                 .Where(p => p.Id == processId &&
                             (p.Status == ProcessStatus.Started || p.Status == ProcessStatus.InProcess) &&
                             p.LastTelemetrySequence < sequence)
                 .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(p => p.GivenAmount, p => p.GivenAmount + delta)
+                    .SetProperty(p => p.GivenAmount, totalGiven)
                     .SetProperty(p => p.LastTelemetrySequence, sequence)
                     .SetProperty(p => p.UpdatedDate, DateTime.Now));
         }

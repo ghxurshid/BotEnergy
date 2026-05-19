@@ -68,7 +68,6 @@ namespace Domain.Constants
         public const string YuridikAdminCreate = "YuridikAdmin.Create";
 
         // ── BillingApi — Balans boshqaruvi ───────────────────────────
-        public const string BalanceGetMyBalance = "Balance.GetMyBalance";
         public const string BalanceTopUp = "Balance.TopUp";
 
         // ── PaymentApi — Payme orqali QR to'lov ──────────────────────
@@ -152,7 +151,7 @@ namespace Domain.Constants
             YuridikAdminCreate,
 
             // Billing
-            BalanceGetMyBalance, BalanceTopUp,
+            BalanceTopUp,
 
             // Payment (Payme QR top-up)
             PaymentTopUpSelf, PaymentTopUpOrganization,

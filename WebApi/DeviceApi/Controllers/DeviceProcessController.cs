@@ -10,7 +10,7 @@ namespace DeviceApi.Controllers
     /// Qurilma mahsulot berish jarayonini boshlash/to'xtatish uchun buyruq oladi.
     ///
     /// **Hozirgi holat:** Stub implementatsiya.
-    /// Asosiy sessiya boshqaruvi UsageSessionApi ga ko'chirilgan.
+    /// Asosiy sessiya boshqaruvi SessionApi ga ko'chirilgan.
     /// Bu endpoint faqat legacy qurilmalar uchun saqlanib qolgan.
     /// </summary>
     [Route("api/[controller]")]

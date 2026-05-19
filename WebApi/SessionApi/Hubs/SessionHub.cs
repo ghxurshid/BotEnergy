@@ -17,10 +17,10 @@ namespace SessionApi.Hubs
     /// Server → Client eventlar:
     ///   DeviceConnected   { device_id, products, ... }
     ///   ProcessStarted    { process_id, product_id, requested_amount, ... }
-    ///   ProcessUpdated    { process_id, total_quantity, current_cost, ... }
-    ///   ProcessEnded      { process_id, end_reason, total_cost, ... }
-    ///   SessionUpdated    { ... }
-    ///   SessionClosed     { reason, total_delivered, ... }
+    ///   ProcessUpdated    { process_id, total_given, current_cost, product_id, unit, price_per_unit }
+    ///   ProcessEnded      { process_id, end_reason, total_given, total_cost, ended_at }
+    ///   SessionUpdated    { session_id, status, ... }
+    ///   SessionClosed     { reason, total_delivered, total_cost, closed_at }  // session-level — barcha jarayonlar yig'indisi
     /// </summary>
     [Authorize]
     public sealed class SessionHub : Hub
