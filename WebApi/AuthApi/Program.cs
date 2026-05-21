@@ -19,8 +19,9 @@ builder.Services.AddSwaggerWithJwtAuth(
 builder.Configuration.AddCommonConfiguration();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
+builder.Services.RegisterAuthServices();
 
-// Redis
+// Redis (RegisterAuthServices'dagi AuthService IRefreshTokenStore'ga bog'liq)
 builder.Services.AddRedisServices(builder.Configuration);
 
 builder.Services.AddSimulatorCors();

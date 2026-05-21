@@ -205,11 +205,6 @@ namespace CommonConfiguration.ConfigurationExtensions
 
         public static IServiceCollection RegisterServices(this IServiceCollection services)
         {
-            // Auth
-            services.AddScoped<IAuthService, AuthService>();
-            services.AddScoped<ITokenService, TokenService>();
-            services.AddScoped<IOtpService, OtpService>();
-
             // User
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IUserService, UserService>();
@@ -251,6 +246,20 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<IUsageReportRepository, UsageReportRepository>();
             services.AddScoped<IUsageReportService, UsageReportService>();
             services.AddSingleton<IExcelReportExporter, ClosedXmlReportExporter>();
+
+            return services;
+        }
+
+        /// <summary>
+        /// AuthApi uchun autentifikatsiya servislari (login/OTP/refresh).
+        /// AuthService IRefreshTokenStore'ga bog'liq, shu sabab <see cref="AddRedisServices"/>
+        /// ham AuthApi'da chaqirilishi shart.
+        /// </summary>
+        public static IServiceCollection RegisterAuthServices(this IServiceCollection services)
+        {
+            services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<ITokenService, TokenService>();
+            services.AddScoped<IOtpService, OtpService>();
 
             return services;
         }
