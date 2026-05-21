@@ -19,5 +19,14 @@ namespace Domain.Interfaces
         /// (avvalgisidan +1). Response holatida bu chaqirilmaydi — request id echo qilinadi.
         /// </summary>
         Task<long> NextOutboundIdAsync(string serialNumber);
+
+        /// <summary>
+        /// Berilgan qurilma uchun inbound va outbound counter'larni 0'ga tushiradi.
+        /// Qurilma muvaffaqiyatli <c>connect</c> yuborganda chaqiriladi — yangi sessiya boshlanishi
+        /// qurilmaning reset/flash holatidan keyin counter'lar mos kelishini ta'minlaydi.
+        /// HMAC validatsiyasidan keyin va connect handler success natijasidan keyin chaqirilishi shart
+        /// (replay zaifligini oldini olish uchun).
+        /// </summary>
+        Task ResetAsync(string serialNumber);
     }
 }

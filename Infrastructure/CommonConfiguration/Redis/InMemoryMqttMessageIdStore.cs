@@ -33,5 +33,12 @@ namespace CommonConfiguration.Redis
             var next = _outbound.AddOrUpdate(serialNumber, 1L, (_, v) => v + 1);
             return Task.FromResult(next);
         }
+
+        public Task ResetAsync(string serialNumber)
+        {
+            _inbound.TryRemove(serialNumber, out _);
+            _outbound.TryRemove(serialNumber, out _);
+            return Task.CompletedTask;
+        }
     }
 }

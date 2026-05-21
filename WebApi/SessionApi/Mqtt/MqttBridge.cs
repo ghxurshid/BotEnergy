@@ -255,6 +255,29 @@ namespace SessionApi.Mqtt
                     return;
                 }
 
+                // Connect — replay check'dan o'tmaydi: qurilma reset/flash bo'lganda yangi sessiya
+                // ochish uchun counter'lar tozalanishi kerak. HMAC validatsiyasi yuqorida o'tdi, ya'ni
+                // bu xabar haqiqatdan ham qurilmadan kelmoqda. Connect muvaffaqiyatli bo'lganda
+                // counter'lar nolga tushadi va shu connect id si yangi boshlang'ich nuqta bo'ladi.
+                if (action == "connect")
+                {
+                    _logger.LogInformation(
+                        "[MQTT-IN] Connect kelmoqda id={Id} serial={Serial} (replay check skip qilindi)",
+                        messageId, serialNumber);
+
+                    var connected = await HandleConnectAsync(serialNumber, messageId, payloadJson);
+                    if (connected)
+                    {
+                        await idStore.ResetAsync(serialNumber);
+                        await idStore.TryAcceptInboundIdAsync(serialNumber, messageId);
+                        await deviceRepo.TouchLastSeenAsync(serialNumber);
+                        _logger.LogInformation(
+                            "[MQTT-IN] Connect OK — counter'lar reset qilindi, inbound id={Id} dan boshlanadi serial={Serial}",
+                            messageId, serialNumber);
+                    }
+                    return;
+                }
+
                 if (!await idStore.TryAcceptInboundIdAsync(serialNumber, messageId))
                 {
                     _logger.LogWarning(
@@ -271,10 +294,6 @@ namespace SessionApi.Mqtt
 
                 switch (action)
                 {
-                    case "connect":
-                        await HandleConnectAsync(serialNumber, messageId, payloadJson);
-                        break;
-
                     case "event":
                         HandleDeviceEvent(serialNumber, payloadJson);
                         break;
@@ -306,7 +325,14 @@ namespace SessionApi.Mqtt
             }
         }
 
-        private async Task HandleConnectAsync(string serialNumber, long requestId, string payloadJson)
+        /// <summary>
+        /// Connect oqimini boshqaradi. <c>true</c> qaytarsa — sessiya muvaffaqiyatli ulandi va
+        /// <see cref="OnMessageAsync"/> shu serial uchun id counter'larini reset qiladi.
+        /// Payload parse/validatsiya yoki <see cref="IDeviceSessionService.TryConnectAsync"/>
+        /// muvaffaqiyatsiz bo'lsa <c>false</c> qaytaradi (counter'lar saqlanadi, replay
+        /// himoyasi buzilmaydi).
+        /// </summary>
+        private async Task<bool> HandleConnectAsync(string serialNumber, long requestId, string payloadJson)
         {
             _logger.LogInformation(
                 "[CONNECT] device/{Serial}/connect id={Id} payload: {Payload}",
@@ -323,7 +349,7 @@ namespace SessionApi.Mqtt
                     "[CONNECT] Payload JSON parse xatoligi serial={Serial}", serialNumber);
                 await PublishConnectAckAsync(serialNumber, requestId, MqttResultEnvelope.Fail<ConnectAckData>(
                     ConnectResultCodes.InvalidPayload, "Payload JSON formati buzuq."));
-                return;
+                return false;
             }
 
             if (data is null || data.UserId is null or 0 || string.IsNullOrEmpty(data.SessionToken))
@@ -334,7 +360,7 @@ namespace SessionApi.Mqtt
                 await PublishConnectAckAsync(serialNumber, requestId, MqttResultEnvelope.Fail<ConnectAckData>(
                     ConnectResultCodes.InvalidPayload,
                     "user_id (>0) va session_token (bo'sh emas) majburiy. Snake_case formatda yuboring."));
-                return;
+                return false;
             }
 
             using var scope = _scopeFactory.CreateScope();
@@ -348,6 +374,7 @@ namespace SessionApi.Mqtt
                 : MqttResultEnvelope.Fail<ConnectAckData>(result.Code, result.Message);
 
             await PublishConnectAckAsync(serialNumber, requestId, envelope);
+            return result.Success;
         }
 
         private void HandleDeviceEvent(string serialNumber, string payloadJson)
