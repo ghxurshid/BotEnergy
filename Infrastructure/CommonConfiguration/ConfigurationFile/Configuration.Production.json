@@ -13,13 +13,6 @@
     "ClientCertificatePath": null,
     "ClientCertificatePassword": null
   },
-  "RabbitMq": {
-    "HostName": "localhost",
-    "Port": 5672,
-    "UserName": "guest",
-    "Password": "guest",
-    "VirtualHost": "/"
-  },
   "Redis": {
     "ConnectionString": "localhost:6379"
   },

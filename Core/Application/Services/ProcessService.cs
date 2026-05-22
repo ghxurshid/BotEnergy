@@ -100,7 +100,7 @@ namespace Application.Services
             session.LastActivityAt = DateTime.Now;
             await _sessionRepo.UpdateAsync(session);
 
-            _commandPublisher.PublishStart(session.Device.SerialNumber, process.Id, product.Id, limit, product.Name, product.Unit.ToString(), product.Price);
+            await _commandPublisher.PublishStartAsync(session.Device.SerialNumber, process.Id, product.Id, limit, product.Name, product.Unit.ToString(), product.Price);
 
             await _notifier.NotifyProcessStartedAsync(session.SessionToken, new
             {
@@ -139,7 +139,7 @@ namespace Application.Services
             // shu yerda ham fix qilamiz — agar device-event keyinchalik kelsa, idempotency saqlanadi.
             var serial = process.Session?.Device?.SerialNumber;
             if (!string.IsNullOrWhiteSpace(serial))
-                _commandPublisher.PublishStop(serial!, process.Id);
+                await _commandPublisher.PublishStopAsync(serial!, process.Id);
 
             process.Status = ProcessStatus.Ended;
             process.EndReason = ProcessEndReason.UserStopped;
@@ -181,7 +181,7 @@ namespace Application.Services
 
             var serial = process.Session?.Device?.SerialNumber;
             if (!string.IsNullOrWhiteSpace(serial))
-                _commandPublisher.PublishPause(serial!, process.Id);
+                await _commandPublisher.PublishPauseAsync(serial!, process.Id);
 
             process.Status = ProcessStatus.Paused;
             process.PausedAt = DateTime.Now;
@@ -215,7 +215,7 @@ namespace Application.Services
 
             var serial = process.Session?.Device?.SerialNumber;
             if (!string.IsNullOrWhiteSpace(serial))
-                _commandPublisher.PublishResume(serial!, process.Id);
+                await _commandPublisher.PublishResumeAsync(serial!, process.Id);
 
             process.Status = ProcessStatus.InProcess;
             process.PausedAt = null;
@@ -282,7 +282,7 @@ namespace Application.Services
                 {
                     if (!string.IsNullOrWhiteSpace(serial))
                     {
-                        _commandPublisher.PublishStop(serial!, process.Id);
+                        await _commandPublisher.PublishStopAsync(serial!, process.Id);
                         await _deviceLock.UnlockDeviceAsync(serial!, userId);
                     }
 

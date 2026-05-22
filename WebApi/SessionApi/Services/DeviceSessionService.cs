@@ -1,11 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
-using CommonConfiguration.Messaging;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
-using Domain.Messaging;
-using Domain.Messaging.Events;
 using Domain.Repositories;
 using Microsoft.Extensions.Logging;
 
@@ -16,20 +13,20 @@ namespace SessionApi.Services
         private readonly IDeviceRepository _deviceRepo;
         private readonly ISessionRepository _sessionRepo;
         private readonly IPendingSessionStore _pendingStore;
-        private readonly RabbitMqPublisher _rabbitPublisher;
+        private readonly ISessionService _sessionService;
         private readonly ILogger<DeviceSessionService> _logger;
 
         public DeviceSessionService(
             IDeviceRepository deviceRepo,
             ISessionRepository sessionRepo,
             IPendingSessionStore pendingStore,
-            RabbitMqPublisher rabbitPublisher,
+            ISessionService sessionService,
             ILogger<DeviceSessionService> logger)
         {
             _deviceRepo = deviceRepo;
             _sessionRepo = sessionRepo;
             _pendingStore = pendingStore;
-            _rabbitPublisher = rabbitPublisher;
+            _sessionService = sessionService;
             _logger = logger;
         }
 
@@ -135,17 +132,19 @@ namespace SessionApi.Services
                     "[CONNECT] Step 5 — DB'da sessiya yaratildi sessionId={SessionId} userId={UserId} deviceId={DeviceId}",
                     session.Id, userId, device.Id);
 
-                // ── Step 6: RabbitMQ "connected" event ──
-                _rabbitPublisher.Publish(QueueNames.EventQueue, new DeviceEvent
+                // ── Step 6: SignalR push mobile'ga (RabbitMQ oraliq hop emas — to'g'ridan-to'g'ri) ──
+                var notifyResult = await _sessionService.NotifyDeviceConnectedAsync(sessionToken);
+                if (!notifyResult.IsSuccess)
                 {
-                    EventType = DeviceEventTypes.Connected,
-                    SerialNumber = serialNumber,
-                    SessionToken = sessionToken
-                });
-
-                _logger.LogInformation(
-                    "[CONNECT] Step 6 — RabbitMQ event yuborildi queue={Queue} sessionId={SessionId}",
-                    QueueNames.EventQueue, session.Id);
+                    _logger.LogWarning(
+                        "[CONNECT] Step 6 — NotifyDeviceConnected muvaffaqiyatsiz sessionId={SessionId}: {Err}",
+                        session.Id, notifyResult.ErrorObj?.ErrorMessage);
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "[CONNECT] Step 6 — SignalR push yuborildi sessionId={SessionId}", session.Id);
+                }
 
                 return new DeviceConnectResult(
                     Success: true,

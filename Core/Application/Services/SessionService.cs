@@ -412,7 +412,7 @@ namespace Application.Services
 
                 if (sendStopCommand && session.Device is not null)
                 {
-                    _commandPublisher.PublishStop(session.Device.SerialNumber, process.Id);
+                    await _commandPublisher.PublishStopAsync(session.Device.SerialNumber, process.Id);
                 }
 
                 process.Status = ProcessStatus.Ended;

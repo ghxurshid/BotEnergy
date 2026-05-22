@@ -1,6 +1,5 @@
 using Application.BackgroundServices;
 using Application.Services;
-using CommonConfiguration.Messaging;
 using CommonConfiguration.Payments.Payme;
 using CommonConfiguration.Redis;
 using CommonConfiguration.Reporting;
@@ -157,18 +156,6 @@ namespace CommonConfiguration.ConfigurationExtensions
                     npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"))
                 .ConfigureWarnings(w =>
                     w.Ignore(RelationalEventId.PendingModelChangesWarning)));
-
-            return services;
-        }
-
-        /// <summary>
-        /// RabbitMQ ulanishi va publisher/consumer infrastrukturasini ro'yxatdan o'tkazish.
-        /// </summary>
-        public static IServiceCollection AddRabbitMq(this IServiceCollection services, IConfiguration config)
-        {
-            services.Configure<RabbitMqOptions>(config.GetSection("RabbitMq"));
-            services.AddSingleton<RabbitMqConnectionManager>();
-            services.AddSingleton<RabbitMqPublisher>();
 
             return services;
         }

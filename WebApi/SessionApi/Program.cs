@@ -32,37 +32,27 @@ builder.Services.AddControllers(options =>
 builder.Services.AddSignalR();
 builder.Services.AddSwaggerWithJwtAuth(
     "Session API", "v1",
-    "Sessiya/process/payment boshqaruvi, MQTT bridge, SignalR real-time, RabbitMQ");
+    "Sessiya/process/payment boshqaruvi, MQTT bridge, SignalR real-time");
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
 builder.Services.RegisterSessionServices();
 builder.Services.AddPaymeClient(builder.Configuration);
 
-// RabbitMQ
-builder.Services.AddRabbitMq(builder.Configuration);
-
 // Redis
 builder.Services.AddRedisServices(builder.Configuration);
 
 // SignalR Session Notifier
 builder.Services.AddScoped<ISessionNotifier, SignalRSessionNotifier>();
-builder.Services.AddScoped<IDeviceCommandPublisher, RabbitMqDeviceCommandPublisher>();
+// Service qatlamidan qurilmaga buyruq — to'g'ridan-to'g'ri MQTT (RabbitMQ oraliq hop yo'q)
+builder.Services.AddScoped<IDeviceCommandPublisher, MqttDeviceCommandPublisher>();
 
-// MQTT connect oqimini boshqaruvchi servis (MqttBridge tomonidan scope orqali chaqiriladi)
+// MQTT connect oqimini boshqaruvchi servis (SessionConnectHandler tomonidan chaqiriladi)
 builder.Services.AddScoped<IDeviceSessionService, DeviceSessionService>();
 
-// MQTT Bridge — qurilmadan event/telemetry/heartbeat qabul qiladi, server buyruqlarini publish qiladi
+// MQTT — pipeline + middleware + handler + transport
 builder.Services.Configure<MqttOptions>(builder.Configuration.GetSection("Mqtt"));
-builder.Services.AddSingleton<MqttBridge>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<MqttBridge>());
-
-// RabbitMQ Consumerlar
-builder.Services.AddHostedService<DeviceEventConsumer>();
-builder.Services.AddHostedService<DevicePaymentEventConsumer>();
-// Server → qurilma yo'nalishi: SessionApi'ning ichida RabbitMQ dan MQTT'ga uzatish
-builder.Services.AddHostedService<DeviceCommandConsumer>();
-builder.Services.AddHostedService<DevicePaymentResultConsumer>();
+builder.Services.AddMqttPipeline(typeof(Program).Assembly);
 
 builder.Services.AddJwtAuthentication(builder.Configuration, signalRHubPath: "/hubs");
 
