@@ -137,6 +137,7 @@ namespace AdminApi.Controllers
         /// | Maydon      | Turi    | Tavsif                      |
         /// |-------------|---------|-----------------------------|
         /// | PhoneNumber | string? | Merchant telefon raqami.    |
+        /// | IsActive    | bool?   | Faol holati.                |
         ///
         /// Faqat yuborilgan (null bo'lmagan) maydonlar yangilanadi.
         /// </remarks>

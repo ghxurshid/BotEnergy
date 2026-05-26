@@ -59,6 +59,7 @@ namespace Application.Services
                 return GenericDto<MerchantResultDto>.Error(404, "Merchant topilmadi.");
 
             if (!string.IsNullOrWhiteSpace(dto.PhoneNumber)) merchant.PhoneNumber = dto.PhoneNumber;
+            if (dto.IsActive.HasValue) merchant.IsActive = dto.IsActive.Value;
 
             await _repo.UpdateAsync(merchant);
 

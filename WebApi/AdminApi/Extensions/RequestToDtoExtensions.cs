@@ -115,7 +115,8 @@ namespace AdminApi.Extensions
         public static UpdateMerchantDto ToDto(this UpdateMerchantRequest request)
             => new UpdateMerchantDto
             {
-                PhoneNumber = request.PhoneNumber
+                PhoneNumber = request.PhoneNumber,
+                IsActive = request.IsActive
             };
 
         public static CreateUserAdminDto ToDto(this CreateUserRequest request)
