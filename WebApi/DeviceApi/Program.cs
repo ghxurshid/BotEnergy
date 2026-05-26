@@ -21,6 +21,8 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
 builder.Services.RegisterDeviceServices();
 
+builder.Services.AddSimulatorCors();
+
 var app = builder.Build();
 
 await app.ApplyMigrationsAsync();
@@ -29,6 +31,9 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseHttpsIfEnabled();
+
+app.UseSimulatorCors();
+
 app.UseAuthorization();
 app.MapControllers();
 
