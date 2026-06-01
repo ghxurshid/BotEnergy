@@ -13,6 +13,13 @@ namespace Domain.Repositories
         Task<bool> HasActiveProcessAsync(long sessionId);
 
         /// <summary>
+        /// Watchdog uchun — aktiv (Started/InProcess) bo'lib turgan, lekin <paramref name="staleBefore"/>
+        /// dan beri yangilanmagan (telemetry kelmagan) jarayonlar. Session+Device+User include qilinadi.
+        /// Paused jarayonlar kiritilmaydi (ular session idle-timeout bilan boshqariladi).
+        /// </summary>
+        Task<List<ProductProcessEntity>> GetStalledProcessesAsync(DateTime staleBefore);
+
+        /// <summary>
         /// Atomic SET — race-safe usulda GivenAmount ni cumulative qiymatga o'rnatish.
         /// Status ham bir vaqtning o'zida InProcess'ga o'tkaziladi (birinchi telemetry kelganda).
         /// Faqat aktiv (Started/InProcess) jarayonlarda va kirgan sequence eski sequence'dan

@@ -37,6 +37,12 @@ namespace SessionApi.Hubs
         public Task NotifyProcessEndedAsync(string sessionToken, object payload)
             => _hubContext.Clients.Group(sessionToken).SendAsync("ProcessEnded", payload);
 
+        public Task NotifyProcessStoppingAsync(string sessionToken, object payload)
+            => _hubContext.Clients.Group(sessionToken).SendAsync("ProcessStopping", payload);
+
+        public Task NotifyProcessPausingAsync(string sessionToken, object payload)
+            => _hubContext.Clients.Group(sessionToken).SendAsync("ProcessPausing", payload);
+
         public Task NotifyUserAsync(long userId, string eventName, object payload)
             => _hubContext.Clients.Group(SessionHub.UserGroup(userId)).SendAsync(eventName, payload);
     }

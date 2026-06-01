@@ -65,6 +65,18 @@ namespace Persistence.Repositories
                      p.Status == ProcessStatus.Paused));
         }
 
+        public async Task<List<ProductProcessEntity>> GetStalledProcessesAsync(DateTime staleBefore)
+        {
+            return await _context.ProductProcesses
+                .Include(p => p.Session!).ThenInclude(s => s!.Device)
+                .Include(p => p.Session!).ThenInclude(s => s!.User)
+                .Where(p =>
+                    (p.Status == ProcessStatus.Started || p.Status == ProcessStatus.InProcess) &&
+                    p.UpdatedDate < staleBefore &&
+                    p.Session!.Status != SessionStatus.Closed)
+                .ToListAsync();
+        }
+
         /// <summary>
         /// Atomic SQL-level UPDATE — race-safe.
         /// GivenAmount qurilmadan kelgan cumulative qiymatga o'rnatiladi (delta emas).

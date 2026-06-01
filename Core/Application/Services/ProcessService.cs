@@ -21,6 +21,12 @@ namespace Application.Services
         private readonly IBillingService _billing;
         private readonly ISessionNotifier _notifier;
 
+        /// <summary>
+        /// Stop/pause buyrug'i yuborilgach qurilmadan tasdiq (yoki telemetry) shuncha vaqt kelmasa,
+        /// watchdog jarayonni majburan yakunlaydi. Inersiya + tarmoq kechikishidan kattaroq bo'lishi kerak.
+        /// </summary>
+        private static readonly TimeSpan StalledTimeout = TimeSpan.FromSeconds(60);
+
         public ProcessService(
             IProductProcessRepository processRepo,
             ISessionRepository sessionRepo,
@@ -135,38 +141,28 @@ namespace Application.Services
             if (process!.Status == ProcessStatus.Ended)
                 return GenericDto<ProcessControlResultDto>.Error(400, "Jarayon allaqachon yakunlangan.");
 
-            // Qurilmaga stop yuboramiz, lekin yakuniy holatni qurilmadan keladigan response/timeout kutmasdan
-            // shu yerda ham fix qilamiz — agar device-event keyinchalik kelsa, idempotency saqlanadi.
+            // Faqat qurilmaga stop yuboramiz — DB statusini O'ZGARTIRMAYMIZ.
+            // Suyuqlik inersiya bilan to'xtaydi; qurilma to'liq yakunlab `process.finished` yuborgach
+            // ReportDeviceFinishedAsync yakuniy miqdorni yozadi, balansni yechadi va lockni bo'shatadi.
+            // Tasdiq kelmasa, watchdog (FinalizeStalledProcessesAsync) zaxira sifatida yakunlaydi.
             var serial = process.Session?.Device?.SerialNumber;
             if (!string.IsNullOrWhiteSpace(serial))
                 await _commandPublisher.PublishStopAsync(serial!, process.Id);
 
-            process.Status = ProcessStatus.Ended;
-            process.EndReason = ProcessEndReason.UserStopped;
-            process.EndedAt = DateTime.Now;
-            await _processRepo.UpdateAsync(process);
-
-            var deducted = await _billing.DeductForProcessAsync(process.Id);
-
-            if (!string.IsNullOrWhiteSpace(serial))
-                await _deviceLock.UnlockDeviceAsync(serial!, dto.UserId);
-
             await TouchSessionAsync(process.Session);
 
-            await _notifier.NotifyProcessEndedAsync(process.Session!.SessionToken, new
+            // Transient — klient tugmalarni disable qilib, ProcessEnded kelguncha kutadi.
+            await _notifier.NotifyProcessStoppingAsync(process.Session!.SessionToken, new
             {
                 process_id = process.Id,
-                end_reason = nameof(ProcessEndReason.UserStopped),
-                total_delivered = process.GivenAmount,
-                total_cost = deducted,
-                ended_at = process.EndedAt
+                status = "Stopping"
             });
 
             return GenericDto<ProcessControlResultDto>.Success(new ProcessControlResultDto
             {
                 ProcessId = process.Id,
-                Status = process.Status.ToString(),
-                ResultMessage = "Jarayon to'xtatildi."
+                Status = "Stopping",
+                ResultMessage = "To'xtatish buyrug'i yuborildi. Qurilma yakunlashini kuting."
             });
         }
 
@@ -179,28 +175,27 @@ namespace Application.Services
             if (process!.Status != ProcessStatus.InProcess && process.Status != ProcessStatus.Started)
                 return GenericDto<ProcessControlResultDto>.Error(400, "Jarayon pauza qilish uchun mos holatda emas.");
 
+            // Faqat pause buyrug'ini yuboramiz — DB statusini O'ZGARTIRMAYMIZ.
+            // Qurilma oqimni inersiya bilan to'xtatib, `process.paused` yuborgach
+            // ReportDevicePausedAsync statusni Paused ga o'tkazadi.
             var serial = process.Session?.Device?.SerialNumber;
             if (!string.IsNullOrWhiteSpace(serial))
                 await _commandPublisher.PublishPauseAsync(serial!, process.Id);
 
-            process.Status = ProcessStatus.Paused;
-            process.PausedAt = DateTime.Now;
-            await _processRepo.UpdateAsync(process);
-
             await TouchSessionAsync(process.Session);
 
-            await _notifier.NotifyProcessUpdatedAsync(process.Session!.SessionToken, new
+            // Transient — klient "pauza qilinmoqda" ko'rsatadi, ProcessPaused kelguncha kutadi.
+            await _notifier.NotifyProcessPausingAsync(process.Session!.SessionToken, new
             {
                 process_id = process.Id,
-                status = process.Status.ToString(),
-                paused_at = process.PausedAt
+                status = "Pausing"
             });
 
             return GenericDto<ProcessControlResultDto>.Success(new ProcessControlResultDto
             {
                 ProcessId = process.Id,
-                Status = process.Status.ToString(),
-                ResultMessage = "Jarayon pauza qilindi."
+                Status = "Pausing",
+                ResultMessage = "Pauza buyrug'i yuborildi. Qurilma to'xtashini kuting."
             });
         }
 
@@ -372,6 +367,94 @@ namespace Application.Services
                 TotalDelivered = process.GivenAmount,
                 TotalCost = deducted
             });
+        }
+
+        public async Task<GenericDto<ProcessControlResultDto>> ReportDevicePausedAsync(DeviceProcessPausedDto dto)
+        {
+            var process = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
+            if (process is null)
+                return GenericDto<ProcessControlResultDto>.Error(404, "Jarayon topilmadi.");
+
+            if (process.Session?.SessionToken != dto.SessionToken)
+                return GenericDto<ProcessControlResultDto>.Error(403, "Sessiya tokeni mos kelmadi.");
+
+            if (process.Session.Device?.SerialNumber != dto.SerialNumber)
+                return GenericDto<ProcessControlResultDto>.Error(403, "Qurilma bu jarayonga tegishli emas.");
+
+            // Idempotent — allaqachon yakunlangan yoki pauza qilingan bo'lsa qayta o'zgartirmaymiz.
+            if (process.Status == ProcessStatus.Ended)
+                return GenericDto<ProcessControlResultDto>.Error(400, "Jarayon allaqachon yakunlangan.");
+
+            if (process.Status == ProcessStatus.Paused)
+                return GenericDto<ProcessControlResultDto>.Success(new ProcessControlResultDto
+                {
+                    ProcessId = process.Id,
+                    Status = process.Status.ToString(),
+                    ResultMessage = "Jarayon allaqachon pauzada."
+                });
+
+            // Inersiya bilan birga yakuniy miqdorni yozamiz (kamaymasligi kerak).
+            if (dto.TotalGiven > process.GivenAmount)
+                process.GivenAmount = dto.TotalGiven;
+
+            process.Status = ProcessStatus.Paused;
+            process.PausedAt = DateTime.Now;
+            await _processRepo.UpdateAsync(process);
+
+            await TouchSessionAsync(process.Session);
+
+            // Balans yechilmaydi — process tugamadi, resume qilinishi mumkin.
+            await _notifier.NotifyProcessUpdatedAsync(process.Session.SessionToken, new
+            {
+                process_id = process.Id,
+                status = process.Status.ToString(),
+                total_given = process.GivenAmount,
+                paused_at = process.PausedAt
+            });
+
+            return GenericDto<ProcessControlResultDto>.Success(new ProcessControlResultDto
+            {
+                ProcessId = process.Id,
+                Status = process.Status.ToString(),
+                ResultMessage = "Jarayon pauza qilindi."
+            });
+        }
+
+        public async Task FinalizeStalledProcessesAsync()
+        {
+            var staleBefore = DateTime.Now.Subtract(StalledTimeout);
+            var stalled = await _processRepo.GetStalledProcessesAsync(staleBefore);
+
+            foreach (var process in stalled)
+            {
+                var endedAt = DateTime.Now;
+
+                // Atomic — boshqa thread (kech kelgan process.finished) yutib bo'lgan bo'lsa 0 qaytaradi.
+                var completed = await _processRepo.CompleteProcessAsync(
+                    process.Id, process.GivenAmount, ProcessEndReason.DeviceError, endedAt);
+                if (completed == 0)
+                    continue;
+
+                var deducted = await _billing.DeductForProcessAsync(process.Id);
+
+                var serial = process.Session?.Device?.SerialNumber;
+                if (!string.IsNullOrWhiteSpace(serial))
+                {
+                    // Qurilma jonli bo'lsa (lekin tasdiq yubormagan bo'lsa) — yana bir bor stop.
+                    await _commandPublisher.PublishStopAsync(serial!, process.Id);
+                    await _deviceLock.UnlockDeviceAsync(serial!, process.Session!.UserId);
+                }
+
+                if (process.Session is not null)
+                    await _notifier.NotifyProcessEndedAsync(process.Session.SessionToken, new
+                    {
+                        process_id = process.Id,
+                        end_reason = nameof(ProcessEndReason.DeviceError),
+                        total_delivered = process.GivenAmount,
+                        total_cost = deducted,
+                        ended_at = endedAt
+                    });
+            }
         }
 
         // ── Yordamchi ─────────────────────────────────────────────────

@@ -11,5 +11,12 @@ namespace Domain.Interfaces
         Task PublishStopAsync(string serialNumber, long processId, CancellationToken ct = default);
         Task PublishPauseAsync(string serialNumber, long processId, CancellationToken ct = default);
         Task PublishResumeAsync(string serialNumber, long processId, CancellationToken ct = default);
+
+        /// <summary>
+        /// Sessiya yopilgani haqida qurilmani xabardor qiladi — QR/ekranni tozalab,
+        /// idle holatga qaytishi uchun. Jarayon allaqachon tugagan bo'lsa ham yuboriladi
+        /// (process-level stop bilan emas, sessiya darajasida).
+        /// </summary>
+        Task PublishSessionClosedAsync(string serialNumber, long sessionId, string reason, CancellationToken ct = default);
     }
 }

@@ -19,6 +19,14 @@ namespace Domain.Interfaces
         Task NotifyProcessEndedAsync(string sessionToken, object payload);
 
         /// <summary>
+        /// Transient holatlar — buyruq qurilmaga yuborildi, lekin qurilma hali tasdiqlamadi.
+        /// DB'ga yozilmaydi; klient tugmalarni disable qilib, yakuniy event (ProcessEnded/Paused)
+        /// kelguncha "to'xtatilmoqda/pauza qilinmoqda" ko'rsatadi. Inersiya oynasi uchun.
+        /// </summary>
+        Task NotifyProcessStoppingAsync(string sessionToken, object payload);
+        Task NotifyProcessPausingAsync(string sessionToken, object payload);
+
+        /// <summary>
         /// Foydalanuvchi guruhiga (user:{userId}) ixtiyoriy event yuborish.
         /// Klient SignalR hub'ga ulanishi bilan avtomatik shu group'ga qo'shiladi.
         /// </summary>

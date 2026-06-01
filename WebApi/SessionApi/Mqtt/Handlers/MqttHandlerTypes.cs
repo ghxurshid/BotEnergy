@@ -10,6 +10,7 @@ namespace SessionApi.Mqtt.Handlers
         public const string SessionConnect = "session.connect";
         public const string ProcessTelemetry = "process.telemetry";
         public const string ProcessFinished = "process.finished";
+        public const string ProcessPaused = "process.paused";
         public const string DeviceHeartbeat = "device.heartbeat";
         public const string DeviceStatus = "device.status";
         public const string PaymentQr = "payment.qr";
@@ -20,5 +21,6 @@ namespace SessionApi.Mqtt.Handlers
         public const string ProcessResume = "process.resume";
         public const string ProcessStop = "process.stop";
         public const string PaymentResult = "payment.result";
+        public const string SessionClose = "session.close";
     }
 }

@@ -34,5 +34,12 @@ namespace SessionApi.Messaging
 
         public Task PublishResumeAsync(string serialNumber, long processId, CancellationToken ct = default)
             => _publisher.PublishRequestAsync(serialNumber, MqttHandlerTypes.ProcessResume, new { process_id = processId }, ct);
+
+        public Task PublishSessionClosedAsync(string serialNumber, long sessionId, string reason, CancellationToken ct = default)
+            => _publisher.PublishRequestAsync(serialNumber, MqttHandlerTypes.SessionClose, new
+            {
+                session_id = sessionId,
+                reason
+            }, ct);
     }
 }

@@ -170,6 +170,12 @@ namespace Application.Services
             if (session.Status == SessionStatus.Closed)
                 return GenericDto<CloseSessionResultDto>.Error(400, "Sessiya allaqachon yopilgan.");
 
+            // Aktiv jarayon (Started/InProcess/Paused yoki stop-pending) bo'lsa, sessiyani yopishga
+            // ruxsat bermaymiz — avval jarayon qurilma tasdig'i bilan to'liq yakunlanishi kerak.
+            // (Background timeout/offline cleaner'lar bundan istisno — ular majburan yopadi.)
+            if (await _processRepo.HasActiveProcessAsync(session.Id))
+                return GenericDto<CloseSessionResultDto>.Error(409, "Avval jarayonni to'xtating, keyin sessiyani yoping.");
+
             var (totalDelivered, totalCost) = await FinalizeOpenProcessesAsync(
                 session, ProcessEndReason.UserStopped, sendStopCommand: true);
 
@@ -178,6 +184,12 @@ namespace Application.Services
             session.ClosedAt = DateTime.Now;
             session.LastActivityAt = DateTime.Now;
             await _sessionRepo.UpdateAsync(session);
+
+            // Qurilmani sessiya yopilgani haqida xabardor qilamiz — jarayon allaqachon
+            // tugagan bo'lsa ham (process-level stop yuborilmagan bo'lsa ham) QR/ekran tozalansin.
+            if (session.Device is not null)
+                await _commandPublisher.PublishSessionClosedAsync(
+                    session.Device.SerialNumber, session.Id, nameof(SessionCloseReason.UserClosed));
 
             await _notifier.NotifySessionClosedAsync(session.SessionToken, new
             {
@@ -209,6 +221,10 @@ namespace Application.Services
                 session.CloseReason = SessionCloseReason.Timeout;
                 session.ClosedAt = DateTime.Now;
                 await _sessionRepo.UpdateAsync(session);
+
+                if (session.Device is not null)
+                    await _commandPublisher.PublishSessionClosedAsync(
+                        session.Device.SerialNumber, session.Id, nameof(SessionCloseReason.Timeout));
 
                 await _notifier.NotifySessionClosedAsync(session.SessionToken, new
                 {
@@ -362,6 +378,9 @@ namespace Application.Services
                     session.ClosedAt = DateTime.Now;
                     session.LastActivityAt = DateTime.Now;
                     await _sessionRepo.UpdateAsync(session);
+
+                    // Qurilma offline (stale) — session.close yubormaymiz, baribir yetib bormaydi.
+                    // Qurilma qayta ulanganda o'zi idle holatga qaytadi.
 
                     await _notifier.NotifySessionUpdatedAsync(session.SessionToken, new
                     {
