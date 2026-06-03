@@ -22,5 +22,14 @@ namespace Domain.Dtos.Base
             PageSize = PageSize,
             TotalCount = TotalCount
         };
+
+        /// <summary>Scope bo'yicha hech narsa ko'rinmasligi kerak bo'lganda bo'sh sahifa.</summary>
+        public static PagedResult<T> Empty(PaginationParams param) => new()
+        {
+            Items = new List<T>(),
+            PageNumber = param.PageNumber,
+            PageSize = param.PageSize,
+            TotalCount = 0
+        };
     }
 }

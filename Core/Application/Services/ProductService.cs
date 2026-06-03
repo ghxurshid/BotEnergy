@@ -1,3 +1,4 @@
+using Domain.Auth;
 using Domain.Constants;
 using Domain.Dtos;
 using Domain.Dtos.Base;
@@ -97,32 +98,50 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<PagedResult<ProductItemDto>>> GetAllAsync(PaginationParams param)
+        public async Task<GenericDto<PagedResult<ProductItemDto>>> GetAllAsync(PaginationParams param, AccessScope scope)
         {
-            var page = await _productRepo.GetAllAsync(param);
+            if (!scope.IsPlatform && scope.MerchantId is null)
+                return GenericDto<PagedResult<ProductItemDto>>.Success(PagedResult<ProductItemDto>.Empty(param));
+
+            var page = await _productRepo.GetAllAsync(param, scope.IsPlatform ? null : scope.MerchantId);
             return GenericDto<PagedResult<ProductItemDto>>.Success(page.Map(ToItem));
         }
 
-        public async Task<GenericDto<List<ProductItemDto>>> GetByDeviceAsync(long deviceId)
+        public async Task<GenericDto<List<ProductItemDto>>> GetByDeviceAsync(long deviceId, AccessScope scope)
         {
+            var device = await _deviceRepo.GetByIdAsync(deviceId);
+            if (device is null)
+                return GenericDto<List<ProductItemDto>>.Error(404, "Qurilma topilmadi.");
+
+            if (!scope.IsPlatform && (device.Station is null || device.Station.MerchantId != scope.MerchantId))
+                return GenericDto<List<ProductItemDto>>.Error(403, "Bu qurilma sizning doirangizga tegishli emas.");
+
             var list = await _productRepo.GetByDeviceIdAsync(deviceId);
             return GenericDto<List<ProductItemDto>>.Success(list.Select(ToItem).ToList());
         }
 
-        public async Task<GenericDto<ProductItemDto>> GetByIdAsync(long id)
+        public async Task<GenericDto<ProductItemDto>> GetByIdAsync(long id, AccessScope scope)
         {
             var product = await _productRepo.GetByIdAsync(id);
             if (product is null)
                 return GenericDto<ProductItemDto>.Error(404, "Mahsulot topilmadi.");
 
+            var deny = DenyIfOutOfScope(product, scope);
+            if (deny is not null)
+                return GenericDto<ProductItemDto>.Error(deny.Value.code, deny.Value.message);
+
             return GenericDto<ProductItemDto>.Success(ToItem(product));
         }
 
-        public async Task<GenericDto<ProductResultDto>> UpdateAsync(long id, UpdateProductDto dto)
+        public async Task<GenericDto<ProductResultDto>> UpdateAsync(long id, UpdateProductDto dto, AccessScope scope)
         {
             var product = await _productRepo.GetByIdAsync(id);
             if (product is null)
                 return GenericDto<ProductResultDto>.Error(404, "Mahsulot topilmadi.");
+
+            var deny = DenyIfOutOfScope(product, scope);
+            if (deny is not null)
+                return GenericDto<ProductResultDto>.Error(deny.Value.code, deny.Value.message);
 
             if (!string.IsNullOrWhiteSpace(dto.Name)) product.Name = dto.Name;
             if (dto.Description is not null) product.Description = dto.Description;
@@ -138,11 +157,15 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<ProductResultDto>> DeleteAsync(long id)
+        public async Task<GenericDto<ProductResultDto>> DeleteAsync(long id, AccessScope scope)
         {
             var product = await _productRepo.GetByIdAsync(id);
             if (product is null)
                 return GenericDto<ProductResultDto>.Error(404, "Mahsulot topilmadi.");
+
+            var deny = DenyIfOutOfScope(product, scope);
+            if (deny is not null)
+                return GenericDto<ProductResultDto>.Error(deny.Value.code, deny.Value.message);
 
             await _productRepo.DeleteAsync(id);
 
@@ -151,6 +174,22 @@ namespace Application.Services
                 Id = id,
                 ResultMessage = "Mahsulot o'chirildi."
             });
+        }
+
+        /// <summary>
+        /// Mahsulot caller scope'iga tegishli emasligini tekshiradi
+        /// (product → device → station.MerchantId). Platform har doim o'tadi.
+        /// </summary>
+        private static (int code, string message)? DenyIfOutOfScope(ProductEntity product, AccessScope scope)
+        {
+            if (scope.IsPlatform)
+                return null;
+
+            var merchantId = product.Device?.Station?.MerchantId;
+            if (merchantId is null || merchantId != scope.MerchantId)
+                return (403, "Bu mahsulot sizning doirangizga tegishli emas.");
+
+            return null;
         }
 
         private static ProductItemDto ToItem(ProductEntity p) => new()

@@ -1,3 +1,4 @@
+using Domain.Auth;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
@@ -37,14 +38,21 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<PagedResult<MerchantItemDto>>> GetAllAsync(PaginationParams param)
+        public async Task<GenericDto<PagedResult<MerchantItemDto>>> GetAllAsync(PaginationParams param, AccessScope scope)
         {
-            var page = await _repo.GetAllAsync(param);
+            // Platform → hammasi; merchant user → faqat o'z merchanti; aks holda bo'sh.
+            if (!scope.IsPlatform && scope.MerchantId is null)
+                return GenericDto<PagedResult<MerchantItemDto>>.Success(PagedResult<MerchantItemDto>.Empty(param));
+
+            var page = await _repo.GetAllAsync(param, scope.IsPlatform ? null : scope.MerchantId);
             return GenericDto<PagedResult<MerchantItemDto>>.Success(page.Map(ToItem));
         }
 
-        public async Task<GenericDto<MerchantItemDto>> GetByIdAsync(long id)
+        public async Task<GenericDto<MerchantItemDto>> GetByIdAsync(long id, AccessScope scope)
         {
+            if (!scope.CanAccessMerchant(id))
+                return GenericDto<MerchantItemDto>.Error(403, "Bu merchant sizning doirangizga tegishli emas.");
+
             var merchant = await _repo.GetByIdAsync(id);
             if (merchant is null)
                 return GenericDto<MerchantItemDto>.Error(404, "Merchant topilmadi.");
@@ -52,8 +60,11 @@ namespace Application.Services
             return GenericDto<MerchantItemDto>.Success(ToItem(merchant));
         }
 
-        public async Task<GenericDto<MerchantResultDto>> UpdateAsync(long id, UpdateMerchantDto dto)
+        public async Task<GenericDto<MerchantResultDto>> UpdateAsync(long id, UpdateMerchantDto dto, AccessScope scope)
         {
+            if (!scope.CanAccessMerchant(id))
+                return GenericDto<MerchantResultDto>.Error(403, "Bu merchant sizning doirangizga tegishli emas.");
+
             var merchant = await _repo.GetByIdAsync(id);
             if (merchant is null)
                 return GenericDto<MerchantResultDto>.Error(404, "Merchant topilmadi.");
@@ -70,8 +81,11 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<MerchantResultDto>> DeleteAsync(long id)
+        public async Task<GenericDto<MerchantResultDto>> DeleteAsync(long id, AccessScope scope)
         {
+            if (!scope.CanAccessMerchant(id))
+                return GenericDto<MerchantResultDto>.Error(403, "Bu merchant sizning doirangizga tegishli emas.");
+
             var merchant = await _repo.GetByIdAsync(id);
             if (merchant is null)
                 return GenericDto<MerchantResultDto>.Error(404, "Merchant topilmadi.");

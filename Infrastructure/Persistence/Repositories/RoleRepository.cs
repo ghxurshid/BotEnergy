@@ -35,6 +35,7 @@ namespace Persistence.Repositories
 
             return await _context.Roles
                 .Where(r =>
+                    (typeSet.Contains(RoleType.PlatformRole) && r is PlatformRoleEntity) ||
                     (typeSet.Contains(RoleType.NaturalRole) && r is NaturalRoleEntity) ||
                     (typeSet.Contains(RoleType.LegalRole) && r is LegalRoleEntity &&
                         (organizationId == null || ((LegalRoleEntity)r).OrganizationId == organizationId)) ||

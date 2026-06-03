@@ -17,8 +17,9 @@ namespace Persistence.Repositories
         public async Task<MerchantEntity?> GetByIdAsync(long id)
             => await _context.Merchants.FirstOrDefaultAsync(c => c.Id == id);
 
-        public Task<PagedResult<MerchantEntity>> GetAllAsync(PaginationParams param)
+        public Task<PagedResult<MerchantEntity>> GetAllAsync(PaginationParams param, long? merchantId = null)
             => _context.Merchants
+                .Where(c => merchantId == null || c.Id == merchantId)
                 .OrderBy(c => c.CompanyName)
                 .ToPagedResultAsync(param);
 

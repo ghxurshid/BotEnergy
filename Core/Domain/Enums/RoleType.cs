@@ -4,6 +4,7 @@ namespace Domain.Enums
     {
         NaturalRole,
         LegalRole,
-        MerchantRole
+        MerchantRole,
+        PlatformRole
     }
 }

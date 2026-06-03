@@ -6,7 +6,7 @@ namespace Domain.Repositories
     public interface IMerchantRepository
     {
         Task<MerchantEntity?> GetByIdAsync(long id);
-        Task<PagedResult<MerchantEntity>> GetAllAsync(PaginationParams param);
+        Task<PagedResult<MerchantEntity>> GetAllAsync(PaginationParams param, long? merchantId = null);
         Task<MerchantEntity?> GetByPhoneNumberAsync(string phoneNumber);
         Task<MerchantEntity> CreateAsync(MerchantEntity merchant);
         Task<MerchantEntity> UpdateAsync(MerchantEntity merchant);

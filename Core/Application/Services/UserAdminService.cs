@@ -58,6 +58,11 @@ namespace Application.Services
                         return GenericDto<UserAdminResultDto>.Error(403, "Faqat o'z tashkilotingizga foydalanuvchi qo'sha olasiz.");
                 }
 
+                // Rol-scope: tashkilot foydalanuvchisiga faqat shu tashkilotning LegalRole'i biriktiriladi.
+                if (role is not LegalRoleEntity legalRole || legalRole.OrganizationId != dto.OrganizationId.Value)
+                    return GenericDto<UserAdminResultDto>.Error(400,
+                        "Tanlangan rol ushbu tashkilotga tegishli LegalRole bo'lishi kerak.");
+
                 newUser = new LegalUserEntity
                 {
                     PhoneId = dto.PhoneId,
@@ -89,6 +94,11 @@ namespace Application.Services
                     }
                 }
 
+                // Rol-scope: merchant foydalanuvchisiga faqat shu merchantning MerchantRole'i biriktiriladi.
+                if (role is not MerchantRoleEntity merchantRole || merchantRole.MerchantId != station.MerchantId)
+                    return GenericDto<UserAdminResultDto>.Error(400,
+                        "Tanlangan rol ushbu merchantga tegishli MerchantRole bo'lishi kerak.");
+
                 newUser = new MerchantUserEntity
                 {
                     PhoneId = dto.PhoneId,
@@ -102,8 +112,26 @@ namespace Application.Services
             }
             else
             {
-                return GenericDto<UserAdminResultDto>.Error(400,
-                    "OrganizationId yoki StationId dan biri ko'rsatilishi shart.");
+                // Na org, na station → platform foydalanuvchi. Faqat platform foydalanuvchisi yarata oladi.
+                var caller = await _userRepo.GetByIdAsync(callerId);
+                if (caller is not PlatformUserEntity)
+                    return GenericDto<UserAdminResultDto>.Error(403,
+                        "Platform foydalanuvchi yaratish faqat platform foydalanuvchisiga ruxsat etilgan.");
+
+                // Rol-scope: platform foydalanuvchisiga faqat PlatformRole biriktiriladi.
+                if (role is not PlatformRoleEntity)
+                    return GenericDto<UserAdminResultDto>.Error(400,
+                        "Platform foydalanuvchiga faqat PlatformRole biriktiriladi.");
+
+                newUser = new PlatformUserEntity
+                {
+                    PhoneId = dto.PhoneId,
+                    PhoneNumber = dto.PhoneNumber,
+                    Mail = dto.Mail,
+                    RoleId = dto.RoleId,
+                    IsOtpVerified = true,
+                    IsVerified = false
+                };
             }
 
             var created = await _userRepo.CreateUserAsync(newUser);

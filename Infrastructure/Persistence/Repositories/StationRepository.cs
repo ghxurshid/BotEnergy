@@ -19,9 +19,10 @@ namespace Persistence.Repositories
                 .Include(s => s.Merchant)
                 .FirstOrDefaultAsync(s => s.Id == id);
 
-        public Task<PagedResult<StationEntity>> GetAllAsync(PaginationParams param)
+        public Task<PagedResult<StationEntity>> GetAllAsync(PaginationParams param, long? merchantId = null)
             => _context.Stations
                 .Include(s => s.Merchant)
+                .Where(s => merchantId == null || s.MerchantId == merchantId)
                 .OrderBy(s => s.Name)
                 .ToPagedResultAsync(param);
 

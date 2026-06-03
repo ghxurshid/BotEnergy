@@ -76,7 +76,8 @@ namespace Persistence.Context
                 b.HasDiscriminator<UserType>("user_type")
                     .HasValue<NaturalUserEntity>(UserType.NaturalPerson)
                     .HasValue<LegalUserEntity>(UserType.LegalEntity)
-                    .HasValue<MerchantUserEntity>(UserType.MerchantPerson);
+                    .HasValue<MerchantUserEntity>(UserType.MerchantPerson)
+                    .HasValue<PlatformUserEntity>(UserType.Platform);
 
                 b.Property<UserType>("user_type")
                     .HasColumnType("auth.user_type")
@@ -175,7 +176,8 @@ namespace Persistence.Context
                 b.HasDiscriminator<RoleType>("role_type")
                     .HasValue<NaturalRoleEntity>(RoleType.NaturalRole)
                     .HasValue<LegalRoleEntity>(RoleType.LegalRole)
-                    .HasValue<MerchantRoleEntity>(RoleType.MerchantRole);
+                    .HasValue<MerchantRoleEntity>(RoleType.MerchantRole)
+                    .HasValue<PlatformRoleEntity>(RoleType.PlatformRole);
 
                 b.Property<RoleType>("role_type")
                     .HasColumnName("role_type");

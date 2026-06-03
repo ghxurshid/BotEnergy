@@ -104,7 +104,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> GetAll([FromQuery] PaginationParams param)
         {
-            var result = await _service.GetAllAsync(param);
+            var result = await _service.GetAllAsync(param, User.GetScope());
             return Ok(result.Result);
         }
 
@@ -127,7 +127,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(long id)
         {
-            var result = await _service.GetByIdAsync(id);
+            var result = await _service.GetByIdAsync(id, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 
@@ -148,7 +148,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> GetByMerchant(long merchantId)
         {
-            var result = await _service.GetByMerchantAsync(merchantId);
+            var result = await _service.GetByMerchantAsync(merchantId, User.GetScope());
             return Ok(result.Result);
         }
 
@@ -182,7 +182,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Update(long id, [FromBody] UpdateStationRequest request)
         {
-            var result = await _service.UpdateAsync(id, request.ToDto());
+            var result = await _service.UpdateAsync(id, request.ToDto(), User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 
@@ -206,7 +206,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Delete(long id)
         {
-            var result = await _service.DeleteAsync(id);
+            var result = await _service.DeleteAsync(id, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
     }

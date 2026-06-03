@@ -6,7 +6,7 @@ namespace Domain.Repositories
     public interface IStationRepository
     {
         Task<StationEntity?> GetByIdAsync(long id);
-        Task<PagedResult<StationEntity>> GetAllAsync(PaginationParams param);
+        Task<PagedResult<StationEntity>> GetAllAsync(PaginationParams param, long? merchantId = null);
         Task<List<StationEntity>> GetByMerchantIdAsync(long merchantId);
         Task<StationEntity> CreateAsync(StationEntity station);
         Task<StationEntity> UpdateAsync(StationEntity station);

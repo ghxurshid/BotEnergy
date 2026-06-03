@@ -10,6 +10,7 @@ namespace Domain.Enums
     {
         NaturalPerson,
         LegalEntity,
-        MerchantPerson
+        MerchantPerson,
+        Platform
     }
 }

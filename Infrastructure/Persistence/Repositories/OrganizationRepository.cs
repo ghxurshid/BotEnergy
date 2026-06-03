@@ -17,8 +17,9 @@ namespace Persistence.Repositories
         public async Task<OrganizationEntity?> GetByIdAsync(long id)
             => await _context.Organizations.FirstOrDefaultAsync(o => o.Id == id);
 
-        public Task<PagedResult<OrganizationEntity>> GetAllAsync(PaginationParams param)
+        public Task<PagedResult<OrganizationEntity>> GetAllAsync(PaginationParams param, long? organizationId = null)
             => _context.Organizations
+                .Where(o => organizationId == null || o.Id == organizationId)
                 .OrderBy(o => o.Name)
                 .ToPagedResultAsync(param);
 

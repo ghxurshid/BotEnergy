@@ -69,12 +69,35 @@ namespace Domain.Constants
         };
 
         /// <summary>
+        /// Mobil (Natural) foydalanuvchi roli uchun ruxsat etilgan permissionlar —
+        /// faqat mahsulot olish (sessiya/jarayon), o'z profili va o'z hisoboti.
+        /// Hech qanday admin/boshqaruv permissioni NaturalRole ga biriktirilmaydi.
+        /// </summary>
+        public static readonly HashSet<string> MobileScope = new()
+        {
+            Permissions.SessionCreate, Permissions.SessionClose,
+            Permissions.SessionRead, Permissions.SessionHeartbeat,
+
+            Permissions.ProcessStart, Permissions.ProcessStop,
+            Permissions.ProcessPause, Permissions.ProcessResume,
+
+            Permissions.UserMe, Permissions.UserUpdateMe,
+            Permissions.UserBootstrap, Permissions.DeviceConnectionGetProducts,
+
+            Permissions.ReportMyUsage, Permissions.ReportMyUsageExport,
+
+            Permissions.PaymentTopUpSelf, Permissions.PaymentGetMyTransactions
+        };
+
+        /// <summary>
         /// Berilgan rol turi uchun permissionning ruxsat etilganligini qaytaradi.
+        /// PlatformRole — hammasi (global admin). NaturalRole — faqat mobil to'plam.
         /// </summary>
         public static bool IsAllowedFor(RoleType roleType, string permission)
             => roleType switch
             {
-                RoleType.NaturalRole => true,
+                RoleType.PlatformRole => true,
+                RoleType.NaturalRole => MobileScope.Contains(permission),
                 RoleType.LegalRole =>
                     !GlobalOnly.Contains(permission) && !MerchantScope.Contains(permission),
                 RoleType.MerchantRole =>

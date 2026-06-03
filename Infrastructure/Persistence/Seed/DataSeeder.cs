@@ -54,10 +54,10 @@ namespace Persistence.Seed
             if (role is not null)
                 return role;
 
-            role = new NaturalRoleEntity
+            role = new PlatformRoleEntity
             {
                 Name = DefaultRoleName,
-                Description = "Barcha huquqlarga ega administrator roli.",
+                Description = "Platforma darajasidagi barcha huquqlarga ega administrator roli.",
                 IsActive = true
             };
 
@@ -119,7 +119,7 @@ namespace Persistence.Seed
             {
                 var (hash, salt) = PasswordHelper.CreatePassword(DefaultPassword);
 
-                user = new NaturalUserEntity
+                user = new PlatformUserEntity
                 {
                     PhoneId = DefaultPhoneId,
                     PhoneNumber = DefaultPhoneNumber,

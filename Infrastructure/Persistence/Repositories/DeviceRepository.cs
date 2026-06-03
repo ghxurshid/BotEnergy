@@ -17,6 +17,7 @@ namespace Persistence.Repositories
         public async Task<DeviceEntity?> GetByIdAsync(long id)
         {
             return await _context.Devices
+                .Include(d => d.Station)
                 .FirstOrDefaultAsync(d => d.Id == id && d.IsActive);
         }
 
@@ -36,9 +37,10 @@ namespace Persistence.Repositories
                             && d.IsActive);
         }
 
-        public Task<PagedResult<DeviceEntity>> GetAllAsync(PaginationParams param)
+        public Task<PagedResult<DeviceEntity>> GetAllAsync(PaginationParams param, long? merchantId = null)
             => _context.Devices
                 .Include(d => d.Station)
+                .Where(d => merchantId == null || d.Station!.MerchantId == merchantId)
                 .OrderBy(d => d.SerialNumber)
                 .ToPagedResultAsync(param);
 

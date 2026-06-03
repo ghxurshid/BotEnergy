@@ -8,7 +8,7 @@ namespace Domain.Repositories
     {
         Task<ProductEntity?> GetByIdAsync(long id);
         Task<ProductEntity?> GetByTypeAsync(ProductType type);
-        Task<PagedResult<ProductEntity>> GetAllAsync(PaginationParams param);
+        Task<PagedResult<ProductEntity>> GetAllAsync(PaginationParams param, long? merchantId = null);
         Task<List<ProductEntity>> GetByDeviceIdAsync(long deviceId);
         Task<ProductEntity> CreateAsync(ProductEntity product);
         Task<ProductEntity> UpdateAsync(ProductEntity product);

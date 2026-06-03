@@ -1,3 +1,4 @@
+using Domain.Auth;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
@@ -34,14 +35,21 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<PagedResult<OrganizationItemDto>>> GetAllAsync(PaginationParams param)
+        public async Task<GenericDto<PagedResult<OrganizationItemDto>>> GetAllAsync(PaginationParams param, AccessScope scope)
         {
-            var page = await _repo.GetAllAsync(param);
+            // Platform → hammasi; org user → faqat o'z tashkiloti; aks holda bo'sh.
+            if (!scope.IsPlatform && scope.OrganizationId is null)
+                return GenericDto<PagedResult<OrganizationItemDto>>.Success(PagedResult<OrganizationItemDto>.Empty(param));
+
+            var page = await _repo.GetAllAsync(param, scope.IsPlatform ? null : scope.OrganizationId);
             return GenericDto<PagedResult<OrganizationItemDto>>.Success(page.Map(ToItem));
         }
 
-        public async Task<GenericDto<OrganizationItemDto>> GetByIdAsync(long id)
+        public async Task<GenericDto<OrganizationItemDto>> GetByIdAsync(long id, AccessScope scope)
         {
+            if (!scope.CanAccessOrganization(id))
+                return GenericDto<OrganizationItemDto>.Error(403, "Bu tashkilot sizning doirangizga tegishli emas.");
+
             var org = await _repo.GetByIdAsync(id);
             if (org is null)
                 return GenericDto<OrganizationItemDto>.Error(404, "Tashkilot topilmadi.");
@@ -49,8 +57,11 @@ namespace Application.Services
             return GenericDto<OrganizationItemDto>.Success(ToItem(org));
         }
 
-        public async Task<GenericDto<OrganizationResultDto>> UpdateAsync(long id, UpdateOrganizationDto dto)
+        public async Task<GenericDto<OrganizationResultDto>> UpdateAsync(long id, UpdateOrganizationDto dto, AccessScope scope)
         {
+            if (!scope.CanAccessOrganization(id))
+                return GenericDto<OrganizationResultDto>.Error(403, "Bu tashkilot sizning doirangizga tegishli emas.");
+
             var org = await _repo.GetByIdAsync(id);
             if (org is null)
                 return GenericDto<OrganizationResultDto>.Error(404, "Tashkilot topilmadi.");
@@ -68,8 +79,11 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<OrganizationResultDto>> DeleteAsync(long id)
+        public async Task<GenericDto<OrganizationResultDto>> DeleteAsync(long id, AccessScope scope)
         {
+            if (!scope.CanAccessOrganization(id))
+                return GenericDto<OrganizationResultDto>.Error(403, "Bu tashkilot sizning doirangizga tegishli emas.");
+
             var org = await _repo.GetByIdAsync(id);
             if (org is null)
                 return GenericDto<OrganizationResultDto>.Error(404, "Tashkilot topilmadi.");

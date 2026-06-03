@@ -61,7 +61,10 @@ namespace CommonConfiguration.ConfigurationExtensions
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials()
-                        .WithExposedHeaders("Idempotent-Replay");
+                        .WithExposedHeaders("Idempotent-Replay")
+                        // Brauzer preflight (OPTIONS) javobini shu muddatga cache qiladi —
+                        // har GET/PUT oldidan OPTIONS qayta yuborilmaydi (Chrome maks 2 soatgacha qisadi).
+                        .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
                 });
             });
             return services;

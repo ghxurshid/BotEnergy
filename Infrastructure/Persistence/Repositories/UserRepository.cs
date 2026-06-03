@@ -29,8 +29,16 @@ namespace Persistence.Repositories
 
         public async Task<UserEntity?> GetByPhoneNumberAsync(string phoneNumber)
         {
-            return await _context.Users
+            var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+
+            // Login token'iga MerchantId/OrganizationId claimlari uchun scope navigatsiyasi kerak.
+            if (user is LegalUserEntity legalUser)
+                await _context.Entry(legalUser).Reference(l => l.Organization).LoadAsync();
+            else if (user is MerchantUserEntity merchantUser)
+                await _context.Entry(merchantUser).Reference(m => m.Station).LoadAsync();
+
+            return user;
         }
 
         public Task<PagedResult<UserEntity>> GetAllAsync(PaginationParams param)

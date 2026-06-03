@@ -76,11 +76,11 @@ namespace Application.Services
             }
             else
             {
-                if (caller is not NaturalUserEntity)
+                if (caller is not PlatformUserEntity)
                     return GenericDto<CreateRoleResultDto>.Error(403,
-                        "Global rol yaratish uchun tegishli scopega biriktirilmagan foydalanuvchi bo'lishingiz kerak.");
+                        "Global (platform) rol yaratish faqat platform foydalanuvchisiga ruxsat etilgan.");
 
-                role = new NaturalRoleEntity
+                role = new PlatformRoleEntity
                 {
                     Name = dto.Name,
                     Description = dto.Description,
@@ -288,6 +288,13 @@ namespace Application.Services
         {
             switch (caller)
             {
+                case PlatformUserEntity:
+                    // Platform — barcha scopelardagi barcha rollarni ko'radi (cheklovsiz).
+                    return new AccessibleScope(
+                        RoleTypes: new[] { RoleType.PlatformRole, RoleType.NaturalRole, RoleType.LegalRole, RoleType.MerchantRole },
+                        OrganizationId: null,
+                        MerchantId: null);
+
                 case LegalUserEntity legal:
                     return new AccessibleScope(
                         RoleTypes: new[] { RoleType.LegalRole },
@@ -303,15 +310,9 @@ namespace Application.Services
                         MerchantId: station?.MerchantId);
 
                 default:
-                    // NaturalUser (global) — qaysi scopelarga accessi borligiga qarab tasniflanadi.
-                    var types = new List<RoleType> { RoleType.NaturalRole };
-                    if (callerPermissions.Contains(Permissions.OrganizationAdminGetAll))
-                        types.Add(RoleType.LegalRole);
-                    if (callerPermissions.Contains(Permissions.MerchantAdminGetAll))
-                        types.Add(RoleType.MerchantRole);
-
+                    // NaturalUser (mobil) — rol boshqarmaydi.
                     return new AccessibleScope(
-                        RoleTypes: types,
+                        RoleTypes: Array.Empty<RoleType>(),
                         OrganizationId: null,
                         MerchantId: null);
             }
@@ -324,6 +325,17 @@ namespace Application.Services
         {
             switch (caller)
             {
+                case PlatformUserEntity:
+                    // Platform: cross-scope rolga kirish uchun ham tegishli permission talab etiladi.
+                    return role switch
+                    {
+                        LegalRoleEntity when !callerPermissions.Contains(Permissions.OrganizationAdminGetById)
+                            => new AccessError(403, "Tashkilot rollari bilan ishlash uchun 'organization.admin.getbyid' ruxsati kerak."),
+                        MerchantRoleEntity when !callerPermissions.Contains(Permissions.MerchantAdminGetById)
+                            => new AccessError(403, "Merchant rollari bilan ishlash uchun 'merchant.admin.getbyid' ruxsati kerak."),
+                        _ => null
+                    };
+
                 case LegalUserEntity legal:
                     if (role is not LegalRoleEntity legalRole)
                         return new AccessError(403, "Tashkilot foydalanuvchisi faqat o'z tashkiloti rollarini boshqara oladi.");
@@ -341,15 +353,8 @@ namespace Application.Services
                     return null;
 
                 default:
-                    // NaturalUser (global): cross-scope kirish uchun tegishli permission kerak.
-                    return role switch
-                    {
-                        LegalRoleEntity when !callerPermissions.Contains(Permissions.OrganizationAdminGetById)
-                            => new AccessError(403, "Tashkilot rollari bilan ishlash uchun 'organization.admin.getbyid' ruxsati kerak."),
-                        MerchantRoleEntity when !callerPermissions.Contains(Permissions.MerchantAdminGetById)
-                            => new AccessError(403, "Merchant rollari bilan ishlash uchun 'merchant.admin.getbyid' ruxsati kerak."),
-                        _ => null
-                    };
+                    // NaturalUser (mobil) — rol boshqarmaydi.
+                    return new AccessError(403, "Rol boshqarish uchun ruxsatingiz yo'q.");
             }
         }
 
@@ -367,6 +372,11 @@ namespace Application.Services
 
             switch (caller)
             {
+                case PlatformUserEntity:
+                    if (!callerPermissions.Contains(Permissions.OrganizationAdminCreate))
+                        return new AccessError(403, "Tashkilot scopeida rol yaratish uchun 'organization.admin.create' ruxsati kerak.");
+                    return null;
+
                 case LegalUserEntity legal:
                     if (legal.OrganizationId != organizationId)
                         return new AccessError(403, "Faqat o'z tashkilotingiz uchun rol yarata olasiz.");
@@ -376,9 +386,7 @@ namespace Application.Services
                     return new AccessError(403, "Merchant foydalanuvchisi tashkilot rolini yarata olmaydi.");
 
                 default:
-                    if (!callerPermissions.Contains(Permissions.OrganizationAdminCreate))
-                        return new AccessError(403, "Tashkilot scopeida rol yaratish uchun 'organization.admin.create' ruxsati kerak.");
-                    return null;
+                    return new AccessError(403, "Tashkilot rolini yaratish uchun ruxsatingiz yo'q.");
             }
         }
 
@@ -396,6 +404,13 @@ namespace Application.Services
 
             switch (caller)
             {
+                case PlatformUserEntity:
+                    if (!callerPermissions.Contains(Permissions.MerchantAdminRegister) ||
+                        !callerPermissions.Contains(Permissions.StationAdminCreate))
+                        return new AccessError(403,
+                            "Merchant scopeida rol yaratish uchun 'merchant.admin.register' va 'station.admin.create' ruxsatlari kerak.");
+                    return null;
+
                 case MerchantUserEntity merchantUser:
                     var station = merchantUser.Station
                         ?? await _stationRepository.GetByIdAsync(merchantUser.StationId);
@@ -407,11 +422,7 @@ namespace Application.Services
                     return new AccessError(403, "Tashkilot foydalanuvchisi merchant rolini yarata olmaydi.");
 
                 default:
-                    if (!callerPermissions.Contains(Permissions.MerchantAdminRegister) ||
-                        !callerPermissions.Contains(Permissions.StationAdminCreate))
-                        return new AccessError(403,
-                            "Merchant scopeida rol yaratish uchun 'merchant.admin.register' va 'station.admin.create' ruxsatlari kerak.");
-                    return null;
+                    return new AccessError(403, "Merchant rolini yaratish uchun ruxsatingiz yo'q.");
             }
         }
 
@@ -422,6 +433,19 @@ namespace Application.Services
         private static AccessError? EnsureCanManageRoleType(UserEntity caller, HashSet<string> callerPermissions, RoleType roleType)
             => (caller, roleType) switch
             {
+                // Platform — barcha rol turlarini boshqaradi, lekin cross-scope uchun permission talab etiladi.
+                (PlatformUserEntity, RoleType.PlatformRole) => null,
+                (PlatformUserEntity, RoleType.NaturalRole) => null,
+                (PlatformUserEntity, RoleType.LegalRole) when !callerPermissions.Contains(Permissions.OrganizationAdminCreate)
+                    => new AccessError(403, "Tashkilot rolini boshqarish uchun 'organization.admin.create' ruxsati kerak."),
+                (PlatformUserEntity, RoleType.LegalRole) => null,
+                (PlatformUserEntity, RoleType.MerchantRole) when
+                    !callerPermissions.Contains(Permissions.MerchantAdminRegister) ||
+                    !callerPermissions.Contains(Permissions.StationAdminCreate)
+                    => new AccessError(403,
+                        "Merchant rolini boshqarish uchun 'merchant.admin.register' va 'station.admin.create' ruxsatlari kerak."),
+                (PlatformUserEntity, RoleType.MerchantRole) => null,
+
                 (LegalUserEntity, RoleType.LegalRole) => null,
                 (LegalUserEntity, _) => new AccessError(403,
                     "Tashkilot foydalanuvchisi faqat tashkilot rolini boshqara oladi."),
@@ -430,20 +454,8 @@ namespace Application.Services
                 (MerchantUserEntity, _) => new AccessError(403,
                     "Merchant foydalanuvchisi faqat merchant rolini boshqara oladi."),
 
-                (_, RoleType.NaturalRole) => null,
-
-                (_, RoleType.LegalRole) when !callerPermissions.Contains(Permissions.OrganizationAdminCreate)
-                    => new AccessError(403, "Tashkilot rolini boshqarish uchun 'organization.admin.create' ruxsati kerak."),
-                (_, RoleType.LegalRole) => null,
-
-                (_, RoleType.MerchantRole) when
-                    !callerPermissions.Contains(Permissions.MerchantAdminRegister) ||
-                    !callerPermissions.Contains(Permissions.StationAdminCreate)
-                    => new AccessError(403,
-                        "Merchant rolini boshqarish uchun 'merchant.admin.register' va 'station.admin.create' ruxsatlari kerak."),
-                (_, RoleType.MerchantRole) => null,
-
-                _ => null
+                // NaturalUser (mobil) va boshqalar — rol turini boshqarmaydi.
+                _ => new AccessError(403, "Bu rol turini boshqarish uchun ruxsatingiz yo'q.")
             };
 
         private static RoleItemDto ToItem(RoleEntity role, List<string> permissions) => new()

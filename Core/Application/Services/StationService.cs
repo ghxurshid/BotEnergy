@@ -1,3 +1,4 @@
+using Domain.Auth;
 using Domain.Constants;
 using Domain.Dtos;
 using Domain.Dtos.Base;
@@ -61,32 +62,45 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<PagedResult<StationItemDto>>> GetAllAsync(PaginationParams param)
+        public async Task<GenericDto<PagedResult<StationItemDto>>> GetAllAsync(PaginationParams param, AccessScope scope)
         {
-            var page = await _repo.GetAllAsync(param);
+            // Platform → hammasi; merchant user → faqat o'z merchanti; aks holda (org/natural) → bo'sh.
+            if (!scope.IsPlatform && scope.MerchantId is null)
+                return GenericDto<PagedResult<StationItemDto>>.Success(PagedResult<StationItemDto>.Empty(param));
+
+            var page = await _repo.GetAllAsync(param, scope.IsPlatform ? null : scope.MerchantId);
             return GenericDto<PagedResult<StationItemDto>>.Success(page.Map(ToItem));
         }
 
-        public async Task<GenericDto<List<StationItemDto>>> GetByMerchantAsync(long merchantId)
+        public async Task<GenericDto<List<StationItemDto>>> GetByMerchantAsync(long merchantId, AccessScope scope)
         {
+            if (!scope.CanAccessMerchant(merchantId))
+                return GenericDto<List<StationItemDto>>.Error(403, "Bu merchant sizning doirangizga tegishli emas.");
+
             var list = await _repo.GetByMerchantIdAsync(merchantId);
             return GenericDto<List<StationItemDto>>.Success(list.Select(ToItem).ToList());
         }
 
-        public async Task<GenericDto<StationItemDto>> GetByIdAsync(long id)
+        public async Task<GenericDto<StationItemDto>> GetByIdAsync(long id, AccessScope scope)
         {
             var station = await _repo.GetByIdAsync(id);
             if (station is null)
                 return GenericDto<StationItemDto>.Error(404, "Stansiya topilmadi.");
 
+            if (!scope.CanAccessMerchant(station.MerchantId))
+                return GenericDto<StationItemDto>.Error(403, "Bu stansiya sizning doirangizga tegishli emas.");
+
             return GenericDto<StationItemDto>.Success(ToItem(station));
         }
 
-        public async Task<GenericDto<StationResultDto>> UpdateAsync(long id, UpdateStationDto dto)
+        public async Task<GenericDto<StationResultDto>> UpdateAsync(long id, UpdateStationDto dto, AccessScope scope)
         {
             var station = await _repo.GetByIdAsync(id);
             if (station is null)
                 return GenericDto<StationResultDto>.Error(404, "Stansiya topilmadi.");
+
+            if (!scope.CanAccessMerchant(station.MerchantId))
+                return GenericDto<StationResultDto>.Error(403, "Bu stansiya sizning doirangizga tegishli emas.");
 
             if (!string.IsNullOrWhiteSpace(dto.Name)) station.Name = dto.Name;
             if (!string.IsNullOrWhiteSpace(dto.Location)) station.Location = dto.Location;
@@ -101,11 +115,14 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<StationResultDto>> DeleteAsync(long id)
+        public async Task<GenericDto<StationResultDto>> DeleteAsync(long id, AccessScope scope)
         {
             var station = await _repo.GetByIdAsync(id);
             if (station is null)
                 return GenericDto<StationResultDto>.Error(404, "Stansiya topilmadi.");
+
+            if (!scope.CanAccessMerchant(station.MerchantId))
+                return GenericDto<StationResultDto>.Error(403, "Bu stansiya sizning doirangizga tegishli emas.");
 
             await _repo.DeleteAsync(id);
 
