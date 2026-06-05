@@ -70,5 +70,13 @@ namespace AdminApi.Controllers
             var result = await _service.GetRolePermissionsAsync(id, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
+
+        [HttpGet]
+        [RequirePermission(Permissions.CustomerAdminGetAll)]
+        public async Task<IActionResult> AllowedPermissions()
+        {
+            var result = await _service.GetAllowedPermissionsAsync();
+            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+        }
     }
 }

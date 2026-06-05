@@ -13,5 +13,6 @@ namespace Domain.Interfaces
         Task<GenericDto<RoleResultDto>> UpdateRoleAsync(long id, UpdateRoleDto dto, AccessScope scope);
         Task<GenericDto<RoleResultDto>> DeleteRoleAsync(long id, AccessScope scope);
         Task<GenericDto<GetRolePermissionsResultDto>> GetRolePermissionsAsync(long roleId, AccessScope scope);
+        Task<GenericDto<GetAllowedPermissionsResultDto>> GetAllowedPermissionsAsync();
     }
 }

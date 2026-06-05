@@ -181,6 +181,21 @@ namespace Application.Services
             });
         }
 
+        public async Task<GenericDto<GetAllowedPermissionsResultDto>> GetAllowedPermissionsAsync()
+        {
+            var allPermissions = await _permissionRepository.GetAllAsync();
+            var allowed = allPermissions
+                .Where(p => PermissionScopes.IsAllowedFor(RoleKind.CustomerCorporate, p.Name))
+                .Select(p => new AllowedPermissionDto { Id = p.Id, Name = p.Name })
+                .ToList();
+
+            return GenericDto<GetAllowedPermissionsResultDto>.Success(new GetAllowedPermissionsResultDto
+            {
+                Kind = RoleKind.CustomerCorporate,
+                Permissions = allowed
+            });
+        }
+
         private async Task<(int code, string message)?> ApplyPermissionsAsync(CustomerRoleEntity role, List<long>? permissionIds)
         {
             if (permissionIds is null || permissionIds.Count == 0)
