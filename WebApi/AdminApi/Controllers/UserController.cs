@@ -98,7 +98,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
         {
-            var result = await _service.CreateAsync(request.ToDto(), User.GetUserId(), User.GetPermissions());
+            var result = await _service.CreateAsync(request.ToDto(), User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 
@@ -128,7 +128,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> GetAll([FromQuery] PaginationParams param)
         {
-            var result = await _service.GetAllAsync(param);
+            var result = await _service.GetAllAsync(param, User.GetScope());
             return Ok(result.Result);
         }
 
@@ -151,7 +151,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(long id)
         {
-            var result = await _service.GetByIdAsync(id);
+            var result = await _service.GetByIdAsync(id, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 
@@ -185,7 +185,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> SetPassword(long id, [FromBody] SetPasswordRequest request)
         {
-            var result = await _service.SetPasswordAsync(request.ToDto(id));
+            var result = await _service.SetPasswordAsync(request.ToDto(id), User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 
@@ -218,7 +218,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> ResetPassword(long id, [FromBody] ResetPasswordRequest request)
         {
-            var result = await _service.ResetPasswordAsync(request.ToDto(id));
+            var result = await _service.ResetPasswordAsync(request.ToDto(id), User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 
@@ -242,7 +242,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Block(long id)
         {
-            var result = await _service.BlockAsync(id);
+            var result = await _service.BlockAsync(id, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 
@@ -266,7 +266,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Unblock(long id)
         {
-            var result = await _service.UnblockAsync(id);
+            var result = await _service.UnblockAsync(id, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 
@@ -290,7 +290,7 @@ namespace AdminApi.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Delete(long id)
         {
-            var result = await _service.DeleteAsync(id);
+            var result = await _service.DeleteAsync(id, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
     }

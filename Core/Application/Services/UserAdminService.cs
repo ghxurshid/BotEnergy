@@ -1,4 +1,5 @@
 using Application.Helpers;
+using Domain.Auth;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
@@ -9,7 +10,8 @@ using Domain.Repositories;
 namespace Application.Services
 {
     /// <summary>
-    /// Platform foydalanuvchilarni (Manage/Merchant) boshqarish — faqat Manage tomonidan.
+    /// Platform foydalanuvchilarni (Manage/Merchant) boshqarish.
+    /// Manage — cheklovsiz; Merchant operator — faqat o'z merchanti operatorlari.
     /// </summary>
     public class UserAdminService : IUserAdminService
     {
@@ -27,8 +29,19 @@ namespace Application.Services
             _merchantRepo = merchantRepo;
         }
 
-        public async Task<GenericDto<UserAdminResultDto>> CreateAsync(CreateUserAdminDto dto, long callerId, HashSet<string> callerPermissions)
+        public async Task<GenericDto<UserAdminResultDto>> CreateAsync(CreateUserAdminDto dto, AccessScope scope)
         {
+            // Scope: Manage → hammasi; Merchant operator → faqat o'z merchantiga Merchant turi.
+            if (!scope.IsManage)
+            {
+                if (!scope.IsMerchant || scope.MerchantId is null)
+                    return GenericDto<UserAdminResultDto>.Error(403, "Platform foydalanuvchi yaratish huquqingiz yo'q.");
+                if (dto.Type != PlatformUserType.Merchant)
+                    return GenericDto<UserAdminResultDto>.Error(403, "Siz faqat Merchant turidagi operator yarata olasiz.");
+                if (dto.MerchantId != scope.MerchantId)
+                    return GenericDto<UserAdminResultDto>.Error(403, "Faqat o'z merchantingizga operator qo'sha olasiz.");
+            }
+
             var existingUser = await _userRepo.GetByPhoneNumberAsync(dto.PhoneNumber);
             if (existingUser is not null)
                 return GenericDto<UserAdminResultDto>.Error(409, "Bu telefon raqam bilan platform foydalanuvchi allaqachon mavjud.");
@@ -50,7 +63,6 @@ namespace Application.Services
                 if (!merchant.IsActive)
                     return GenericDto<UserAdminResultDto>.Error(400, "Merchant faol emas.");
 
-                // Rol shu merchantga tegishli (scoped) bo'lishi kerak.
                 if (role.MerchantId != dto.MerchantId.Value)
                     return GenericDto<UserAdminResultDto>.Error(400, "Tanlangan rol ushbu merchantga tegishli bo'lishi kerak.");
 
@@ -58,7 +70,6 @@ namespace Application.Services
             }
             else
             {
-                // Manage → rol global (MerchantId null) bo'lishi kerak.
                 if (role.MerchantId is not null)
                     return GenericDto<UserAdminResultDto>.Error(400, "Manage foydalanuvchiga faqat global (Manage) rol biriktiriladi.");
             }
@@ -84,15 +95,44 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<UserAdminResultDto>> SetPasswordAsync(SetPasswordAdminDto dto)
+        public async Task<GenericDto<PagedResult<UserAdminItemDto>>> GetAllAsync(PaginationParams param, AccessScope scope)
+        {
+            if (scope.IsManage)
+            {
+                var all = await _userRepo.GetAllAsync(param);
+                return GenericDto<PagedResult<UserAdminItemDto>>.Success(all.Map(ToItem));
+            }
+
+            if (scope.IsMerchant && scope.MerchantId.HasValue)
+            {
+                var page = await _userRepo.GetByMerchantAsync(scope.MerchantId.Value, param);
+                return GenericDto<PagedResult<UserAdminItemDto>>.Success(page.Map(ToItem));
+            }
+
+            return GenericDto<PagedResult<UserAdminItemDto>>.Success(PagedResult<UserAdminItemDto>.Empty(param));
+        }
+
+        public async Task<GenericDto<UserAdminItemDto>> GetByIdAsync(long userId, AccessScope scope)
+        {
+            var user = await _userRepo.GetByIdAsync(userId);
+            if (user is null)
+                return GenericDto<UserAdminItemDto>.Error(404, "Foydalanuvchi topilmadi.");
+            if (!CanManage(user, scope))
+                return GenericDto<UserAdminItemDto>.Error(403, "Bu foydalanuvchi sizning doirangizga tegishli emas.");
+
+            return GenericDto<UserAdminItemDto>.Success(ToItem(user));
+        }
+
+        public async Task<GenericDto<UserAdminResultDto>> SetPasswordAsync(SetPasswordAdminDto dto, AccessScope scope)
         {
             var user = await _userRepo.GetByIdAsync(dto.UserId);
             if (user is null)
                 return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+            if (!CanManage(user, scope))
+                return GenericDto<UserAdminResultDto>.Error(403, "Ruxsat yo'q.");
 
             if (user.IsVerified)
                 return GenericDto<UserAdminResultDto>.Error(400, "Parol allaqachon o'rnatilgan.");
-
             if (!user.IsOtpVerified)
                 return GenericDto<UserAdminResultDto>.Error(400, "OTP tasdiqlanmagan.");
 
@@ -109,12 +149,13 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<UserAdminResultDto>> ResetPasswordAsync(ResetPasswordAdminDto dto)
+        public async Task<GenericDto<UserAdminResultDto>> ResetPasswordAsync(ResetPasswordAdminDto dto, AccessScope scope)
         {
             var user = await _userRepo.GetByIdAsync(dto.UserId);
             if (user is null)
                 return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
-
+            if (!CanManage(user, scope))
+                return GenericDto<UserAdminResultDto>.Error(403, "Ruxsat yo'q.");
             if (!user.IsVerified)
                 return GenericDto<UserAdminResultDto>.Error(400, "Foydalanuvchi hali ro'yxatdan to'liq o'tmagan.");
 
@@ -130,64 +171,41 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<PagedResult<UserAdminItemDto>>> GetAllAsync(PaginationParams param)
-        {
-            var page = await _userRepo.GetAllAsync(param);
-            return GenericDto<PagedResult<UserAdminItemDto>>.Success(page.Map(ToItem));
-        }
+        public async Task<GenericDto<UserAdminResultDto>> BlockAsync(long userId, AccessScope scope)
+            => await SetBlockedAsync(userId, scope, true);
 
-        public async Task<GenericDto<UserAdminItemDto>> GetByIdAsync(long userId)
-        {
-            var user = await _userRepo.GetByIdAsync(userId);
-            if (user is null)
-                return GenericDto<UserAdminItemDto>.Error(404, "Foydalanuvchi topilmadi.");
+        public async Task<GenericDto<UserAdminResultDto>> UnblockAsync(long userId, AccessScope scope)
+            => await SetBlockedAsync(userId, scope, false);
 
-            return GenericDto<UserAdminItemDto>.Success(ToItem(user));
-        }
-
-        public async Task<GenericDto<UserAdminResultDto>> BlockAsync(long userId)
+        private async Task<GenericDto<UserAdminResultDto>> SetBlockedAsync(long userId, AccessScope scope, bool blocked)
         {
             var user = await _userRepo.GetByIdAsync(userId);
             if (user is null)
                 return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+            if (!CanManage(user, scope))
+                return GenericDto<UserAdminResultDto>.Error(403, "Ruxsat yo'q.");
 
-            if (user.IsBlocked)
-                return GenericDto<UserAdminResultDto>.Error(400, "Foydalanuvchi allaqachon bloklangan.");
+            if (user.IsBlocked == blocked)
+                return GenericDto<UserAdminResultDto>.Error(400,
+                    blocked ? "Foydalanuvchi allaqachon bloklangan." : "Foydalanuvchi bloklanmagan.");
 
-            user.IsBlocked = true;
+            user.IsBlocked = blocked;
             await _userRepo.UpdateAsync(user);
 
             return GenericDto<UserAdminResultDto>.Success(new UserAdminResultDto
             {
                 Id = user.Id,
-                ResultMessage = "Foydalanuvchi bloklandi."
+                ResultMessage = blocked ? "Foydalanuvchi bloklandi." : "Foydalanuvchi blokdan chiqarildi."
             });
         }
 
-        public async Task<GenericDto<UserAdminResultDto>> UnblockAsync(long userId)
+        public async Task<GenericDto<UserAdminResultDto>> DeleteAsync(long userId, AccessScope scope)
         {
             var user = await _userRepo.GetByIdAsync(userId);
             if (user is null)
                 return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
-
-            if (!user.IsBlocked)
-                return GenericDto<UserAdminResultDto>.Error(400, "Foydalanuvchi bloklanmagan.");
-
-            user.IsBlocked = false;
-            await _userRepo.UpdateAsync(user);
-
-            return GenericDto<UserAdminResultDto>.Success(new UserAdminResultDto
-            {
-                Id = user.Id,
-                ResultMessage = "Foydalanuvchi blokdan chiqarildi."
-            });
-        }
-
-        public async Task<GenericDto<UserAdminResultDto>> DeleteAsync(long userId)
-        {
-            var user = await _userRepo.GetByIdAsync(userId);
-            if (user is null)
-                return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+            if (!CanManage(user, scope))
+                return GenericDto<UserAdminResultDto>.Error(403, "Ruxsat yo'q.");
 
             await _userRepo.DeleteAsync(userId);
 
@@ -196,6 +214,17 @@ namespace Application.Services
                 Id = userId,
                 ResultMessage = "Foydalanuvchi o'chirildi."
             });
+        }
+
+        /// <summary>Manage → har doim; Merchant operator → faqat o'z merchanti operatorlari.</summary>
+        private static bool CanManage(PlatformUserEntity target, AccessScope scope)
+        {
+            if (scope.IsManage)
+                return true;
+            return scope.IsMerchant
+                && target.Type == PlatformUserType.Merchant
+                && target.MerchantId.HasValue
+                && target.MerchantId == scope.MerchantId;
         }
 
         private static UserAdminItemDto ToItem(PlatformUserEntity u) => new()
