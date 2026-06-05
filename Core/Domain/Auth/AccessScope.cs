@@ -8,29 +8,41 @@ namespace Domain.Auth
     /// "qaysi ma'lumot ustida"ni belgilaydi.
     ///
     /// Prioritet:
-    ///  - Platform  → scope cheklovi yo'q (permissioni bo'lsa hammasi).
-    ///  - Merchant  → faqat o'z merchanti (MerchantId).
-    ///  - Legal     → faqat o'z tashkiloti (OrganizationId).
-    ///  - Natural   → admin entity'lariga scope yo'q (faqat mahsulot + report).
+    ///  - Platform/Manage   → scope cheklovi yo'q (permissioni bo'lsa hammasi).
+    ///  - Platform/Merchant → faqat o'z merchanti (MerchantId).
+    ///  - Customer/Corporate→ faqat o'z tashkiloti (OrganizationId).
+    ///  - Customer/Natural  → admin entity'lariga scope yo'q (faqat mahsulot + report).
     /// </summary>
     public sealed record AccessScope(
         long UserId,
-        UserType UserType,
+        UserGroup Group,
+        string SubType,
         long? MerchantId,
         long? OrganizationId,
-        long? StationId,
         IReadOnlySet<string> Permissions)
     {
-        public bool IsPlatform => UserType == UserType.Platform;
+        public bool IsPlatform => Group == UserGroup.Platform;
+        public bool IsCustomer => Group == UserGroup.Customer;
+
+        /// <summary>Platform/Manage — cheklovsiz to'liq kirish.</summary>
+        public bool IsManage => Group == UserGroup.Platform
+            && string.Equals(SubType, nameof(PlatformUserType.Manage), StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Platform/Merchant — bitta merchantga scoped operator.</summary>
+        public bool IsMerchant => Group == UserGroup.Platform
+            && string.Equals(SubType, nameof(PlatformUserType.Merchant), StringComparison.OrdinalIgnoreCase);
+
+        public bool IsCorporate => Group == UserGroup.Customer
+            && string.Equals(SubType, nameof(CustomerUserType.Corporate), StringComparison.OrdinalIgnoreCase);
 
         public bool HasPermission(string permission) => Permissions.Contains(permission);
 
-        /// <summary>Platform → har doim; Merchant user → faqat o'z merchanti; aks holda false.</summary>
+        /// <summary>Manage → har doim; Merchant → faqat o'z merchanti; aks holda false.</summary>
         public bool CanAccessMerchant(long merchantId)
-            => IsPlatform || (MerchantId.HasValue && MerchantId.Value == merchantId);
+            => IsManage || (MerchantId.HasValue && MerchantId.Value == merchantId);
 
-        /// <summary>Platform → har doim; Legal user → faqat o'z tashkiloti; aks holda false.</summary>
+        /// <summary>Manage → har doim; Corporate → faqat o'z tashkiloti; aks holda false.</summary>
         public bool CanAccessOrganization(long organizationId)
-            => IsPlatform || (OrganizationId.HasValue && OrganizationId.Value == organizationId);
+            => IsManage || (OrganizationId.HasValue && OrganizationId.Value == organizationId);
     }
 }

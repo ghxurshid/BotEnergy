@@ -1,145 +1,86 @@
 using Application.Helpers;
-using Domain.Constants;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
 
 namespace Application.Services
 {
+    /// <summary>
+    /// Platform foydalanuvchilarni (Manage/Merchant) boshqarish — faqat Manage tomonidan.
+    /// </summary>
     public class UserAdminService : IUserAdminService
     {
-        private readonly IUserRepository _userRepo;
-        private readonly IRoleRepository _roleRepo;
-        private readonly IOrganizationRepository _orgRepo;
-        private readonly IStationRepository _stationRepo;
+        private readonly IPlatformUserRepository _userRepo;
+        private readonly IPlatformRoleRepository _roleRepo;
+        private readonly IMerchantRepository _merchantRepo;
 
         public UserAdminService(
-            IUserRepository userRepo,
-            IRoleRepository roleRepo,
-            IOrganizationRepository orgRepo,
-            IStationRepository stationRepo)
+            IPlatformUserRepository userRepo,
+            IPlatformRoleRepository roleRepo,
+            IMerchantRepository merchantRepo)
         {
             _userRepo = userRepo;
             _roleRepo = roleRepo;
-            _orgRepo = orgRepo;
-            _stationRepo = stationRepo;
+            _merchantRepo = merchantRepo;
         }
 
         public async Task<GenericDto<UserAdminResultDto>> CreateAsync(CreateUserAdminDto dto, long callerId, HashSet<string> callerPermissions)
         {
             var existingUser = await _userRepo.GetByPhoneNumberAsync(dto.PhoneNumber);
             if (existingUser is not null)
-                return GenericDto<UserAdminResultDto>.Error(409, "Bu telefon raqam bilan foydalanuvchi allaqachon mavjud.");
+                return GenericDto<UserAdminResultDto>.Error(409, "Bu telefon raqam bilan platform foydalanuvchi allaqachon mavjud.");
 
             var role = await _roleRepo.GetByIdAsync(dto.RoleId);
             if (role is null)
                 return GenericDto<UserAdminResultDto>.Error(404, "Rol topilmadi.");
 
-            if (dto.OrganizationId.HasValue && dto.StationId.HasValue)
-                dto.StationId = null;
+            long? merchantId = null;
 
-            UserEntity newUser;
-
-            if (dto.OrganizationId.HasValue)
+            if (dto.Type == PlatformUserType.Merchant)
             {
-                var org = await _orgRepo.GetByIdAsync(dto.OrganizationId.Value);
-                if (org is null)
-                    return GenericDto<UserAdminResultDto>.Error(404, "Tashkilot topilmadi.");
+                if (dto.MerchantId is null)
+                    return GenericDto<UserAdminResultDto>.Error(400, "Merchant foydalanuvchi uchun MerchantId majburiy.");
 
-                if (!org.IsActive)
-                    return GenericDto<UserAdminResultDto>.Error(400, "Tashkilot faol emas.");
+                var merchant = await _merchantRepo.GetByIdAsync(dto.MerchantId.Value);
+                if (merchant is null)
+                    return GenericDto<UserAdminResultDto>.Error(404, "Merchant topilmadi.");
+                if (!merchant.IsActive)
+                    return GenericDto<UserAdminResultDto>.Error(400, "Merchant faol emas.");
 
-                if (!callerPermissions.Contains(Permissions.OrganizationAdminCreate))
-                {
-                    var caller = await _userRepo.GetByIdAsync(callerId);
-                    if (caller is LegalUserEntity legalUser && legalUser.OrganizationId != dto.OrganizationId)
-                        return GenericDto<UserAdminResultDto>.Error(403, "Faqat o'z tashkilotingizga foydalanuvchi qo'sha olasiz.");
-                }
+                // Rol shu merchantga tegishli (scoped) bo'lishi kerak.
+                if (role.MerchantId != dto.MerchantId.Value)
+                    return GenericDto<UserAdminResultDto>.Error(400, "Tanlangan rol ushbu merchantga tegishli bo'lishi kerak.");
 
-                // Rol-scope: tashkilot foydalanuvchisiga faqat shu tashkilotning LegalRole'i biriktiriladi.
-                if (role is not LegalRoleEntity legalRole || legalRole.OrganizationId != dto.OrganizationId.Value)
-                    return GenericDto<UserAdminResultDto>.Error(400,
-                        "Tanlangan rol ushbu tashkilotga tegishli LegalRole bo'lishi kerak.");
-
-                newUser = new LegalUserEntity
-                {
-                    PhoneId = dto.PhoneId,
-                    PhoneNumber = dto.PhoneNumber,
-                    Mail = dto.Mail,
-                    RoleId = dto.RoleId,
-                    OrganizationId = dto.OrganizationId.Value,
-                    IsOtpVerified = true,
-                    IsVerified = false
-                };
-            }
-            else if (dto.StationId.HasValue)
-            {
-                var station = await _stationRepo.GetByIdAsync(dto.StationId.Value);
-                if (station is null)
-                    return GenericDto<UserAdminResultDto>.Error(404, "Stansiya topilmadi.");
-
-                if (!station.IsActive)
-                    return GenericDto<UserAdminResultDto>.Error(400, "Stansiya faol emas.");
-
-                if (!callerPermissions.Contains(Permissions.MerchantAdminRegister))
-                {
-                    var caller = await _userRepo.GetByIdAsync(callerId);
-                    if (caller is MerchantUserEntity merchantUser)
-                    {
-                        var callerStation = await _stationRepo.GetByIdAsync(merchantUser.StationId);
-                        if (callerStation?.MerchantId != station.MerchantId)
-                            return GenericDto<UserAdminResultDto>.Error(403, "Faqat o'z merchantingizga foydalanuvchi qo'sha olasiz.");
-                    }
-                }
-
-                // Rol-scope: merchant foydalanuvchisiga faqat shu merchantning MerchantRole'i biriktiriladi.
-                if (role is not MerchantRoleEntity merchantRole || merchantRole.MerchantId != station.MerchantId)
-                    return GenericDto<UserAdminResultDto>.Error(400,
-                        "Tanlangan rol ushbu merchantga tegishli MerchantRole bo'lishi kerak.");
-
-                newUser = new MerchantUserEntity
-                {
-                    PhoneId = dto.PhoneId,
-                    PhoneNumber = dto.PhoneNumber,
-                    Mail = dto.Mail,
-                    RoleId = dto.RoleId,
-                    StationId = dto.StationId.Value,
-                    IsOtpVerified = true,
-                    IsVerified = false
-                };
+                merchantId = dto.MerchantId;
             }
             else
             {
-                // Na org, na station → platform foydalanuvchi. Faqat platform foydalanuvchisi yarata oladi.
-                var caller = await _userRepo.GetByIdAsync(callerId);
-                if (caller is not PlatformUserEntity)
-                    return GenericDto<UserAdminResultDto>.Error(403,
-                        "Platform foydalanuvchi yaratish faqat platform foydalanuvchisiga ruxsat etilgan.");
-
-                // Rol-scope: platform foydalanuvchisiga faqat PlatformRole biriktiriladi.
-                if (role is not PlatformRoleEntity)
-                    return GenericDto<UserAdminResultDto>.Error(400,
-                        "Platform foydalanuvchiga faqat PlatformRole biriktiriladi.");
-
-                newUser = new PlatformUserEntity
-                {
-                    PhoneId = dto.PhoneId,
-                    PhoneNumber = dto.PhoneNumber,
-                    Mail = dto.Mail,
-                    RoleId = dto.RoleId,
-                    IsOtpVerified = true,
-                    IsVerified = false
-                };
+                // Manage → rol global (MerchantId null) bo'lishi kerak.
+                if (role.MerchantId is not null)
+                    return GenericDto<UserAdminResultDto>.Error(400, "Manage foydalanuvchiga faqat global (Manage) rol biriktiriladi.");
             }
 
-            var created = await _userRepo.CreateUserAsync(newUser);
+            var newUser = new PlatformUserEntity
+            {
+                Type = dto.Type,
+                PhoneId = dto.PhoneId,
+                PhoneNumber = dto.PhoneNumber,
+                Mail = dto.Mail,
+                RoleId = dto.RoleId,
+                MerchantId = merchantId,
+                IsOtpVerified = true,
+                IsVerified = false
+            };
+
+            var created = await _userRepo.CreateAsync(newUser);
 
             return GenericDto<UserAdminResultDto>.Success(new UserAdminResultDto
             {
                 Id = created.Id,
-                ResultMessage = "Foydalanuvchi muvaffaqiyatli yaratildi."
+                ResultMessage = "Platform foydalanuvchi muvaffaqiyatli yaratildi."
             });
         }
 
@@ -159,7 +100,7 @@ namespace Application.Services
             user.PasswordHash = hash;
             user.PasswordSalt = salt;
             user.IsVerified = true;
-            await _userRepo.UpdateUserAsync(user);
+            await _userRepo.UpdateAsync(user);
 
             return GenericDto<UserAdminResultDto>.Success(new UserAdminResultDto
             {
@@ -180,7 +121,7 @@ namespace Application.Services
             var (hash, salt) = PasswordHelper.CreatePassword(dto.NewPassword);
             user.PasswordHash = hash;
             user.PasswordSalt = salt;
-            await _userRepo.UpdateUserAsync(user);
+            await _userRepo.UpdateAsync(user);
 
             return GenericDto<UserAdminResultDto>.Success(new UserAdminResultDto
             {
@@ -214,7 +155,7 @@ namespace Application.Services
                 return GenericDto<UserAdminResultDto>.Error(400, "Foydalanuvchi allaqachon bloklangan.");
 
             user.IsBlocked = true;
-            await _userRepo.UpdateUserAsync(user);
+            await _userRepo.UpdateAsync(user);
 
             return GenericDto<UserAdminResultDto>.Success(new UserAdminResultDto
             {
@@ -233,7 +174,7 @@ namespace Application.Services
                 return GenericDto<UserAdminResultDto>.Error(400, "Foydalanuvchi bloklanmagan.");
 
             user.IsBlocked = false;
-            await _userRepo.UpdateUserAsync(user);
+            await _userRepo.UpdateAsync(user);
 
             return GenericDto<UserAdminResultDto>.Success(new UserAdminResultDto
             {
@@ -248,7 +189,7 @@ namespace Application.Services
             if (user is null)
                 return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
-            await _userRepo.DeleteUserAsync(userId);
+            await _userRepo.DeleteAsync(userId);
 
             return GenericDto<UserAdminResultDto>.Success(new UserAdminResultDto
             {
@@ -257,29 +198,19 @@ namespace Application.Services
             });
         }
 
-        private static UserAdminItemDto ToItem(UserEntity u)
+        private static UserAdminItemDto ToItem(PlatformUserEntity u) => new()
         {
-            decimal balance = u switch
-            {
-                NaturalUserEntity n => n.Balance,
-                LegalUserEntity l => l.Organization?.Balance ?? 0,
-                _ => 0
-            };
-
-            return new UserAdminItemDto
-            {
-                Id = u.Id,
-                PhoneNumber = u.PhoneNumber,
-                Mail = u.Mail,
-                UserType = u.UserType,
-                IsVerified = u.IsVerified,
-                IsBlocked = u.IsBlocked,
-                RoleId = u.RoleId,
-                RoleName = u.Role?.Name,
-                Balance = balance,
-                CreatedDate = u.CreatedDate,
-                LastLoginDate = u.LastLoginDate
-            };
-        }
+            Id = u.Id,
+            PhoneNumber = u.PhoneNumber,
+            Mail = u.Mail,
+            SubType = u.Type.ToString(),
+            MerchantId = u.MerchantId,
+            IsVerified = u.IsVerified,
+            IsBlocked = u.IsBlocked,
+            RoleId = u.RoleId,
+            RoleName = u.Role?.Name,
+            CreatedDate = u.CreatedDate,
+            LastLoginDate = u.LastLoginDate
+        };
     }
 }

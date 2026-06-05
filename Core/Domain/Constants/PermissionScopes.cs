@@ -3,77 +3,39 @@ using Domain.Enums;
 namespace Domain.Constants
 {
     /// <summary>
-    /// Permissionlarning scope (kontekst) bo'yicha tasniflanishi.
-    /// Role scopega biriktirilganda — shu rolga qaysi permissionlarni
-    /// biriktirish mumkinligini aniqlaydi.
+    /// Permissionlarning rol turi (<see cref="RoleKind"/>) bo'yicha biriktirilishi mumkinligini
+    /// belgilaydi. Rol yaratish/yangilashda permission tanlovini cheklash uchun ishlatiladi.
     /// </summary>
     public static class PermissionScopes
     {
         /// <summary>
-        /// Faqat global (NaturalRole) rolda bo'lishi kerak permissionlar —
-        /// platforma darajasidagi entitylarni yaratish/o'chirish.
+        /// Faqat Platform/Manage rolda bo'lishi mumkin permissionlar —
+        /// platforma darajasidagi yaratish/o'chirish va global ko'rinishlar.
+        /// Merchant rolga biriktirilmaydi.
         /// </summary>
-        public static readonly HashSet<string> GlobalOnly = new()
+        public static readonly HashSet<string> ManageOnly = new()
         {
-            Permissions.MerchantAdminRegister,
-            Permissions.MerchantAdminDelete,
             Permissions.OrganizationAdminCreate,
-            Permissions.OrganizationAdminDelete,
-            Permissions.YuridikAdminCreate
-        };
-
-        /// <summary>
-        /// Merchant scope ichidagi permissionlar (Merchant → Station → Device → Product).
-        /// Organization roliga biriktirilmaydi.
-        /// </summary>
-        public static readonly HashSet<string> MerchantScope = new()
-        {
-            Permissions.MerchantAdminGetAll,
-            Permissions.MerchantAdminGetById,
-            Permissions.MerchantAdminUpdate,
-
-            Permissions.StationAdminCreate,
-            Permissions.StationAdminGetAll,
-            Permissions.StationAdminGetById,
-            Permissions.StationAdminGetByMerchant,
-            Permissions.StationAdminUpdate,
-            Permissions.StationAdminDelete,
-
-            Permissions.DeviceAdminRegister,
-            Permissions.DeviceAdminGetAll,
-            Permissions.DeviceAdminGetById,
-            Permissions.DeviceAdminGetByStation,
-            Permissions.DeviceAdminUpdate,
-            Permissions.DeviceAdminDelete,
-
-            Permissions.ProductAdminCreate,
-            Permissions.ProductAdminGetAll,
-            Permissions.ProductAdminGetByDevice,
-            Permissions.ProductAdminGetById,
-            Permissions.ProductAdminGetAllowedTypes,
-            Permissions.ProductAdminUpdate,
-            Permissions.ProductAdminDelete
-        };
-
-        /// <summary>
-        /// Organization scope ichidagi permissionlar.
-        /// Merchant roliga biriktirilmaydi.
-        /// </summary>
-        public static readonly HashSet<string> OrganizationScope = new()
-        {
             Permissions.OrganizationAdminGetAll,
             Permissions.OrganizationAdminGetById,
             Permissions.OrganizationAdminUpdate,
+            Permissions.OrganizationAdminDelete,
 
-            Permissions.BalanceTopUp
+            Permissions.MerchantAdminRegister,
+            Permissions.MerchantAdminDelete,
+            Permissions.MerchantAdminGetAll,
+
+            Permissions.BalanceTopUp,
+
+            Permissions.PaymentAdminGetAll,
+            Permissions.PaymentAdminReverse,
         };
 
         /// <summary>
-        /// Mobil (Natural) foydalanuvchi roli uchun ruxsat etilgan permissionlar —
-        /// faqat mahsulot olish (sessiya/jarayon), o'z profili va o'z hisoboti.
-        /// Hech qanday admin/boshqaruv permissioni NaturalRole ga biriktirilmaydi.
+        /// Customer/Natural (jismoniy) rol uchun ruxsat etilgan permissionlar —
+        /// faqat mahsulot olish (sessiya/jarayon), o'z profili, o'z hisoboti, o'z balansini to'ldirish.
         /// </summary>
-        public static readonly HashSet<string> MobileScope = new()
+        public static readonly HashSet<string> NaturalAllowed = new()
         {
             Permissions.SessionCreate, Permissions.SessionClose,
             Permissions.SessionRead, Permissions.SessionHeartbeat,
@@ -86,22 +48,47 @@ namespace Domain.Constants
 
             Permissions.ReportMyUsage, Permissions.ReportMyUsageExport,
 
-            Permissions.PaymentTopUpSelf, Permissions.PaymentGetMyTransactions
+            Permissions.PaymentTopUpSelf, Permissions.PaymentGetMyTransactions,
         };
 
         /// <summary>
-        /// Berilgan rol turi uchun permissionning ruxsat etilganligini qaytaradi.
-        /// PlatformRole — hammasi (global admin). NaturalRole — faqat mobil to'plam.
+        /// Customer/Corporate rol uchun ruxsat etilgan permissionlar —
+        /// Natural to'plami + tashkilot balansi/hisoboti + qo'l-osti userlarni boshqarish.
         /// </summary>
-        public static bool IsAllowedFor(RoleType roleType, string permission)
-            => roleType switch
+        public static readonly HashSet<string> CorporateAllowed = NaturalAllowed
+            .Concat(new[]
             {
-                RoleType.PlatformRole => true,
-                RoleType.NaturalRole => MobileScope.Contains(permission),
-                RoleType.LegalRole =>
-                    !GlobalOnly.Contains(permission) && !MerchantScope.Contains(permission),
-                RoleType.MerchantRole =>
-                    !GlobalOnly.Contains(permission) && !OrganizationScope.Contains(permission),
+                Permissions.PaymentTopUpOrganization,
+                Permissions.PaymentGetOrganizationTransactions,
+                Permissions.OrganizationReportUsage,
+                Permissions.OrganizationReportUsageExport,
+
+                Permissions.CustomerAdminCreate, Permissions.CustomerAdminGetAll,
+                Permissions.CustomerAdminGetById, Permissions.CustomerAdminSetPassword,
+                Permissions.CustomerAdminBlock, Permissions.CustomerAdminUnblock,
+                Permissions.CustomerAdminDelete,
+            })
+            .ToHashSet();
+
+        /// <summary>
+        /// Platform/Merchant rol uchun ruxsat etilgan permissionlar —
+        /// barcha platform permissionlari, lekin <see cref="ManageOnly"/> bundan mustasno.
+        /// </summary>
+        public static readonly HashSet<string> MerchantAllowed = Permissions.PlatformAll
+            .Where(p => !ManageOnly.Contains(p))
+            .ToHashSet();
+
+        /// <summary>
+        /// Berilgan rol turi uchun permissionning ruxsat etilganligini qaytaradi.
+        /// </summary>
+        public static bool IsAllowedFor(RoleKind kind, string permission)
+            => kind switch
+            {
+                // Manage — to'liq nazorat: barcha permissionlar (platform + customer).
+                RoleKind.PlatformManage => true,
+                RoleKind.PlatformMerchant => MerchantAllowed.Contains(permission),
+                RoleKind.CustomerCorporate => CorporateAllowed.Contains(permission),
+                RoleKind.CustomerNatural => NaturalAllowed.Contains(permission),
                 _ => false
             };
     }

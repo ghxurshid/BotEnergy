@@ -1,3 +1,4 @@
+using Domain.Auth;
 using Domain.Constants;
 using Domain.Dtos;
 using Domain.Dtos.Base;
@@ -8,103 +9,64 @@ using Domain.Repositories;
 
 namespace Application.Services
 {
+    /// <summary>
+    /// Platform (Manage/Merchant) rollarini boshqarish.
+    /// Manage — barcha platform rollarni; Merchant — faqat o'z merchanti rollarini.
+    /// </summary>
     public class RoleService : IRoleService
     {
-        private readonly IRoleRepository _roleRepository;
-        private readonly IUserRepository _userRepository;
-        private readonly IStationRepository _stationRepository;
-        private readonly IOrganizationRepository _organizationRepository;
+        private readonly IPlatformRoleRepository _roleRepository;
+        private readonly IPermissionRepository _permissionRepository;
         private readonly IMerchantRepository _merchantRepository;
 
         public RoleService(
-            IRoleRepository roleRepository,
-            IUserRepository userRepository,
-            IStationRepository stationRepository,
-            IOrganizationRepository organizationRepository,
+            IPlatformRoleRepository roleRepository,
+            IPermissionRepository permissionRepository,
             IMerchantRepository merchantRepository)
         {
             _roleRepository = roleRepository;
-            _userRepository = userRepository;
-            _stationRepository = stationRepository;
-            _organizationRepository = organizationRepository;
+            _permissionRepository = permissionRepository;
             _merchantRepository = merchantRepository;
         }
 
-        public async Task<GenericDto<CreateRoleResultDto>> CreateRoleAsync(CreateRoleDto dto, long callerId, HashSet<string> callerPermissions)
+        public async Task<GenericDto<CreateRoleResultDto>> CreateRoleAsync(CreateRoleDto dto, AccessScope scope)
         {
-            var caller = await _userRepository.GetByIdAsync(callerId);
-            if (caller is null)
-                return GenericDto<CreateRoleResultDto>.Error(401, "Foydalanuvchi aniqlanmadi.");
+            long? merchantId;
 
-            // Organization OrganizationId ustuvor — UserAdminService dagi qoidaga mos.
-            if (dto.OrganizationId.HasValue && dto.StationId.HasValue)
-                dto.StationId = null;
-
-            RoleEntity role;
-
-            if (dto.OrganizationId.HasValue)
+            if (scope.IsManage)
             {
-                var orgCheck = await EnsureCanCreateInOrganizationAsync(caller, callerPermissions, dto.OrganizationId.Value);
-                if (orgCheck is not null)
-                    return GenericDto<CreateRoleResultDto>.Error(orgCheck.Code, orgCheck.Message);
-
-                role = new LegalRoleEntity
+                merchantId = dto.MerchantId;
+                if (merchantId.HasValue)
                 {
-                    Name = dto.Name,
-                    Description = dto.Description,
-                    IsActive = dto.IsActive,
-                    OrganizationId = dto.OrganizationId.Value
-                };
+                    var merchant = await _merchantRepository.GetByIdAsync(merchantId.Value);
+                    if (merchant is null)
+                        return GenericDto<CreateRoleResultDto>.Error(404, "Merchant topilmadi.");
+                }
             }
-            else if (dto.StationId.HasValue)
+            else if (scope.IsMerchant)
             {
-                var station = await _stationRepository.GetByIdAsync(dto.StationId.Value);
-                if (station is null)
-                    return GenericDto<CreateRoleResultDto>.Error(404, "Stansiya topilmadi.");
-
-                var stationCheck = await EnsureCanCreateInMerchantAsync(caller, callerPermissions, station.MerchantId);
-                if (stationCheck is not null)
-                    return GenericDto<CreateRoleResultDto>.Error(stationCheck.Code, stationCheck.Message);
-
-                role = new MerchantRoleEntity
-                {
-                    Name = dto.Name,
-                    Description = dto.Description,
-                    IsActive = dto.IsActive,
-                    MerchantId = station.MerchantId
-                };
+                if (scope.MerchantId is null)
+                    return GenericDto<CreateRoleResultDto>.Error(403, "Merchant doirasi aniqlanmadi.");
+                merchantId = scope.MerchantId;
             }
             else
             {
-                if (caller is not PlatformUserEntity)
-                    return GenericDto<CreateRoleResultDto>.Error(403,
-                        "Global (platform) rol yaratish faqat platform foydalanuvchisiga ruxsat etilgan.");
-
-                role = new PlatformRoleEntity
-                {
-                    Name = dto.Name,
-                    Description = dto.Description,
-                    IsActive = dto.IsActive
-                };
+                return GenericDto<CreateRoleResultDto>.Error(403, "Platform rol yaratish huquqingiz yo'q.");
             }
 
-            if (dto.PermissionIds is not null && dto.PermissionIds.Count > 0)
+            var kind = merchantId is null ? RoleKind.PlatformManage : RoleKind.PlatformMerchant;
+
+            var role = new PlatformRoleEntity
             {
-                var validIds = await _roleRepository.FilterExistingPermissionIdsAsync(dto.PermissionIds);
-                var permissions = await _roleRepository.GetAllPermissionsAsync();
-                var nameById = permissions.ToDictionary(p => p.Id, p => p.Name);
+                Name = dto.Name,
+                Description = dto.Description,
+                IsActive = dto.IsActive,
+                MerchantId = merchantId
+            };
 
-                foreach (var pid in validIds)
-                {
-                    if (!PermissionScopes.IsAllowedFor(role.RoleType, nameById[pid]))
-                        return GenericDto<CreateRoleResultDto>.Error(400,
-                            $"'{nameById[pid]}' permissioni '{role.RoleType}' rolga biriktirilmaydi.");
-                }
-
-                role.RolePermissions = validIds
-                    .Select(pid => new RolePermissionEntity { PermissionId = pid })
-                    .ToList();
-            }
+            var permError = await ApplyPermissionsAsync(role, dto.PermissionIds, kind);
+            if (permError is not null)
+                return GenericDto<CreateRoleResultDto>.Error(permError.Value.code, permError.Value.message);
 
             var created = await _roleRepository.CreateAsync(role);
 
@@ -115,15 +77,15 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<GetRolesResultDto>> GetRolesAsync(long callerId, HashSet<string> callerPermissions)
+        public async Task<GenericDto<GetRolesResultDto>> GetRolesAsync(AccessScope scope)
         {
-            var caller = await _userRepository.GetByIdAsync(callerId);
-            if (caller is null)
-                return GenericDto<GetRolesResultDto>.Error(401, "Foydalanuvchi aniqlanmadi.");
-
-            var scope = await BuildAccessibleScopeAsync(caller, callerPermissions);
-
-            var roles = await _roleRepository.GetByScopeAsync(scope.RoleTypes, scope.OrganizationId, scope.MerchantId);
+            List<PlatformRoleEntity> roles;
+            if (scope.IsManage)
+                roles = await _roleRepository.GetByScopeAsync(includeManage: true, merchantId: null);
+            else if (scope.IsMerchant && scope.MerchantId.HasValue)
+                roles = await _roleRepository.GetByScopeAsync(includeManage: false, merchantId: scope.MerchantId);
+            else
+                return GenericDto<GetRolesResultDto>.Error(403, "Rol ko'rish huquqingiz yo'q.");
 
             var result = new GetRolesResultDto();
             foreach (var role in roles)
@@ -135,69 +97,51 @@ namespace Application.Services
             return GenericDto<GetRolesResultDto>.Success(result);
         }
 
-        public async Task<GenericDto<RoleItemDto>> GetRoleByIdAsync(long id, long callerId, HashSet<string> callerPermissions)
+        public async Task<GenericDto<RoleItemDto>> GetRoleByIdAsync(long id, AccessScope scope)
         {
-            var caller = await _userRepository.GetByIdAsync(callerId);
-            if (caller is null)
-                return GenericDto<RoleItemDto>.Error(401, "Foydalanuvchi aniqlanmadi.");
-
             var role = await _roleRepository.GetByIdAsync(id);
             if (role is null)
                 return GenericDto<RoleItemDto>.Error(404, "Rol topilmadi.");
 
-            var accessCheck = await EnsureCanAccessRoleAsync(caller, callerPermissions, role);
-            if (accessCheck is not null)
-                return GenericDto<RoleItemDto>.Error(accessCheck.Code, accessCheck.Message);
+            if (!CanAccess(role, scope))
+                return GenericDto<RoleItemDto>.Error(403, "Bu rol sizning doirangizga tegishli emas.");
 
             var permissions = await _roleRepository.GetPermissionsByRoleIdAsync(role.Id);
             return GenericDto<RoleItemDto>.Success(ToItem(role, permissions));
         }
 
-        public async Task<GenericDto<RoleResultDto>> UpdateRoleAsync(long id, UpdateRoleDto dto, long callerId, HashSet<string> callerPermissions)
+        public async Task<GenericDto<RoleResultDto>> UpdateRoleAsync(long id, UpdateRoleDto dto, AccessScope scope)
         {
-            var caller = await _userRepository.GetByIdAsync(callerId);
-            if (caller is null)
-                return GenericDto<RoleResultDto>.Error(401, "Foydalanuvchi aniqlanmadi.");
-
             var role = await _roleRepository.GetByIdWithPermissionsAsync(id);
             if (role is null)
                 return GenericDto<RoleResultDto>.Error(404, "Rol topilmadi.");
 
-            var accessCheck = await EnsureCanAccessRoleAsync(caller, callerPermissions, role);
-            if (accessCheck is not null)
-                return GenericDto<RoleResultDto>.Error(accessCheck.Code, accessCheck.Message);
+            if (!CanAccess(role, scope))
+                return GenericDto<RoleResultDto>.Error(403, "Bu rol sizning doirangizga tegishli emas.");
 
-            // Scope (RoleType, MerchantId, OrganizationId) o'zgartirilmaydi —
-            // faqat name, description, isActive va permissionlar.
             if (!string.IsNullOrWhiteSpace(dto.Name)) role.Name = dto.Name;
             if (dto.Description is not null) role.Description = dto.Description;
             if (dto.IsActive.HasValue) role.IsActive = dto.IsActive.Value;
 
             if (dto.PermissionIds is not null)
             {
-                var newIds = (await _roleRepository.FilterExistingPermissionIdsAsync(dto.PermissionIds)).ToHashSet();
-                var allPermissions = await _roleRepository.GetAllPermissionsAsync();
+                var kind = role.MerchantId is null ? RoleKind.PlatformManage : RoleKind.PlatformMerchant;
+                var newIds = (await _permissionRepository.FilterExistingIdsAsync(dto.PermissionIds)).ToHashSet();
+                var allPermissions = await _permissionRepository.GetAllAsync();
                 var nameById = allPermissions.ToDictionary(p => p.Id, p => p.Name);
 
                 foreach (var pid in newIds)
-                {
-                    if (!PermissionScopes.IsAllowedFor(role.RoleType, nameById[pid]))
-                        return GenericDto<RoleResultDto>.Error(400,
-                            $"'{nameById[pid]}' permissioni '{role.RoleType}' rolga biriktirilmaydi.");
-                }
+                    if (!PermissionScopes.IsAllowedFor(kind, nameById[pid]))
+                        return GenericDto<RoleResultDto>.Error(400, $"'{nameById[pid]}' permissioni '{kind}' rolga biriktirilmaydi.");
 
-                role.RolePermissions ??= new List<RolePermissionEntity>();
+                role.RolePermissions ??= new List<PlatformRolePermissionEntity>();
 
                 foreach (var rp in role.RolePermissions.Where(rp => !newIds.Contains(rp.PermissionId)))
                     rp.IsDeleted = true;
 
-                var existingIds = role.RolePermissions
-                    .Where(rp => !rp.IsDeleted)
-                    .Select(rp => rp.PermissionId)
-                    .ToHashSet();
-
+                var existingIds = role.RolePermissions.Where(rp => !rp.IsDeleted).Select(rp => rp.PermissionId).ToHashSet();
                 foreach (var pid in newIds.Except(existingIds))
-                    role.RolePermissions.Add(new RolePermissionEntity { PermissionId = pid });
+                    role.RolePermissions.Add(new PlatformRolePermissionEntity { PermissionId = pid });
             }
 
             await _roleRepository.UpdateAsync(role);
@@ -209,19 +153,14 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<RoleResultDto>> DeleteRoleAsync(long id, long callerId, HashSet<string> callerPermissions)
+        public async Task<GenericDto<RoleResultDto>> DeleteRoleAsync(long id, AccessScope scope)
         {
-            var caller = await _userRepository.GetByIdAsync(callerId);
-            if (caller is null)
-                return GenericDto<RoleResultDto>.Error(401, "Foydalanuvchi aniqlanmadi.");
-
             var role = await _roleRepository.GetByIdAsync(id);
             if (role is null)
                 return GenericDto<RoleResultDto>.Error(404, "Rol topilmadi.");
 
-            var accessCheck = await EnsureCanAccessRoleAsync(caller, callerPermissions, role);
-            if (accessCheck is not null)
-                return GenericDto<RoleResultDto>.Error(accessCheck.Code, accessCheck.Message);
+            if (!CanAccess(role, scope))
+                return GenericDto<RoleResultDto>.Error(403, "Bu rol sizning doirangizga tegishli emas.");
 
             await _roleRepository.DeleteAsync(id);
 
@@ -232,19 +171,14 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<GetRolePermissionsResultDto>> GetRolePermissionsAsync(long roleId, long callerId, HashSet<string> callerPermissions)
+        public async Task<GenericDto<GetRolePermissionsResultDto>> GetRolePermissionsAsync(long roleId, AccessScope scope)
         {
-            var caller = await _userRepository.GetByIdAsync(callerId);
-            if (caller is null)
-                return GenericDto<GetRolePermissionsResultDto>.Error(401, "Foydalanuvchi aniqlanmadi.");
-
             var role = await _roleRepository.GetByIdAsync(roleId);
             if (role is null)
                 return GenericDto<GetRolePermissionsResultDto>.Error(404, "Rol topilmadi.");
 
-            var accessCheck = await EnsureCanAccessRoleAsync(caller, callerPermissions, role);
-            if (accessCheck is not null)
-                return GenericDto<GetRolePermissionsResultDto>.Error(accessCheck.Code, accessCheck.Message);
+            if (!CanAccess(role, scope))
+                return GenericDto<GetRolePermissionsResultDto>.Error(403, "Bu rol sizning doirangizga tegishli emas.");
 
             var permissions = await _roleRepository.GetPermissionsByRoleIdAsync(roleId);
 
@@ -256,225 +190,64 @@ namespace Application.Services
             });
         }
 
-        public async Task<GenericDto<GetAllowedPermissionsResultDto>> GetAllowedPermissionsAsync(RoleType roleType, long callerId, HashSet<string> callerPermissions)
+        public async Task<GenericDto<GetAllowedPermissionsResultDto>> GetAllowedPermissionsAsync(RoleKind kind, AccessScope scope)
         {
-            var caller = await _userRepository.GetByIdAsync(callerId);
-            if (caller is null)
-                return GenericDto<GetAllowedPermissionsResultDto>.Error(401, "Foydalanuvchi aniqlanmadi.");
+            if (kind is not (RoleKind.PlatformManage or RoleKind.PlatformMerchant))
+                return GenericDto<GetAllowedPermissionsResultDto>.Error(400, "Bu servis faqat platform rol turlarini boshqaradi.");
 
-            var managementCheck = EnsureCanManageRoleType(caller, callerPermissions, roleType);
-            if (managementCheck is not null)
-                return GenericDto<GetAllowedPermissionsResultDto>.Error(managementCheck.Code, managementCheck.Message);
+            if (kind == RoleKind.PlatformManage && !scope.IsManage)
+                return GenericDto<GetAllowedPermissionsResultDto>.Error(403, "Manage rol turini boshqarish uchun ruxsatingiz yo'q.");
 
-            var allPermissions = await _roleRepository.GetAllPermissionsAsync();
+            var allPermissions = await _permissionRepository.GetAllAsync();
             var allowed = allPermissions
-                .Where(p => PermissionScopes.IsAllowedFor(roleType, p.Name))
+                .Where(p => PermissionScopes.IsAllowedFor(kind, p.Name))
                 .Select(p => new AllowedPermissionDto { Id = p.Id, Name = p.Name })
                 .ToList();
 
             return GenericDto<GetAllowedPermissionsResultDto>.Success(new GetAllowedPermissionsResultDto
             {
-                RoleType = roleType,
+                Kind = kind,
                 Permissions = allowed
             });
         }
 
-        // ── Permission flow helpers ────────────────────────────────────────────
-
-        /// <summary>
-        /// Caller qaysi scopelardagi rollarni ko'ra olishini hisoblaydi.
-        /// </summary>
-        private async Task<AccessibleScope> BuildAccessibleScopeAsync(UserEntity caller, HashSet<string> callerPermissions)
+        private async Task<(int code, string message)?> ApplyPermissionsAsync(PlatformRoleEntity role, List<long>? permissionIds, RoleKind kind)
         {
-            switch (caller)
-            {
-                case PlatformUserEntity:
-                    // Platform — barcha scopelardagi barcha rollarni ko'radi (cheklovsiz).
-                    return new AccessibleScope(
-                        RoleTypes: new[] { RoleType.PlatformRole, RoleType.NaturalRole, RoleType.LegalRole, RoleType.MerchantRole },
-                        OrganizationId: null,
-                        MerchantId: null);
+            if (permissionIds is null || permissionIds.Count == 0)
+                return null;
 
-                case LegalUserEntity legal:
-                    return new AccessibleScope(
-                        RoleTypes: new[] { RoleType.LegalRole },
-                        OrganizationId: legal.OrganizationId,
-                        MerchantId: null);
+            var validIds = await _permissionRepository.FilterExistingIdsAsync(permissionIds);
+            var permissions = await _permissionRepository.GetAllAsync();
+            var nameById = permissions.ToDictionary(p => p.Id, p => p.Name);
 
-                case MerchantUserEntity merchantUser:
-                    var station = merchantUser.Station
-                        ?? await _stationRepository.GetByIdAsync(merchantUser.StationId);
-                    return new AccessibleScope(
-                        RoleTypes: new[] { RoleType.MerchantRole },
-                        OrganizationId: null,
-                        MerchantId: station?.MerchantId);
+            foreach (var pid in validIds)
+                if (!PermissionScopes.IsAllowedFor(kind, nameById[pid]))
+                    return (400, $"'{nameById[pid]}' permissioni '{kind}' rolga biriktirilmaydi.");
 
-                default:
-                    // NaturalUser (mobil) — rol boshqarmaydi.
-                    return new AccessibleScope(
-                        RoleTypes: Array.Empty<RoleType>(),
-                        OrganizationId: null,
-                        MerchantId: null);
-            }
+            role.RolePermissions = validIds
+                .Select(pid => new PlatformRolePermissionEntity { PermissionId = pid })
+                .ToList();
+
+            return null;
         }
 
-        /// <summary>
-        /// Caller berilgan rolga (uning scopega) kira olishini tekshiradi.
-        /// </summary>
-        private async Task<AccessError?> EnsureCanAccessRoleAsync(UserEntity caller, HashSet<string> callerPermissions, RoleEntity role)
+        private static bool CanAccess(PlatformRoleEntity role, AccessScope scope)
         {
-            switch (caller)
-            {
-                case PlatformUserEntity:
-                    // Platform: cross-scope rolga kirish uchun ham tegishli permission talab etiladi.
-                    return role switch
-                    {
-                        LegalRoleEntity when !callerPermissions.Contains(Permissions.OrganizationAdminGetById)
-                            => new AccessError(403, "Tashkilot rollari bilan ishlash uchun 'organization.admin.getbyid' ruxsati kerak."),
-                        MerchantRoleEntity when !callerPermissions.Contains(Permissions.MerchantAdminGetById)
-                            => new AccessError(403, "Merchant rollari bilan ishlash uchun 'merchant.admin.getbyid' ruxsati kerak."),
-                        _ => null
-                    };
-
-                case LegalUserEntity legal:
-                    if (role is not LegalRoleEntity legalRole)
-                        return new AccessError(403, "Tashkilot foydalanuvchisi faqat o'z tashkiloti rollarini boshqara oladi.");
-                    if (legalRole.OrganizationId != legal.OrganizationId)
-                        return new AccessError(403, "Bu rol sizning tashkilotingizga tegishli emas.");
-                    return null;
-
-                case MerchantUserEntity merchantUser:
-                    if (role is not MerchantRoleEntity merchantRole)
-                        return new AccessError(403, "Merchant foydalanuvchisi faqat o'z merchanti rollarini boshqara oladi.");
-                    var station = merchantUser.Station
-                        ?? await _stationRepository.GetByIdAsync(merchantUser.StationId);
-                    if (station is null || merchantRole.MerchantId != station.MerchantId)
-                        return new AccessError(403, "Bu rol sizning merchantingizga tegishli emas.");
-                    return null;
-
-                default:
-                    // NaturalUser (mobil) — rol boshqarmaydi.
-                    return new AccessError(403, "Rol boshqarish uchun ruxsatingiz yo'q.");
-            }
+            if (scope.IsManage)
+                return true;
+            return scope.IsMerchant && role.MerchantId.HasValue && role.MerchantId == scope.MerchantId;
         }
 
-        /// <summary>
-        /// Caller berilgan organization scopeida rol yarata olishini tekshiradi.
-        /// </summary>
-        private async Task<AccessError?> EnsureCanCreateInOrganizationAsync(UserEntity caller, HashSet<string> callerPermissions, long organizationId)
-        {
-            var organization = await _organizationRepository.GetByIdAsync(organizationId);
-            if (organization is null)
-                return new AccessError(404, "Tashkilot topilmadi.");
-
-            if (!organization.IsActive)
-                return new AccessError(400, "Tashkilot faol emas.");
-
-            switch (caller)
-            {
-                case PlatformUserEntity:
-                    if (!callerPermissions.Contains(Permissions.OrganizationAdminCreate))
-                        return new AccessError(403, "Tashkilot scopeida rol yaratish uchun 'organization.admin.create' ruxsati kerak.");
-                    return null;
-
-                case LegalUserEntity legal:
-                    if (legal.OrganizationId != organizationId)
-                        return new AccessError(403, "Faqat o'z tashkilotingiz uchun rol yarata olasiz.");
-                    return null;
-
-                case MerchantUserEntity:
-                    return new AccessError(403, "Merchant foydalanuvchisi tashkilot rolini yarata olmaydi.");
-
-                default:
-                    return new AccessError(403, "Tashkilot rolini yaratish uchun ruxsatingiz yo'q.");
-            }
-        }
-
-        /// <summary>
-        /// Caller berilgan merchant scopeida rol yarata olishini tekshiradi.
-        /// </summary>
-        private async Task<AccessError?> EnsureCanCreateInMerchantAsync(UserEntity caller, HashSet<string> callerPermissions, long merchantId)
-        {
-            var merchant = await _merchantRepository.GetByIdAsync(merchantId);
-            if (merchant is null)
-                return new AccessError(404, "Merchant topilmadi.");
-
-            if (!merchant.IsActive)
-                return new AccessError(400, "Merchant faol emas.");
-
-            switch (caller)
-            {
-                case PlatformUserEntity:
-                    if (!callerPermissions.Contains(Permissions.MerchantAdminRegister) ||
-                        !callerPermissions.Contains(Permissions.StationAdminCreate))
-                        return new AccessError(403,
-                            "Merchant scopeida rol yaratish uchun 'merchant.admin.register' va 'station.admin.create' ruxsatlari kerak.");
-                    return null;
-
-                case MerchantUserEntity merchantUser:
-                    var station = merchantUser.Station
-                        ?? await _stationRepository.GetByIdAsync(merchantUser.StationId);
-                    if (station is null || station.MerchantId != merchantId)
-                        return new AccessError(403, "Faqat o'z merchantingiz uchun rol yarata olasiz.");
-                    return null;
-
-                case LegalUserEntity:
-                    return new AccessError(403, "Tashkilot foydalanuvchisi merchant rolini yarata olmaydi.");
-
-                default:
-                    return new AccessError(403, "Merchant rolini yaratish uchun ruxsatingiz yo'q.");
-            }
-        }
-
-        /// <summary>
-        /// Caller berilgan rol turini boshqara olishini tekshiradi
-        /// (GetAllowedPermissions uchun).
-        /// </summary>
-        private static AccessError? EnsureCanManageRoleType(UserEntity caller, HashSet<string> callerPermissions, RoleType roleType)
-            => (caller, roleType) switch
-            {
-                // Platform — barcha rol turlarini boshqaradi, lekin cross-scope uchun permission talab etiladi.
-                (PlatformUserEntity, RoleType.PlatformRole) => null,
-                (PlatformUserEntity, RoleType.NaturalRole) => null,
-                (PlatformUserEntity, RoleType.LegalRole) when !callerPermissions.Contains(Permissions.OrganizationAdminCreate)
-                    => new AccessError(403, "Tashkilot rolini boshqarish uchun 'organization.admin.create' ruxsati kerak."),
-                (PlatformUserEntity, RoleType.LegalRole) => null,
-                (PlatformUserEntity, RoleType.MerchantRole) when
-                    !callerPermissions.Contains(Permissions.MerchantAdminRegister) ||
-                    !callerPermissions.Contains(Permissions.StationAdminCreate)
-                    => new AccessError(403,
-                        "Merchant rolini boshqarish uchun 'merchant.admin.register' va 'station.admin.create' ruxsatlari kerak."),
-                (PlatformUserEntity, RoleType.MerchantRole) => null,
-
-                (LegalUserEntity, RoleType.LegalRole) => null,
-                (LegalUserEntity, _) => new AccessError(403,
-                    "Tashkilot foydalanuvchisi faqat tashkilot rolini boshqara oladi."),
-
-                (MerchantUserEntity, RoleType.MerchantRole) => null,
-                (MerchantUserEntity, _) => new AccessError(403,
-                    "Merchant foydalanuvchisi faqat merchant rolini boshqara oladi."),
-
-                // NaturalUser (mobil) va boshqalar — rol turini boshqarmaydi.
-                _ => new AccessError(403, "Bu rol turini boshqarish uchun ruxsatingiz yo'q.")
-            };
-
-        private static RoleItemDto ToItem(RoleEntity role, List<string> permissions) => new()
+        private static RoleItemDto ToItem(PlatformRoleEntity role, List<string> permissions) => new()
         {
             Id = role.Id,
             Name = role.Name,
             Description = role.Description,
             IsActive = role.IsActive,
-            RoleType = role.RoleType,
-            OrganizationId = (role as LegalRoleEntity)?.OrganizationId,
-            MerchantId = (role as MerchantRoleEntity)?.MerchantId,
+            Kind = (role.MerchantId is null ? RoleKind.PlatformManage : RoleKind.PlatformMerchant).ToString(),
+            MerchantId = role.MerchantId,
+            OrganizationId = null,
             Permissions = permissions
         };
-
-        private sealed record AccessibleScope(
-            IReadOnlyCollection<RoleType> RoleTypes,
-            long? OrganizationId,
-            long? MerchantId);
-
-        private sealed record AccessError(int Code, string Message);
     }
 }

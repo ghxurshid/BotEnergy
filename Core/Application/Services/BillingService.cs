@@ -1,6 +1,7 @@
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
 
@@ -8,10 +9,10 @@ namespace Application.Services
 {
     public class BillingService : IBillingService
     {
-        private readonly IUserRepository _userRepo;
+        private readonly ICustomerUserRepository _userRepo;
         private readonly IProductProcessRepository _processRepo;
 
-        public BillingService(IUserRepository userRepo, IProductProcessRepository processRepo)
+        public BillingService(ICustomerUserRepository userRepo, IProductProcessRepository processRepo)
         {
             _userRepo = userRepo;
             _processRepo = processRepo;
@@ -23,12 +24,10 @@ namespace Application.Services
             if (user is null)
                 return GenericDto<GetBalanceResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
-            decimal balance = ResolveBalance(user);
-
             return GenericDto<GetBalanceResultDto>.Success(new GetBalanceResultDto
             {
                 UserId = userId,
-                Balance = balance
+                Balance = ResolveBalance(user)
             });
         }
 
@@ -43,25 +42,21 @@ namespace Application.Services
 
             decimal newBalance;
 
-            if (user is NaturalUserEntity natural)
+            if (user.Type == CustomerUserType.Natural)
             {
-                natural.Balance += dto.Amount;
-                newBalance = natural.Balance;
+                user.Balance += dto.Amount;
+                newBalance = user.Balance;
             }
-            else if (user is LegalUserEntity legal)
+            else // Corporate
             {
-                if (legal.Organization is null)
-                    return GenericDto<TopUpBalanceResultDto>.Error(400, "Yuridik foydalanuvchining tashkiloti topilmadi.");
+                if (user.Organization is null)
+                    return GenericDto<TopUpBalanceResultDto>.Error(400, "Corporate foydalanuvchining tashkiloti topilmadi.");
 
-                legal.Organization.Balance += dto.Amount;
-                newBalance = legal.Organization.Balance;
-            }
-            else
-            {
-                return GenericDto<TopUpBalanceResultDto>.Error(400, "Foydalanuvchi turi aniqlanmadi.");
+                user.Organization.Balance += dto.Amount;
+                newBalance = user.Organization.Balance;
             }
 
-            await _userRepo.UpdateUserAsync(user);
+            await _userRepo.UpdateAsync(user);
 
             return GenericDto<TopUpBalanceResultDto>.Success(new TopUpBalanceResultDto
             {
@@ -83,8 +78,7 @@ namespace Application.Services
                 return 0;
 
             // ExecuteUpdateAsync orqali ushbu scope ichida row allaqachon yangilangan bo'lishi mumkin
-            // (telemetry hot path), shuning uchun freshlatib olamiz — IsBalanceDeducted va GivenAmount
-            // haqiqiy DB qiymati bo'lishi kerak.
+            // (telemetry hot path), shuning uchun freshlatib olamiz.
             await _processRepo.ReloadAsync(process);
 
             if (process.IsBalanceDeducted)
@@ -104,17 +98,17 @@ namespace Application.Services
 
             decimal deducted = 0;
 
-            if (user is NaturalUserEntity natural)
+            if (user.Type == CustomerUserType.Natural)
             {
-                deducted = Math.Min(natural.Balance, cost);
-                natural.Balance -= deducted;
-                await _userRepo.UpdateUserAsync(natural);
+                deducted = Math.Min(user.Balance, cost);
+                user.Balance -= deducted;
+                await _userRepo.UpdateAsync(user);
             }
-            else if (user is LegalUserEntity legal && legal.Organization is not null)
+            else if (user.Type == CustomerUserType.Corporate && user.Organization is not null)
             {
-                deducted = Math.Min(legal.Organization.Balance, cost);
-                legal.Organization.Balance -= deducted;
-                await _userRepo.UpdateUserAsync(legal);
+                deducted = Math.Min(user.Organization.Balance, cost);
+                user.Organization.Balance -= deducted;
+                await _userRepo.UpdateAsync(user);
             }
 
             process.IsBalanceDeducted = true;
@@ -123,10 +117,10 @@ namespace Application.Services
             return deducted;
         }
 
-        private static decimal ResolveBalance(UserEntity user) => user switch
+        private static decimal ResolveBalance(CustomerUserEntity user) => user.Type switch
         {
-            NaturalUserEntity natural => natural.Balance,
-            LegalUserEntity legal => legal.Organization?.Balance ?? 0,
+            CustomerUserType.Natural => user.Balance,
+            CustomerUserType.Corporate => user.Organization?.Balance ?? 0,
             _ => 0
         };
     }

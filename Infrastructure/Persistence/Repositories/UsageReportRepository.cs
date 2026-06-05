@@ -81,8 +81,7 @@ namespace Persistence.Repositories
                     query.Where(p => p.Session!.UserId == u.UserId),
 
                 UsageReportScope.Organization o =>
-                    query.Where(p =>
-                        ((LegalUserEntity)p.Session!.User!).OrganizationId == o.OrganizationId),
+                    query.Where(p => p.Session!.User!.OrganizationId == o.OrganizationId),
 
                 UsageReportScope.Merchant m when m.StationId is null =>
                     query.Where(p => p.Session!.Device!.Station!.MerchantId == m.MerchantId),

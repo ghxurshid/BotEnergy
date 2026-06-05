@@ -1,6 +1,7 @@
 using Application.Helpers;
 using Domain.Constants;
 using Domain.Entities;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Context;
 
@@ -8,8 +9,8 @@ namespace Persistence.Seed
 {
     public static class DataSeeder
     {
-        private const string DefaultOrganizationName = "BotEnergy System";
-        private const string DefaultRoleName = "SuperAdmin";
+        private const string ManageRoleName = "SuperAdmin";
+        private const string NaturalRoleName = "Customer";
         private const string DefaultPhoneNumber = "998901234567";
         private const string DefaultPassword = "Admin@123";
         private const string DefaultMail = "admin@botenergy.uz";
@@ -17,102 +18,121 @@ namespace Persistence.Seed
 
         public static async Task SeedAsync(AppDbContext context)
         {
-            var organization = await SeedDefaultOrganizationAsync(context);
-            var role = await SeedDefaultRoleAsync(context, organization.Id);
-            await SeedRolePermissionsAsync(context, role);
-            await SeedDefaultUserAsync(context, role.Id);
+            await EnsurePermissionRowsAsync(context);
+
+            var manageRole = await SeedManageRoleAsync(context);
+            await SeedManageUserAsync(context, manageRole.Id);
+
+            await SeedNaturalRoleAsync(context);
         }
 
-        private static async Task<OrganizationEntity> SeedDefaultOrganizationAsync(AppDbContext context)
+        /// <summary>Barcha permission satrlari (Permissions.All) mavjudligini ta'minlaydi.</summary>
+        private static async Task EnsurePermissionRowsAsync(AppDbContext context)
         {
-            var organization = await context.Organizations
-                .FirstOrDefaultAsync(o => o.Name == DefaultOrganizationName && !o.IsDeleted);
+            var existing = await context.Permissions
+                .Select(p => p.Name)
+                .ToListAsync();
 
-            if (organization is not null)
-                return organization;
+            var missing = Permissions.All.Where(p => !existing.Contains(p)).ToList();
+            if (missing.Count == 0)
+                return;
 
-            organization = new OrganizationEntity
-            {
-                Name = DefaultOrganizationName,
-                Inn = "000000000",
-                Address = "Tashkent",
-                PhoneNumber = "998000000000",
-                IsActive = true
-            };
+            foreach (var name in missing)
+                await context.Permissions.AddAsync(new PermissionEntity { Name = name });
 
-            await context.Organizations.AddAsync(organization);
             await context.SaveChangesAsync();
-
-            return organization;
         }
 
-        private static async Task<RoleEntity> SeedDefaultRoleAsync(AppDbContext context, long organizationId)
+        private static async Task<PlatformRoleEntity> SeedManageRoleAsync(AppDbContext context)
         {
-            var role = await context.Roles
-                .FirstOrDefaultAsync(r => r.Name == DefaultRoleName && !r.IsDeleted);
+            var role = await context.PlatformRoles
+                .FirstOrDefaultAsync(r => r.Name == ManageRoleName && !r.IsDeleted);
 
-            if (role is not null)
-                return role;
-
-            role = new PlatformRoleEntity
+            if (role is null)
             {
-                Name = DefaultRoleName,
-                Description = "Platforma darajasidagi barcha huquqlarga ega administrator roli.",
-                IsActive = true
-            };
+                role = new PlatformRoleEntity
+                {
+                    Name = ManageRoleName,
+                    Description = "Platforma darajasidagi barcha huquqlarga ega Manage administrator roli.",
+                    IsActive = true,
+                    MerchantId = null
+                };
+                await context.PlatformRoles.AddAsync(role);
+                await context.SaveChangesAsync();
+            }
 
-            await context.Roles.AddAsync(role);
-            await context.SaveChangesAsync();
+            await SyncRolePermissionsAsync(
+                context, role.Id, Permissions.All,
+                existing: await context.PlatformRolePermissions
+                    .Where(rp => rp.RoleId == role.Id && !rp.IsDeleted)
+                    .Include(rp => rp.Permission)
+                    .Select(rp => rp.Permission!.Name)
+                    .ToListAsync(),
+                factory: pid => new PlatformRolePermissionEntity { RoleId = role.Id, PermissionId = pid },
+                add: e => context.PlatformRolePermissions.Add(e));
 
             return role;
         }
 
-        private static async Task SeedRolePermissionsAsync(AppDbContext context, RoleEntity role)
+        private static async Task SeedNaturalRoleAsync(AppDbContext context)
         {
-            var existingPermissionNames = await context.RolePermissions
-                .Where(rp => rp.RoleId == role.Id && !rp.IsDeleted)
-                .Include(rp => rp.Permission)
-                .Select(rp => rp.Permission!.Name)
-                .ToListAsync();
+            var role = await context.CustomerRoles
+                .FirstOrDefaultAsync(r => r.Name == NaturalRoleName && r.OrganizationId == null && !r.IsDeleted);
 
-            var missingNames = Permissions.All
-                .Where(p => !existingPermissionNames.Contains(p))
-                .ToList();
+            if (role is null)
+            {
+                role = new CustomerRoleEntity
+                {
+                    Name = NaturalRoleName,
+                    Description = "Jismoniy foydalanuvchilar uchun standart rol (self-register).",
+                    IsActive = true,
+                    OrganizationId = null
+                };
+                await context.CustomerRoles.AddAsync(role);
+                await context.SaveChangesAsync();
+            }
 
+            await SyncRolePermissionsAsync(
+                context, role.Id, PermissionScopes.NaturalAllowed.ToList(),
+                existing: await context.CustomerRolePermissions
+                    .Where(rp => rp.RoleId == role.Id && !rp.IsDeleted)
+                    .Include(rp => rp.Permission)
+                    .Select(rp => rp.Permission!.Name)
+                    .ToListAsync(),
+                factory: pid => new CustomerRolePermissionEntity { RoleId = role.Id, PermissionId = pid },
+                add: e => context.CustomerRolePermissions.Add(e));
+        }
+
+        /// <summary>Rolga yetishmayotgan permissionlarni biriktiradi (umumiy yordamchi).</summary>
+        private static async Task SyncRolePermissionsAsync<TLink>(
+            AppDbContext context,
+            long roleId,
+            IReadOnlyCollection<string> desiredNames,
+            List<string> existing,
+            Func<long, TLink> factory,
+            Action<TLink> add)
+            where TLink : class
+        {
+            var missingNames = desiredNames.Where(n => !existing.Contains(n)).ToList();
             if (missingNames.Count == 0)
                 return;
 
+            var idByName = await context.Permissions
+                .Where(p => missingNames.Contains(p.Name))
+                .ToDictionaryAsync(p => p.Name, p => p.Id);
+
             foreach (var name in missingNames)
             {
-                var permission = await context.Permissions
-                    .FirstOrDefaultAsync(p => p.Name == name && !p.IsDeleted);
-
-                if (permission is null)
-                {
-                    permission = new PermissionEntity { Name = name };
-                    await context.Permissions.AddAsync(permission);
-                    await context.SaveChangesAsync();
-                }
-
-                var alreadyLinked = await context.RolePermissions
-                    .AnyAsync(rp => rp.RoleId == role.Id && rp.PermissionId == permission.Id && !rp.IsDeleted);
-
-                if (!alreadyLinked)
-                {
-                    await context.RolePermissions.AddAsync(new RolePermissionEntity
-                    {
-                        RoleId = role.Id,
-                        PermissionId = permission.Id
-                    });
-                }
+                if (idByName.TryGetValue(name, out var pid))
+                    add(factory(pid));
             }
 
             await context.SaveChangesAsync();
         }
 
-        private static async Task SeedDefaultUserAsync(AppDbContext context, long roleId)
+        private static async Task SeedManageUserAsync(AppDbContext context, long roleId)
         {
-            var user = await context.Users
+            var user = await context.PlatformUsers
                 .FirstOrDefaultAsync(u => u.PhoneNumber == DefaultPhoneNumber && !u.IsDeleted);
 
             if (user is null)
@@ -121,6 +141,7 @@ namespace Persistence.Seed
 
                 user = new PlatformUserEntity
                 {
+                    Type = PlatformUserType.Manage,
                     PhoneId = DefaultPhoneId,
                     PhoneNumber = DefaultPhoneNumber,
                     Mail = DefaultMail,
@@ -131,7 +152,7 @@ namespace Persistence.Seed
                     RoleId = roleId
                 };
 
-                await context.Users.AddAsync(user);
+                await context.PlatformUsers.AddAsync(user);
                 await context.SaveChangesAsync();
                 return;
             }

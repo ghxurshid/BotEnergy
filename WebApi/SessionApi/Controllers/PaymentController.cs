@@ -29,13 +29,13 @@ namespace SessionApi.Controllers
     {
         private readonly IPaymentService _paymentService;
         private readonly IPaymentTransactionRepository _repo;
-        private readonly IUserRepository _userRepo;
+        private readonly ICustomerUserRepository _userRepo;
         private readonly ISessionNotifier _notifier;
 
         public PaymentController(
             IPaymentService paymentService,
             IPaymentTransactionRepository repo,
-            IUserRepository userRepo,
+            ICustomerUserRepository userRepo,
             ISessionNotifier notifier)
         {
             _paymentService = paymentService;
@@ -149,11 +149,11 @@ namespace SessionApi.Controllers
                 return Unauthorized();
 
             var user = await _userRepo.GetByIdAsync(userId);
-            if (user is not LegalUserEntity legal || legal.OrganizationId is null)
-                return BadRequest(new { message = "Yuridik foydalanuvchi va biriktirilgan tashkilot kerak." });
+            if (user is not { Type: CustomerUserType.Corporate } || user.OrganizationId is null)
+                return BadRequest(new { message = "Corporate foydalanuvchi va biriktirilgan tashkilot kerak." });
 
             var skip = (Math.Max(pageNumber, 1) - 1) * pageSize;
-            var items = await _repo.ListForOrganizationAsync(legal.OrganizationId.Value, skip, pageSize, status);
+            var items = await _repo.ListForOrganizationAsync(user.OrganizationId.Value, skip, pageSize, status);
             return Ok(items);
         }
 

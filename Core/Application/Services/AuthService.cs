@@ -8,21 +8,27 @@ using Domain.Repositories;
 
 namespace Application.Services
 {
+    /// <summary>
+    /// Customer (Natural/Corporate) autentifikatsiyasi: self-register (Natural),
+    /// OTP, parol o'rnatish, login, refresh, parol tiklash.
+    /// Refresh token qiymati "c:" prefiksi bilan saqlanadi (Platform tokenlaridan ajratish uchun).
+    /// </summary>
     public class AuthService : IAuthService
     {
-        private readonly IUserRepository _userRepository;
+        private readonly ICustomerUserRepository _userRepository;
         private readonly IOtpService _otpService;
         private readonly ITokenService _tokenService;
-        private readonly IRoleRepository _roleRepository;
+        private readonly ICustomerRoleRepository _roleRepository;
         private readonly IRefreshTokenStore _refreshTokenStore;
 
+        private const string TokenPrefix = "c:";
         private static readonly TimeSpan RefreshTokenExpiry = TimeSpan.FromDays(7);
 
         public AuthService(
-            IUserRepository userRepository,
+            ICustomerUserRepository userRepository,
             IOtpService otpService,
             ITokenService tokenService,
-            IRoleRepository roleRepository,
+            ICustomerRoleRepository roleRepository,
             IRefreshTokenStore refreshTokenStore)
         {
             _userRepository = userRepository;
@@ -47,23 +53,29 @@ namespace Application.Services
                         new RegisterResultDto { UserId = existingUser.Id, ResultMessage = "OTP allaqachon tasdiqlangan. Parol o'rnatish uchun /SetPassword ga murojaat qiling." });
 
                 existingUser.IsOtpVerified = false;
-                await _userRepository.UpdateUserAsync(existingUser);
+                await _userRepository.UpdateAsync(existingUser);
                 await _otpService.GenerateOtpAsync(existingUser.PhoneNumber, OtpPurpose.Register);
 
                 return GenericDto<RegisterResultDto>.Success(
                     new RegisterResultDto { UserId = existingUser.Id, ResultMessage = "OTP kod qayta yuborildi." });
             }
 
-            var newUser = new NaturalUserEntity
+            // Self-register → Natural. Default global Natural rol avtomatik biriktiriladi
+            // (aks holda foydalanuvchida hech qanday permission bo'lmaydi).
+            var defaultRole = await _roleRepository.GetDefaultNaturalRoleAsync();
+
+            var newUser = new CustomerUserEntity
             {
+                Type = CustomerUserType.Natural,
                 PhoneId = request.PhoneId,
                 PhoneNumber = request.PhoneNumber,
                 Mail = request.Mail,
+                RoleId = defaultRole?.Id,
                 IsVerified = false,
                 IsOtpVerified = false
             };
 
-            await _userRepository.CreateUserAsync(newUser);
+            await _userRepository.CreateAsync(newUser);
             await _otpService.GenerateOtpAsync(newUser.PhoneNumber, OtpPurpose.Register);
 
             return GenericDto<RegisterResultDto>.Success(
@@ -85,7 +97,7 @@ namespace Application.Services
                 return GenericDto<VerifyResultDto>.Error(400, "OTP kod noto'g'ri yoki muddati o'tgan.");
 
             user.IsOtpVerified = true;
-            await _userRepository.UpdateUserAsync(user);
+            await _userRepository.UpdateAsync(user);
 
             return GenericDto<VerifyResultDto>.Success(
                 new VerifyResultDto { ResultMessage = "OTP tasdiqlandi. Parol o'rnatish uchun /SetPassword ga murojaat qiling." });
@@ -109,7 +121,7 @@ namespace Application.Services
             user.PasswordSalt = salt;
             user.IsVerified = true;
             user.LastLoginDate = DateTime.Now;
-            await _userRepository.UpdateUserAsync(user);
+            await _userRepository.UpdateAsync(user);
 
             var tokens = await GenerateAndPersistTokensAsync(user);
 
@@ -146,7 +158,7 @@ namespace Application.Services
 
             user.LastLoginDate = DateTime.Now;
             user.LastActiveDate = DateTime.Now;
-            await _userRepository.UpdateUserAsync(user);
+            await _userRepository.UpdateAsync(user);
 
             var tokens = await GenerateAndPersistTokensAsync(user);
 
@@ -160,6 +172,9 @@ namespace Application.Services
 
         public async Task<GenericDto<RefreshTokenResultDto>> RefreshTokenAsync(RefreshTokenDto request)
         {
+            if (!request.RefreshToken.StartsWith(TokenPrefix, StringComparison.Ordinal))
+                return GenericDto<RefreshTokenResultDto>.Error(401, "Refresh token noto'g'ri yoki muddati o'tgan.");
+
             var userId = await _refreshTokenStore.GetUserIdAsync(request.RefreshToken);
             if (userId is null)
                 return GenericDto<RefreshTokenResultDto>.Error(401, "Refresh token noto'g'ri yoki muddati o'tgan.");
@@ -174,7 +189,6 @@ namespace Application.Services
             if (user.IsDeleted)
                 return GenericDto<RefreshTokenResultDto>.Error(403, "Akkaunt o'chirilgan.");
 
-            // Rotation: eski tokenni bekor qilib, yangi juftlik yaratish
             await _refreshTokenStore.RevokeAsync(request.RefreshToken);
 
             var tokens = await GenerateAndPersistTokensAsync(user);
@@ -236,7 +250,7 @@ namespace Application.Services
             var (hash, salt) = PasswordHelper.CreatePassword(request.NewPassword);
             user.PasswordHash = hash;
             user.PasswordSalt = salt;
-            await _userRepository.UpdateUserAsync(user);
+            await _userRepository.UpdateAsync(user);
 
             await _otpService.ConsumeOtpVerificationAsync(user.PhoneNumber, OtpPurpose.ResetPassword);
 
@@ -244,11 +258,11 @@ namespace Application.Services
                 new ResetPasswordSetResultDto { ResultMessage = "Parol muvaffaqiyatli o'zgartirildi." });
         }
 
-        private async Task<(string AccessToken, string RefreshToken, DateTime AccessTokenExpiration)> GenerateAndPersistTokensAsync(UserEntity user)
+        private async Task<(string AccessToken, string RefreshToken, DateTime AccessTokenExpiration)> GenerateAndPersistTokensAsync(CustomerUserEntity user)
         {
             var permissions = await _roleRepository.GetUserPermissionsAsync(user.RoleId);
             var accessToken = _tokenService.GenerateAccessToken(user, permissions);
-            var refreshToken = _tokenService.GenerateRefreshToken();
+            var refreshToken = TokenPrefix + _tokenService.GenerateRefreshToken();
 
             await _refreshTokenStore.SaveAsync(refreshToken, user.Id, RefreshTokenExpiry);
 

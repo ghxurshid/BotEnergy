@@ -16,6 +16,10 @@ namespace Domain.Entities
 
         public ICollection<StationEntity>? Stations { get; set; }
 
-        public ICollection<MerchantRoleEntity>? Roles { get; set; }
+        /// <summary>Shu merchantga tegishli (scoped) platform rollari.</summary>
+        public ICollection<PlatformRoleEntity>? Roles { get; set; }
+
+        /// <summary>Shu merchant operatorlari (PlatformUser/Merchant).</summary>
+        public ICollection<PlatformUserEntity>? Users { get; set; }
     }
 }

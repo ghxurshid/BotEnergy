@@ -21,8 +21,8 @@ namespace Persistence.Migrations
                 .HasAnnotation("ProductVersion", "9.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "auth", "role_type", new[] { "natural_role", "legal_role", "merchant_role" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "auth", "user_type", new[] { "natural_person", "legal_entity", "merchant_person" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "auth", "role_type", new[] { "natural_role", "legal_role", "merchant_role", "platform_role" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "auth", "user_type", new[] { "natural_person", "legal_entity", "merchant_person", "platform" });
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Domain.Entities.DeviceEntity", b =>
@@ -1065,6 +1065,13 @@ namespace Persistence.Migrations
                     b.HasDiscriminator().HasValue(0);
                 });
 
+            modelBuilder.Entity("Domain.Entities.PlatformRoleEntity", b =>
+                {
+                    b.HasBaseType("Domain.Entities.RoleEntity");
+
+                    b.HasDiscriminator().HasValue(3);
+                });
+
             modelBuilder.Entity("Domain.Entities.LegalUserEntity", b =>
                 {
                     b.HasBaseType("Domain.Entities.UserEntity");
@@ -1102,6 +1109,13 @@ namespace Persistence.Migrations
                         .HasColumnName("balance");
 
                     b.HasDiscriminator().HasValue(0);
+                });
+
+            modelBuilder.Entity("Domain.Entities.PlatformUserEntity", b =>
+                {
+                    b.HasBaseType("Domain.Entities.UserEntity");
+
+                    b.HasDiscriminator().HasValue(3);
                 });
 
             modelBuilder.Entity("Domain.Entities.DeviceEntity", b =>

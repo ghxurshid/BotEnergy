@@ -14,13 +14,13 @@ namespace Application.Services
         private readonly IProductRepository _productRepo;
         private readonly IDeviceRepository _deviceRepo;
         private readonly IStationRepository _stationRepo;
-        private readonly IUserRepository _userRepo;
+        private readonly IPlatformUserRepository _userRepo;
 
         public ProductService(
             IProductRepository productRepo,
             IDeviceRepository deviceRepo,
             IStationRepository stationRepo,
-            IUserRepository userRepo)
+            IPlatformUserRepository userRepo)
         {
             _productRepo = productRepo;
             _deviceRepo = deviceRepo;
@@ -65,17 +65,8 @@ namespace Application.Services
                 if (caller is null)
                     return GenericDto<ProductResultDto>.Error(403, "Foydalanuvchi topilmadi.");
 
-                if (!callerPermissions.Contains(Permissions.StationAdminCreate))
-                {
-                    if (caller is MerchantUserEntity merchantUser && merchantUser.StationId != device.StationId)
-                        return GenericDto<ProductResultDto>.Error(403, "Bu qurilma sizning stansiyangizga tegishli emas.");
-                }
-                else if (caller is MerchantUserEntity merchantUser)
-                {
-                    var callerStation = await _stationRepo.GetByIdAsync(merchantUser.StationId);
-                    if (callerStation?.MerchantId != station.MerchantId)
-                        return GenericDto<ProductResultDto>.Error(403, "Bu stansiya sizning merchantingizga tegishli emas.");
-                }
+                if (caller.Type == PlatformUserType.Merchant && caller.MerchantId != station.MerchantId)
+                    return GenericDto<ProductResultDto>.Error(403, "Bu stansiya sizning merchantingizga tegishli emas.");
             }
 
             var product = new ProductEntity
@@ -100,10 +91,10 @@ namespace Application.Services
 
         public async Task<GenericDto<PagedResult<ProductItemDto>>> GetAllAsync(PaginationParams param, AccessScope scope)
         {
-            if (!scope.IsPlatform && scope.MerchantId is null)
+            if (!scope.IsManage && scope.MerchantId is null)
                 return GenericDto<PagedResult<ProductItemDto>>.Success(PagedResult<ProductItemDto>.Empty(param));
 
-            var page = await _productRepo.GetAllAsync(param, scope.IsPlatform ? null : scope.MerchantId);
+            var page = await _productRepo.GetAllAsync(param, scope.IsManage ? null : scope.MerchantId);
             return GenericDto<PagedResult<ProductItemDto>>.Success(page.Map(ToItem));
         }
 
@@ -113,7 +104,7 @@ namespace Application.Services
             if (device is null)
                 return GenericDto<List<ProductItemDto>>.Error(404, "Qurilma topilmadi.");
 
-            if (!scope.IsPlatform && (device.Station is null || device.Station.MerchantId != scope.MerchantId))
+            if (!scope.IsManage && (device.Station is null || device.Station.MerchantId != scope.MerchantId))
                 return GenericDto<List<ProductItemDto>>.Error(403, "Bu qurilma sizning doirangizga tegishli emas.");
 
             var list = await _productRepo.GetByDeviceIdAsync(deviceId);
@@ -182,7 +173,7 @@ namespace Application.Services
         /// </summary>
         private static (int code, string message)? DenyIfOutOfScope(ProductEntity product, AccessScope scope)
         {
-            if (scope.IsPlatform)
+            if (scope.IsManage)
                 return null;
 
             var merchantId = product.Device?.Station?.MerchantId;

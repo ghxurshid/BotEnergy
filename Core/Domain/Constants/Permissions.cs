@@ -3,6 +3,11 @@ namespace Domain.Constants
     /// <summary>
     /// Tizimdagi barcha permission nomlari.
     /// DataSeeder va API controllerlarda yagona manba sifatida ishlatiladi.
+    ///
+    /// Permissionlar ikki guruhga ajraladi:
+    ///  - <see cref="PlatformAll"/> — Platform (Manage/Merchant) rollariga biriktiriladi.
+    ///  - <see cref="CustomerAll"/> — Customer (Natural/Corporate) rollariga biriktiriladi.
+    /// <see cref="All"/> — ikkalasining birlashmasi (DataSeeder permission satrlarini yaratish uchun).
     /// </summary>
     public static class Permissions
     {
@@ -47,7 +52,7 @@ namespace Domain.Constants
         public const string ProductAdminUpdate = "ProductAdmin.Update";
         public const string ProductAdminDelete = "ProductAdmin.Delete";
 
-        // ── AdminApi — Foydalanuvchi boshqaruvi ──────────────────────
+        // ── AdminApi — Platform foydalanuvchi boshqaruvi ─────────────
         public const string UserAdminCreate = "UserAdmin.Create";
         public const string UserAdminGetAll = "UserAdmin.GetAll";
         public const string UserAdminGetById = "UserAdmin.GetById";
@@ -64,8 +69,15 @@ namespace Domain.Constants
         public const string MerchantAdminUpdate = "MerchantAdmin.Update";
         public const string MerchantAdminDelete = "MerchantAdmin.Delete";
 
-        // ── AdminApi — Yuridik foydalanuvchi ─────────────────────────
-        public const string YuridikAdminCreate = "YuridikAdmin.Create";
+        // ── Corporate foydalanuvchi boshqaruvi (Customer guruhi) ─────
+        // Corporate bosh admini o'z tashkilotidagi qo'l-osti userlarni boshqaradi.
+        public const string CustomerAdminCreate = "CustomerAdmin.Create";
+        public const string CustomerAdminGetAll = "CustomerAdmin.GetAll";
+        public const string CustomerAdminGetById = "CustomerAdmin.GetById";
+        public const string CustomerAdminSetPassword = "CustomerAdmin.SetPassword";
+        public const string CustomerAdminBlock = "CustomerAdmin.Block";
+        public const string CustomerAdminUnblock = "CustomerAdmin.Unblock";
+        public const string CustomerAdminDelete = "CustomerAdmin.Delete";
 
         // ── BillingApi — Balans boshqaruvi ───────────────────────────
         public const string BalanceTopUp = "Balance.TopUp";
@@ -104,7 +116,7 @@ namespace Domain.Constants
         public const string ReportMyUsage = "Report.MyUsage";
         public const string ReportMyUsageExport = "Report.MyUsageExport";
 
-        // ── AdminApi — Yuridik tashkilot hisoboti ────────────────────
+        // ── Tashkilot (corporate) hisoboti ───────────────────────────
         public const string OrganizationReportUsage = "OrganizationReport.Usage";
         public const string OrganizationReportUsageExport = "OrganizationReport.UsageExport";
 
@@ -113,9 +125,9 @@ namespace Domain.Constants
         public const string MerchantReportSalesExport = "MerchantReport.SalesExport";
 
         /// <summary>
-        /// Barcha permissionlar ro'yxati — DataSeeder uchun.
+        /// Platform (Manage/Merchant) rollariga biriktirilishi mumkin bo'lgan permissionlar.
         /// </summary>
-        public static readonly List<string> All = new()
+        public static readonly List<string> PlatformAll = new()
         {
             // Role
             RoleCreateRole, RoleGetAll, RoleGetById, RoleUpdate, RoleDelete,
@@ -138,7 +150,7 @@ namespace Domain.Constants
             ProductAdminGetById, ProductAdminGetAllowedTypes, ProductAdminUpdate,
             ProductAdminDelete,
 
-            // User Admin
+            // Platform User Admin
             UserAdminCreate, UserAdminGetAll, UserAdminGetById,
             UserAdminSetPassword, UserAdminResetPassword,
             UserAdminBlock, UserAdminUnblock, UserAdminDelete,
@@ -147,31 +159,50 @@ namespace Domain.Constants
             MerchantAdminRegister, MerchantAdminGetAll, MerchantAdminGetById,
             MerchantAdminUpdate, MerchantAdminDelete,
 
-            // Yuridik
-            YuridikAdminCreate,
-
             // Billing
             BalanceTopUp,
 
-            // Payment (Payme QR top-up)
-            PaymentTopUpSelf, PaymentTopUpOrganization,
-            PaymentGetMyTransactions, PaymentGetOrganizationTransactions,
+            // Payment audit
             PaymentAdminGetAll, PaymentAdminGetById,
             PaymentAdminGetSteps, PaymentAdminReverse,
 
+            // Reports
+            MerchantReportSales, MerchantReportSalesExport,
+        };
+
+        /// <summary>
+        /// Customer (Natural/Corporate) rollariga biriktirilishi mumkin bo'lgan permissionlar.
+        /// </summary>
+        public static readonly List<string> CustomerAll = new()
+        {
             // Session
             SessionCreate, SessionClose, SessionRead, SessionHeartbeat,
 
             // Process
             ProcessStart, ProcessStop, ProcessPause, ProcessResume,
 
-            // User Profile
+            // Profile
             UserMe, UserUpdateMe, UserBootstrap, DeviceConnectionGetProducts,
 
             // Reports
             ReportMyUsage, ReportMyUsageExport,
             OrganizationReportUsage, OrganizationReportUsageExport,
-            MerchantReportSales, MerchantReportSalesExport,
+
+            // Payment (self + organization)
+            PaymentTopUpSelf, PaymentGetMyTransactions,
+            PaymentTopUpOrganization, PaymentGetOrganizationTransactions,
+
+            // Corporate sub-user management
+            CustomerAdminCreate, CustomerAdminGetAll, CustomerAdminGetById,
+            CustomerAdminSetPassword, CustomerAdminBlock, CustomerAdminUnblock,
+            CustomerAdminDelete,
         };
+
+        /// <summary>
+        /// Barcha permissionlar (PlatformAll ∪ CustomerAll) — DataSeeder permission
+        /// satrlarini yaratish uchun.
+        /// </summary>
+        public static readonly List<string> All =
+            PlatformAll.Concat(CustomerAll).Distinct().ToList();
     }
 }

@@ -20,14 +20,14 @@ namespace Application.Services
     public class PaymentService : IPaymentService
     {
         private readonly IPaymentTransactionRepository _repo;
-        private readonly IUserRepository _userRepo;
+        private readonly ICustomerUserRepository _userRepo;
         private readonly IPaymeClient _payme;
         private readonly IBillingService _billing;
         private readonly ILogger<PaymentService> _logger;
 
         public PaymentService(
             IPaymentTransactionRepository repo,
-            IUserRepository userRepo,
+            ICustomerUserRepository userRepo,
             IPaymeClient payme,
             IBillingService billing,
             ILogger<PaymentService> logger)
@@ -69,15 +69,15 @@ namespace Application.Services
 
             if (request.PayeeType == PaymentPayeeType.User)
             {
-                if (user is not NaturalUserEntity)
-                    return GenericDto<QrTopUpResultDto>.Error(400, "Shaxsiy balansga to'lov faqat oddiy foydalanuvchilar uchun.");
+                if (user.Type != CustomerUserType.Natural)
+                    return GenericDto<QrTopUpResultDto>.Error(400, "Shaxsiy balansga to'lov faqat jismoniy foydalanuvchilar uchun.");
                 userPayeeId = user.Id;
             }
             else
             {
-                if (user is not LegalUserEntity legal || legal.OrganizationId is null)
-                    return GenericDto<QrTopUpResultDto>.Error(400, "Tashkilot to'lovi uchun siz biriktirilgan tashkilotga ega yuridik foydalanuvchi bo'lishingiz kerak.");
-                organizationPayeeId = legal.OrganizationId;
+                if (user.Type != CustomerUserType.Corporate || user.OrganizationId is null)
+                    return GenericDto<QrTopUpResultDto>.Error(400, "Tashkilot to'lovi uchun siz biriktirilgan tashkilotga ega corporate foydalanuvchi bo'lishingiz kerak.");
+                organizationPayeeId = user.OrganizationId;
             }
 
             // 5. PaymentTransaction yarat (Pending)
@@ -216,19 +216,19 @@ namespace Application.Services
                 return GenericDto<ReverseTransactionResultDto>.Error(404, "Tegishli foydalanuvchi topilmadi.");
 
             decimal newBalance;
-            if (tx.PayeeType == PaymentPayeeType.User && user is NaturalUserEntity natural)
+            if (tx.PayeeType == PaymentPayeeType.User && user.Type == CustomerUserType.Natural)
             {
-                natural.Balance -= tx.Amount;
-                newBalance = natural.Balance;
-                await _userRepo.UpdateUserAsync(natural);
+                user.Balance -= tx.Amount;
+                newBalance = user.Balance;
+                await _userRepo.UpdateAsync(user);
             }
             else if (tx.PayeeType == PaymentPayeeType.Organization &&
-                     user is LegalUserEntity legal &&
-                     legal.Organization is not null)
+                     user.Type == CustomerUserType.Corporate &&
+                     user.Organization is not null)
             {
-                legal.Organization.Balance -= tx.Amount;
-                newBalance = legal.Organization.Balance;
-                await _userRepo.UpdateUserAsync(legal);
+                user.Organization.Balance -= tx.Amount;
+                newBalance = user.Organization.Balance;
+                await _userRepo.UpdateAsync(user);
             }
             else
             {

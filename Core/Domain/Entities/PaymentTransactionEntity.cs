@@ -13,7 +13,7 @@ namespace Domain.Entities
 
         /// <summary>Mablag' qaytariladigan oddiy foydalanuvchi (PayeeType=User bo'lganda).</summary>
         public long? UserId { get; set; }
-        public UserEntity? User { get; set; }
+        public CustomerUserEntity? User { get; set; }
 
         /// <summary>Mablag' qaytariladigan tashkilot (PayeeType=Organization bo'lganda).</summary>
         public long? OrganizationId { get; set; }

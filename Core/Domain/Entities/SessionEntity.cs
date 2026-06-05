@@ -11,7 +11,7 @@ namespace Domain.Entities
     public class SessionEntity : Entity
     {
         public long UserId { get; set; }
-        public UserEntity? User { get; set; }
+        public CustomerUserEntity? User { get; set; }
 
         public long? DeviceId { get; set; }
         public DeviceEntity? Device { get; set; }

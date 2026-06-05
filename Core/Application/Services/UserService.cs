@@ -1,6 +1,7 @@
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
 
@@ -8,9 +9,9 @@ namespace Application.Services
 {
     public class UserService : IUserService
     {
-        private readonly IUserRepository _userRepository;
+        private readonly ICustomerUserRepository _userRepository;
 
-        public UserService(IUserRepository userRepository)
+        public UserService(ICustomerUserRepository userRepository)
             => _userRepository = userRepository;
 
         public async Task<GenericDto<GetUserDto>> GetCurrentUserAsync(long userId)
@@ -22,20 +23,15 @@ namespace Application.Services
             return GenericDto<GetUserDto>.Success(MapToDto(user));
         }
 
-        internal static GetUserDto MapToDto(UserEntity user) => new()
+        internal static GetUserDto MapToDto(CustomerUserEntity user) => new()
         {
             Id = user.Id,
             PhoneId = user.PhoneId,
             Mail = user.Mail,
             PhoneNumber = user.PhoneNumber,
-            UserType = user.UserType.ToString(),
-            // NaturalUser → o'z balansi, LegalUser → tashkilot balansi, MerchantUser → 0.
-            Balance = user switch
-            {
-                NaturalUserEntity natural => natural.Balance,
-                LegalUserEntity legal => legal.Organization?.Balance ?? 0m,
-                _ => 0m
-            },
+            UserType = user.Type.ToString(),
+            // Natural → o'z balansi, Corporate → tashkilot balansi.
+            Balance = ResolveBalance(user),
             IsVerified = user.IsVerified,
             IsBlocked = user.IsBlocked,
             LastLoginDate = user.LastLoginDate,
@@ -49,17 +45,10 @@ namespace Application.Services
             if (user is null)
                 return GenericDto<GetBalanceResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
-            var balance = user switch
-            {
-                NaturalUserEntity natural => natural.Balance,
-                LegalUserEntity legal => legal.Organization?.Balance ?? 0m,
-                _ => 0m
-            };
-
             return GenericDto<GetBalanceResultDto>.Success(new GetBalanceResultDto
             {
                 UserId = userId,
-                Balance = balance
+                Balance = ResolveBalance(user)
             });
         }
 
@@ -75,12 +64,19 @@ namespace Application.Services
             if (!string.IsNullOrEmpty(dto.PhoneId))
                 user.PhoneId = dto.PhoneId;
 
-            await _userRepository.UpdateUserAsync(user);
+            await _userRepository.UpdateAsync(user);
 
             return GenericDto<UpdateUserResultDto>.Success(new UpdateUserResultDto
             {
                 ResultMessage = "Ma'lumotlar muvaffaqiyatli yangilandi."
             });
         }
+
+        private static decimal ResolveBalance(CustomerUserEntity user) => user.Type switch
+        {
+            CustomerUserType.Natural => user.Balance,
+            CustomerUserType.Corporate => user.Organization?.Balance ?? 0m,
+            _ => 0m
+        };
     }
 }

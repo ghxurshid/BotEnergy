@@ -2,14 +2,13 @@ using Domain.Entities.BaseEntity;
 
 namespace Domain.Entities
 {
-    public class RolePermissionEntity : Entity
+    /// <summary>Customer rol ↔ permission bog'lanishi (jadval: auth.customer_role_permissions).</summary>
+    public class CustomerRolePermissionEntity : Entity
     {
         public long RoleId { get; set; }
-
-        public RoleEntity? Role { get; set; }
+        public CustomerRoleEntity? Role { get; set; }
 
         public long PermissionId { get; set; }
-        
         public PermissionEntity? Permission { get; set; }
     }
 }

@@ -5,12 +5,14 @@ namespace Persistence.Context
 {
     public partial class AppDbContext
     {
-        public DbSet<UserEntity> Users { get; set; }
+        public DbSet<PlatformUserEntity> PlatformUsers { get; set; }
+        public DbSet<CustomerUserEntity> CustomerUsers { get; set; }
         public DbSet<OrganizationEntity> Organizations { get; set; }
-        public DbSet<RoleEntity> Roles { get; set; }
+        public DbSet<PlatformRoleEntity> PlatformRoles { get; set; }
+        public DbSet<CustomerRoleEntity> CustomerRoles { get; set; }
         public DbSet<PermissionEntity> Permissions { get; set; }
-        public DbSet<RolePermissionEntity> RolePermissions { get; set; }
-        public DbSet<UserRoleEntity> UserRoles { get; set; }
+        public DbSet<PlatformRolePermissionEntity> PlatformRolePermissions { get; set; }
+        public DbSet<CustomerRolePermissionEntity> CustomerRolePermissions { get; set; }
         public DbSet<StationEntity> Stations { get; set; }
         public DbSet<ProductEntity> Products { get; set; }
         public DbSet<DeviceEntity> Devices { get; set; }

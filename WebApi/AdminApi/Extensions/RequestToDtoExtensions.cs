@@ -11,8 +11,7 @@ namespace AdminApi.Extensions
                 Name = request.Name,
                 Description = request.Description,
                 IsActive = request.IsActive ?? true,
-                StationId = request.StationId,
-                OrganizationId = request.OrganizationId,
+                MerchantId = request.MerchantId,
                 PermissionIds = request.PermissionIds
             };
 
@@ -126,8 +125,28 @@ namespace AdminApi.Extensions
                 Mail = request.Mail,
                 PhoneNumber = request.PhoneNumber,
                 RoleId = request.RoleId,
+                Type = request.Type,
+                MerchantId = request.MerchantId
+            };
+
+        public static CreateCorporateUserDto ToDto(this CreateCorporateUserRequest request)
+            => new CreateCorporateUserDto
+            {
+                PhoneId = request.PhoneId,
+                Mail = request.Mail,
+                PhoneNumber = request.PhoneNumber,
+                RoleId = request.RoleId,
+                OrganizationId = request.OrganizationId
+            };
+
+        public static CreateRoleDto ToDto(this CreateCorporateRoleRequest request)
+            => new CreateRoleDto
+            {
+                Name = request.Name,
+                Description = request.Description,
+                IsActive = request.IsActive ?? true,
                 OrganizationId = request.OrganizationId,
-                StationId = request.StationId
+                PermissionIds = request.PermissionIds
             };
 
         public static SetPasswordAdminDto ToDto(this SetPasswordRequest request, long userId)

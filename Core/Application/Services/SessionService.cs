@@ -16,7 +16,7 @@ namespace Application.Services
     {
         private readonly ISessionRepository _sessionRepo;
         private readonly IDeviceRepository _deviceRepo;
-        private readonly IUserRepository _userRepo;
+        private readonly ICustomerUserRepository _userRepo;
         private readonly IProductProcessRepository _processRepo;
         private readonly ISessionNotifier _notifier;
         private readonly IDeviceCommandPublisher _commandPublisher;
@@ -32,7 +32,7 @@ namespace Application.Services
         public SessionService(
             ISessionRepository sessionRepo,
             IDeviceRepository deviceRepo,
-            IUserRepository userRepo,
+            ICustomerUserRepository userRepo,
             IProductProcessRepository processRepo,
             ISessionNotifier notifier,
             IDeviceCommandPublisher commandPublisher,

@@ -1,7 +1,7 @@
 using Domain.Entities;
 using Domain.Entities.BaseEntity;
-using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Persistence.Context
 {
@@ -18,17 +18,16 @@ namespace Persistence.Context
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.HasPostgresEnum<UserType>("auth", "user_type");
-            modelBuilder.HasPostgresEnum<RoleType>("auth", "role_type");
-
             modelBuilder.HasDefaultSchema(AppSchema);
 
-            ConfigureUser(modelBuilder);
+            ConfigurePlatformUser(modelBuilder);
+            ConfigureCustomerUser(modelBuilder);
             ConfigureOrganization(modelBuilder);
-            ConfigureRole(modelBuilder);
+            ConfigurePlatformRole(modelBuilder);
+            ConfigureCustomerRole(modelBuilder);
             ConfigurePermission(modelBuilder);
-            ConfigureRolePermission(modelBuilder);
-            ConfigureUserRole(modelBuilder);
+            ConfigurePlatformRolePermission(modelBuilder);
+            ConfigureCustomerRolePermission(modelBuilder);
             ConfigureStation(modelBuilder);
             ConfigureDevice(modelBuilder);
             ConfigureProduct(modelBuilder);
@@ -67,78 +66,87 @@ namespace Persistence.Context
             modelBuilder.Entity<T>().HasQueryFilter(e => !e.IsDeleted);
         }
 
-        private static void ConfigureUser(ModelBuilder modelBuilder)
+        /// <summary>Ikkala user jadvali uchun umumiy ustunlar (UserBase).</summary>
+        private static void ConfigureUserCommon<T>(EntityTypeBuilder<T> b) where T : UserBase
         {
-            modelBuilder.Entity<UserEntity>(b =>
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+            b.Property(x => x.PhoneId).HasColumnName("phone_id").IsRequired().HasMaxLength(128);
+            b.Property(x => x.PhoneNumber).HasColumnName("phone_number").IsRequired().HasMaxLength(32);
+            b.Property(x => x.Mail).HasColumnName("mail").IsRequired().HasMaxLength(256);
+
+            b.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(256);
+            b.Property(x => x.PasswordSalt).HasColumnName("password_salt").HasMaxLength(256);
+
+            b.Property(x => x.IsBlocked).HasColumnName("is_blocked").HasDefaultValue(false);
+            b.Property(x => x.IsVerified).HasColumnName("is_verified").HasDefaultValue(false);
+            b.Property(x => x.IsOtpVerified).HasColumnName("is_otp_verified").HasDefaultValue(false);
+
+            b.Property(x => x.RoleId).HasColumnName("role_id");
+
+            b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+            b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+            b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+            b.Property(x => x.LastLoginDate).HasColumnName("last_login_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+            b.Property(x => x.LastActiveDate).HasColumnName("last_active_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+
+            b.HasIndex(x => x.PhoneNumber).IsUnique();
+            b.HasIndex(x => x.Mail).IsUnique();
+            b.HasIndex(x => x.PhoneId);
+        }
+
+        private static void ConfigurePlatformUser(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<PlatformUserEntity>(b =>
             {
-                b.ToTable("users", AuthSchema);
+                b.ToTable("platform_users", AuthSchema);
+                ConfigureUserCommon(b);
 
-                b.HasDiscriminator<UserType>("user_type")
-                    .HasValue<NaturalUserEntity>(UserType.NaturalPerson)
-                    .HasValue<LegalUserEntity>(UserType.LegalEntity)
-                    .HasValue<MerchantUserEntity>(UserType.MerchantPerson)
-                    .HasValue<PlatformUserEntity>(UserType.Platform);
+                b.Property(x => x.Type).HasColumnName("type").HasConversion<int>();
 
-                b.Property<UserType>("user_type")
-                    .HasColumnType("auth.user_type")
-                    .HasColumnName("user_type");
+                b.Property(x => x.MerchantId).HasColumnName("merchant_id");
+                b.HasOne(x => x.Merchant)
+                    .WithMany(x => x.Users)
+                    .HasForeignKey(x => x.MerchantId)
+                    .OnDelete(DeleteBehavior.Restrict);
 
-                b.HasKey(x => x.Id);
-                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
-
-                b.Property(x => x.PhoneId).HasColumnName("phone_id").IsRequired().HasMaxLength(128);
-                b.Property(x => x.PhoneNumber).HasColumnName("phone_number").IsRequired().HasMaxLength(32);
-                b.Property(x => x.Mail).HasColumnName("mail").IsRequired().HasMaxLength(256);
-
-                b.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(256);
-                b.Property(x => x.PasswordSalt).HasColumnName("password_salt").HasMaxLength(256);
-
-                b.Property(x => x.IsBlocked).HasColumnName("is_blocked").HasDefaultValue(false);
-                b.Property(x => x.IsVerified).HasColumnName("is_verified").HasDefaultValue(false);
-                b.Property(x => x.IsOtpVerified).HasColumnName("is_otp_verified").HasDefaultValue(false);
-
-                b.Property(x => x.RoleId).HasColumnName("role_id");
                 b.HasOne(x => x.Role)
                     .WithMany()
                     .HasForeignKey(x => x.RoleId)
                     .OnDelete(DeleteBehavior.SetNull);
 
-                b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
-                b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
-                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
-
-                b.Property(x => x.LastLoginDate).HasColumnName("last_login_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
-                b.Property(x => x.LastActiveDate).HasColumnName("last_active_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
-
-                b.HasIndex(x => x.PhoneNumber).IsUnique();
-                b.HasIndex(x => x.Mail).IsUnique();
-                b.HasIndex(x => x.PhoneId);
+                b.HasIndex(x => x.MerchantId);
             });
+        }
 
-            modelBuilder.Entity<NaturalUserEntity>(b =>
+        private static void ConfigureCustomerUser(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<CustomerUserEntity>(b =>
             {
+                b.ToTable("customer_users", AuthSchema);
+                ConfigureUserCommon(b);
+
+                b.Property(x => x.Type).HasColumnName("type").HasConversion<int>();
+
                 b.Property(x => x.Balance)
                     .HasColumnName("balance")
                     .HasColumnType("numeric(18,2)")
                     .HasDefaultValue(0m);
-            });
 
-            modelBuilder.Entity<LegalUserEntity>(b =>
-            {
                 b.Property(x => x.OrganizationId).HasColumnName("organization_id");
                 b.HasOne(x => x.Organization)
-                    .WithMany(x => x.LegalUsers)
+                    .WithMany(x => x.CustomerUsers)
                     .HasForeignKey(x => x.OrganizationId)
                     .OnDelete(DeleteBehavior.SetNull);
-            });
 
-            modelBuilder.Entity<MerchantUserEntity>(b =>
-            {
-                b.Property(x => x.StationId).HasColumnName("station_id");
-                b.HasOne(x => x.Station)
+                b.HasOne(x => x.Role)
                     .WithMany()
-                    .HasForeignKey(x => x.StationId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                    .HasForeignKey(x => x.RoleId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                b.HasIndex(x => x.OrganizationId);
             });
         }
 
@@ -167,47 +175,29 @@ namespace Persistence.Context
             });
         }
 
-        private static void ConfigureRole(ModelBuilder modelBuilder)
+        /// <summary>Ikkala rol jadvali uchun umumiy ustunlar (RoleBase).</summary>
+        private static void ConfigureRoleCommon<T>(EntityTypeBuilder<T> b) where T : RoleBase
         {
-            modelBuilder.Entity<RoleEntity>(b =>
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+            b.Property(x => x.Name).HasColumnName("name").IsRequired().HasMaxLength(100);
+            b.Property(x => x.Description).HasColumnName("description").HasMaxLength(300);
+            b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+            b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+            b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+            b.HasIndex(x => x.Name);
+        }
+
+        private static void ConfigurePlatformRole(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<PlatformRoleEntity>(b =>
             {
-                b.ToTable("roles", AuthSchema);
+                b.ToTable("platform_roles", AuthSchema);
+                ConfigureRoleCommon(b);
 
-                b.HasDiscriminator<RoleType>("role_type")
-                    .HasValue<NaturalRoleEntity>(RoleType.NaturalRole)
-                    .HasValue<LegalRoleEntity>(RoleType.LegalRole)
-                    .HasValue<MerchantRoleEntity>(RoleType.MerchantRole)
-                    .HasValue<PlatformRoleEntity>(RoleType.PlatformRole);
-
-                b.Property<RoleType>("role_type")
-                    .HasColumnName("role_type");
-
-                b.HasKey(x => x.Id);
-                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
-
-                b.Property(x => x.Name).HasColumnName("name").IsRequired().HasMaxLength(100);
-                b.Property(x => x.Description).HasColumnName("description").HasMaxLength(300);
-                b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
-                b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
-                b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
-                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
-
-                b.HasIndex(x => x.Name);
-            });
-
-            modelBuilder.Entity<LegalRoleEntity>(b =>
-            {
-                b.Property(x => x.OrganizationId).HasColumnName("organization_id");
-                b.HasOne(x => x.Organization)
-                    .WithMany(x => x.Roles)
-                    .HasForeignKey(x => x.OrganizationId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                b.HasIndex(x => x.OrganizationId);
-            });
-
-            modelBuilder.Entity<MerchantRoleEntity>(b =>
-            {
                 b.Property(x => x.MerchantId).HasColumnName("merchant_id");
                 b.HasOne(x => x.Merchant)
                     .WithMany(x => x.Roles)
@@ -215,6 +205,23 @@ namespace Persistence.Context
                     .OnDelete(DeleteBehavior.Cascade);
 
                 b.HasIndex(x => x.MerchantId);
+            });
+        }
+
+        private static void ConfigureCustomerRole(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<CustomerRoleEntity>(b =>
+            {
+                b.ToTable("customer_roles", AuthSchema);
+                ConfigureRoleCommon(b);
+
+                b.Property(x => x.OrganizationId).HasColumnName("organization_id");
+                b.HasOne(x => x.Organization)
+                    .WithMany(x => x.Roles)
+                    .HasForeignKey(x => x.OrganizationId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => x.OrganizationId);
             });
         }
 
@@ -237,11 +244,11 @@ namespace Persistence.Context
             });
         }
 
-        private static void ConfigureRolePermission(ModelBuilder modelBuilder)
+        private static void ConfigurePlatformRolePermission(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<RolePermissionEntity>(b =>
+            modelBuilder.Entity<PlatformRolePermissionEntity>(b =>
             {
-                b.ToTable("role_permissions", AuthSchema);
+                b.ToTable("platform_role_permissions", AuthSchema);
 
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
@@ -258,7 +265,7 @@ namespace Persistence.Context
                     .OnDelete(DeleteBehavior.Cascade);
 
                 b.HasOne(x => x.Permission)
-                    .WithMany(x => x.RolePermissions)
+                    .WithMany(x => x.PlatformRolePermissions)
                     .HasForeignKey(x => x.PermissionId)
                     .OnDelete(DeleteBehavior.Cascade);
 
@@ -266,32 +273,32 @@ namespace Persistence.Context
             });
         }
 
-        private static void ConfigureUserRole(ModelBuilder modelBuilder)
+        private static void ConfigureCustomerRolePermission(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<UserRoleEntity>(b =>
+            modelBuilder.Entity<CustomerRolePermissionEntity>(b =>
             {
-                b.ToTable("user_roles", AuthSchema);
+                b.ToTable("customer_role_permissions", AuthSchema);
 
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
 
-                b.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
                 b.Property(x => x.RoleId).HasColumnName("role_id").IsRequired();
+                b.Property(x => x.PermissionId).HasColumnName("permission_id").IsRequired();
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
-                b.HasOne(x => x.User)
-                    .WithMany(x => x.UserRoles)
-                    .HasForeignKey(x => x.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
                 b.HasOne(x => x.Role)
-                    .WithMany(x => x.UserRoles)
+                    .WithMany(x => x.RolePermissions)
                     .HasForeignKey(x => x.RoleId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                b.HasIndex(x => new { x.UserId, x.RoleId }).IsUnique();
+                b.HasOne(x => x.Permission)
+                    .WithMany(x => x.CustomerRolePermissions)
+                    .HasForeignKey(x => x.PermissionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => new { x.RoleId, x.PermissionId }).IsUnique();
             });
         }
 
@@ -422,6 +429,7 @@ namespace Persistence.Context
                     .WithMany(x => x.Sessions)
                     .HasForeignKey(x => x.UserId)
                     .OnDelete(DeleteBehavior.Restrict);
+                // FK → auth.customer_users (sessiya faqat Customer uchun)
 
                 b.HasOne(x => x.Device)
                     .WithMany(x => x.Sessions)

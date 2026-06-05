@@ -16,8 +16,8 @@ namespace Domain.Entities
 
         public bool IsActive { get; set; } = true;
 
-        public ICollection<LegalUserEntity>? LegalUsers { get; set; }
+        public ICollection<CustomerUserEntity>? CustomerUsers { get; set; }
 
-        public ICollection<LegalRoleEntity>? Roles { get; set; }
+        public ICollection<CustomerRoleEntity>? Roles { get; set; }
     }
 }

@@ -41,10 +41,10 @@ namespace Application.Services
         public async Task<GenericDto<PagedResult<MerchantItemDto>>> GetAllAsync(PaginationParams param, AccessScope scope)
         {
             // Platform → hammasi; merchant user → faqat o'z merchanti; aks holda bo'sh.
-            if (!scope.IsPlatform && scope.MerchantId is null)
+            if (!scope.IsManage && scope.MerchantId is null)
                 return GenericDto<PagedResult<MerchantItemDto>>.Success(PagedResult<MerchantItemDto>.Empty(param));
 
-            var page = await _repo.GetAllAsync(param, scope.IsPlatform ? null : scope.MerchantId);
+            var page = await _repo.GetAllAsync(param, scope.IsManage ? null : scope.MerchantId);
             return GenericDto<PagedResult<MerchantItemDto>>.Success(page.Map(ToItem));
         }
 

@@ -24,8 +24,8 @@ namespace AdminApi.Filters.ValidationFilters
             if (request.RoleId <= 0)
             { context.Result = new BadRequestObjectResult(new { message = "Rol ID kiritilishi shart." }); return; }
 
-            if (!request.OrganizationId.HasValue && !request.StationId.HasValue)
-            { context.Result = new BadRequestObjectResult(new { message = "OrganizationId yoki StationId dan biri ko'rsatilishi shart." }); return; }
+            if (request.Type == Domain.Enums.PlatformUserType.Merchant && !request.MerchantId.HasValue)
+            { context.Result = new BadRequestObjectResult(new { message = "Merchant foydalanuvchi uchun MerchantId ko'rsatilishi shart." }); return; }
         }
 
         public void OnActionExecuted(ActionExecutedContext context) { }

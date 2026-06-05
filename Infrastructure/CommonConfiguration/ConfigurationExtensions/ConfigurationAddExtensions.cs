@@ -148,7 +148,6 @@ namespace CommonConfiguration.ConfigurationExtensions
             var connectionString = config.GetConnectionString("DefaultConnection");
 
             var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-            dataSourceBuilder.MapEnum<UserType>("auth.user_type");
             var dataSource = dataSourceBuilder.Build();
 
             services.AddDbContext<AppDbContext>(options =>
@@ -192,14 +191,19 @@ namespace CommonConfiguration.ConfigurationExtensions
 
         public static IServiceCollection RegisterServices(this IServiceCollection services)
         {
-            // User
-            services.AddScoped<IUserRepository, UserRepository>();
+            // User repos (Platform / Customer alohida)
+            services.AddScoped<IPlatformUserRepository, PlatformUserRepository>();
+            services.AddScoped<ICustomerUserRepository, CustomerUserRepository>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IUserAdminService, UserAdminService>();
+            services.AddScoped<ICustomerAdminService, CustomerAdminService>();
 
-            // Role
-            services.AddScoped<IRoleRepository, RoleRepository>();
+            // Role repos + permission katalog
+            services.AddScoped<IPlatformRoleRepository, PlatformRoleRepository>();
+            services.AddScoped<ICustomerRoleRepository, CustomerRoleRepository>();
+            services.AddScoped<IPermissionRepository, PermissionRepository>();
             services.AddScoped<IRoleService, RoleService>();
+            services.AddScoped<ICustomerRoleService, CustomerRoleService>();
 
             // Organization
             services.AddScoped<IOrganizationRepository, OrganizationRepository>();
@@ -245,8 +249,16 @@ namespace CommonConfiguration.ConfigurationExtensions
         public static IServiceCollection RegisterAuthServices(this IServiceCollection services)
         {
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IPlatformAuthService, PlatformAuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IOtpService, OtpService>();
+
+            // Auth servislar repository larga bog'liq (CommonConfiguration AuthApi'da
+            // RegisterServices chaqirmasligi mumkin, shuning uchun shu yerda ham ro'yxatga olamiz).
+            services.AddScoped<IPlatformUserRepository, PlatformUserRepository>();
+            services.AddScoped<ICustomerUserRepository, CustomerUserRepository>();
+            services.AddScoped<IPlatformRoleRepository, PlatformRoleRepository>();
+            services.AddScoped<ICustomerRoleRepository, CustomerRoleRepository>();
 
             return services;
         }
@@ -258,7 +270,7 @@ namespace CommonConfiguration.ConfigurationExtensions
         /// </summary>
         public static IServiceCollection RegisterSessionServices(this IServiceCollection services)
         {
-            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<ICustomerUserRepository, CustomerUserRepository>();
             services.AddScoped<IDeviceRepository, DeviceRepository>();
             services.AddScoped<IProductRepository, ProductRepository>();
             services.AddScoped<IProductProcessRepository, ProductProcessRepository>();

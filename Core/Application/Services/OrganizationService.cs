@@ -38,10 +38,10 @@ namespace Application.Services
         public async Task<GenericDto<PagedResult<OrganizationItemDto>>> GetAllAsync(PaginationParams param, AccessScope scope)
         {
             // Platform → hammasi; org user → faqat o'z tashkiloti; aks holda bo'sh.
-            if (!scope.IsPlatform && scope.OrganizationId is null)
+            if (!scope.IsManage && scope.OrganizationId is null)
                 return GenericDto<PagedResult<OrganizationItemDto>>.Success(PagedResult<OrganizationItemDto>.Empty(param));
 
-            var page = await _repo.GetAllAsync(param, scope.IsPlatform ? null : scope.OrganizationId);
+            var page = await _repo.GetAllAsync(param, scope.IsManage ? null : scope.OrganizationId);
             return GenericDto<PagedResult<OrganizationItemDto>>.Success(page.Map(ToItem));
         }
 

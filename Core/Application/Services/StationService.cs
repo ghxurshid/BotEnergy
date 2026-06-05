@@ -12,9 +12,9 @@ namespace Application.Services
     {
         private readonly IStationRepository _repo;
         private readonly IMerchantRepository _merchantRepo;
-        private readonly IUserRepository _userRepo;
+        private readonly IPlatformUserRepository _userRepo;
 
-        public StationService(IStationRepository repo, IMerchantRepository merchantRepo, IUserRepository userRepo)
+        public StationService(IStationRepository repo, IMerchantRepository merchantRepo, IPlatformUserRepository userRepo)
         {
             _repo = repo;
             _merchantRepo = merchantRepo;
@@ -33,10 +33,9 @@ namespace Application.Services
             if (!callerPermissions.Contains(Permissions.MerchantAdminRegister))
             {
                 var caller = await _userRepo.GetByIdAsync(callerId);
-                if (caller is MerchantUserEntity merchantUser)
+                if (caller is { Type: Domain.Enums.PlatformUserType.Merchant })
                 {
-                    var callerStation = await _repo.GetByIdAsync(merchantUser.StationId);
-                    if (callerStation?.MerchantId != dto.MerchantId)
+                    if (caller.MerchantId != dto.MerchantId)
                         return GenericDto<StationResultDto>.Error(403, "Faqat o'z merchantingizga stansiya qo'sha olasiz.");
                 }
                 else
@@ -65,10 +64,10 @@ namespace Application.Services
         public async Task<GenericDto<PagedResult<StationItemDto>>> GetAllAsync(PaginationParams param, AccessScope scope)
         {
             // Platform → hammasi; merchant user → faqat o'z merchanti; aks holda (org/natural) → bo'sh.
-            if (!scope.IsPlatform && scope.MerchantId is null)
+            if (!scope.IsManage && scope.MerchantId is null)
                 return GenericDto<PagedResult<StationItemDto>>.Success(PagedResult<StationItemDto>.Empty(param));
 
-            var page = await _repo.GetAllAsync(param, scope.IsPlatform ? null : scope.MerchantId);
+            var page = await _repo.GetAllAsync(param, scope.IsManage ? null : scope.MerchantId);
             return GenericDto<PagedResult<StationItemDto>>.Success(page.Map(ToItem));
         }
 

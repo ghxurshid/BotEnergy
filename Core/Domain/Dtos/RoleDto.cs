@@ -7,8 +7,13 @@ namespace Domain.Dtos
         public required string Name { get; set; }
         public string? Description { get; set; }
         public bool IsActive { get; set; } = true;
-        public long? StationId { get; set; }
+
+        /// <summary>Platform rol uchun: null = Manage (global) rol; set = merchant scope roli.</summary>
+        public long? MerchantId { get; set; }
+
+        /// <summary>Customer rol uchun: null = global Natural rol; set = corporate org roli.</summary>
         public long? OrganizationId { get; set; }
+
         public List<long>? PermissionIds { get; set; }
     }
 
@@ -32,7 +37,8 @@ namespace Domain.Dtos
         public required string Name { get; set; }
         public string? Description { get; set; }
         public bool IsActive { get; set; }
-        public RoleType RoleType { get; set; }
+        /// <summary>Rolning aniq turi: PlatformManage / PlatformMerchant / CustomerNatural / CustomerCorporate.</summary>
+        public string Kind { get; set; } = string.Empty;
         public long? OrganizationId { get; set; }
         public long? MerchantId { get; set; }
         public List<string> Permissions { get; set; } = new();
@@ -64,7 +70,7 @@ namespace Domain.Dtos
 
     public class GetAllowedPermissionsResultDto
     {
-        public RoleType RoleType { get; set; }
+        public RoleKind Kind { get; set; }
         public List<AllowedPermissionDto> Permissions { get; set; } = new();
     }
 }

@@ -12,9 +12,9 @@ namespace Application.Services
     {
         private readonly IDeviceRepository _repo;
         private readonly IStationRepository _stationRepo;
-        private readonly IUserRepository _userRepo;
+        private readonly IPlatformUserRepository _userRepo;
 
-        public DeviceService(IDeviceRepository repo, IStationRepository stationRepo, IUserRepository userRepo)
+        public DeviceService(IDeviceRepository repo, IStationRepository stationRepo, IPlatformUserRepository userRepo)
         {
             _repo = repo;
             _stationRepo = stationRepo;
@@ -60,10 +60,10 @@ namespace Application.Services
 
         public async Task<GenericDto<PagedResult<DeviceItemDto>>> GetAllAsync(PaginationParams param, AccessScope scope)
         {
-            if (!scope.IsPlatform && scope.MerchantId is null)
+            if (!scope.IsManage && scope.MerchantId is null)
                 return GenericDto<PagedResult<DeviceItemDto>>.Success(PagedResult<DeviceItemDto>.Empty(param));
 
-            var page = await _repo.GetAllAsync(param, scope.IsPlatform ? null : scope.MerchantId);
+            var page = await _repo.GetAllAsync(param, scope.IsManage ? null : scope.MerchantId);
             return GenericDto<PagedResult<DeviceItemDto>>.Success(page.Map(ToItem));
         }
 
@@ -146,10 +146,9 @@ namespace Application.Services
             if (caller is null)
                 return GenericDto<DeviceResultDto>.Error(403, "Foydalanuvchi topilmadi.");
 
-            if (caller is MerchantUserEntity merchantUser)
+            if (caller.Type == Domain.Enums.PlatformUserType.Merchant)
             {
-                var callerStation = await _stationRepo.GetByIdAsync(merchantUser.StationId);
-                if (callerStation?.MerchantId != station.MerchantId)
+                if (caller.MerchantId != station.MerchantId)
                     return GenericDto<DeviceResultDto>.Error(403, "Bu stansiya sizning merchantingizga tegishli emas.");
             }
             else
@@ -166,7 +165,7 @@ namespace Application.Services
         /// </summary>
         private static (int code, string message)? DenyIfOutOfScope(DeviceEntity device, AccessScope scope)
         {
-            if (scope.IsPlatform)
+            if (scope.IsManage)
                 return null;
 
             var merchantId = device.Station?.MerchantId;
