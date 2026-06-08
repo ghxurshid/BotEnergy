@@ -11,31 +11,19 @@ using Microsoft.AspNetCore.Mvc;
 namespace AdminApi.Controllers
 {
     /// <summary>
-    /// Rollar va ruxsatlar boshqaruvi (RBAC).
+    /// Platform rollari va ruxsatlari boshqaruvi (RBAC).
     /// </summary>
     /// <remarks>
-    /// Tizimda foydalanuvchilarga rol tayinlash va rollarga ruxsat (permission) berish.
+    /// `/api/Role/*` faqat **Platform** rollarini boshqaradi. (Corporate rollar — `/api/CorporateRole/*`.)
     ///
-    /// **RBAC tizimi:**
-    /// - Har bir foydalanuvchiga bir yoki bir nechta rol tayinlanishi mumkin.
-    /// - Har bir rolga bir nechta permission (ruxsat) biriktirilishi mumkin.
-    /// - Permission lar orqali foydalanuvchi qaysi endpointlarga kira olishi nazorat qilinadi.
+    /// **Rol turi (RoleKind):**
+    /// - **PlatformManage** — global (`MerchantId == null`), barcha platform permissionlar mumkin.
+    /// - **PlatformMerchant** — merchantga scoped (`MerchantId` to'ldirilgan), `ManageOnly`'dan tashqari to'plam.
     ///
-    /// **Rol scopei (RoleType):**
-    /// - **NaturalRole** — global, hech qanday entityga biriktirilmagan.
-    /// - **LegalRole** — tashkilotga (Organization) biriktirilgan.
-    /// - **MerchantRole** — merchantga (Station orqali) biriktirilgan.
+    /// **Scope:** Manage barcha platform rollarni; Merchant operator faqat o'z merchanti rollarini boshqaradi
+    /// (`AccessScope`). Har userda bitta `RoleId` FK (m:n yo'q). Permission biriktirish `PermissionScopes.IsAllowedFor(kind, ...)` bilan cheklanadi.
     ///
-    /// **Permission flow:**
-    /// - Faqat permissionning o'zi yetarli emas — caller qaysi scopega tegishli ekanligi
-    ///   va qaysi entity ustida ish qilayotgani ham tekshiriladi.
-    /// - Tashkilot foydalanuvchisi faqat o'z tashkiloti rollarini, merchant
-    ///   foydalanuvchisi faqat o'z merchanti rollarini boshqara oladi.
-    /// - Global (NaturalUser) foydalanuvchi cross-scope ishlash uchun tegishli
-    ///   permissionlarga ega bo'lishi kerak.
-    ///
-    /// Barcha endpointlar JWT token va tegishli permission talab qiladi.
-    /// Xatolik bo'lsa response body'da `{ "message": "..." }` formatida sabab qaytariladi.
+    /// Barcha endpointlar JWT + tegishli permission talab qiladi. Xatolik: `{ "message": "..." }`.
     /// </remarks>
     [Route("api/[controller]/[action]")]
     [ApiController]
@@ -64,21 +52,19 @@ namespace AdminApi.Controllers
         /// | Name           | string | **Ha**   | Rol nomi.                                                                                           |
         /// | Description    | string | Yo'q     | Rol tavsifi.                                                                                        |
         /// | IsActive       | bool   | Yo'q     | Faol holati. Berilmasa default (true).                                                              |
-        /// | StationId      | long   | Yo'q     | Berilsa — Station merchantiga biriktirilgan MerchantRole yaratiladi.                                |
-        /// | OrganizationId | long   | Yo'q     | Berilsa — Tashkilotga biriktirilgan LegalRole yaratiladi. Berilmasa va StationId bo'lsa — MerchantRole, ikkalasi ham bo'lmasa global NaturalRole. |
+        /// | MerchantId     | long   | Yo'q     | null → PlatformManage (global) rol; to'ldirilsa → shu merchantning PlatformMerchant roli.          |
         /// | PermissionIds  | long[] | Yo'q     | Rolga tayinlanadigan permission ID lari.                                                            |
         ///
         /// **Muhim qoidalar:**
-        /// - `OrganizationId` va `StationId` ikkalasi ham berilsa — `OrganizationId` ustuvor.
-        /// - Hech biri berilmasa — global NaturalRole yaratiladi (faqat global userlar uchun).
-        /// - Permissionlar rol scopeiga mos bo'lishi shart (masalan, MerchantRole ga
-        ///   organization permissionlari biriktirilmaydi).
+        /// - Manage → istalgan (MerchantId ixtiyoriy); Merchant operator → faqat o'z `MerchantId`.
+        /// - Permissionlar rol kindiga mos bo'lishi shart (`PermissionScopes.IsAllowedFor`) — masalan,
+        ///   PlatformMerchant rolga `ManageOnly` permissionlar biriktirilmaydi.
         /// </remarks>
-        /// <param name="request">Rol yaratish uchun ma'lumotlar.</param>
+        /// <param name="request">Platform rol yaratish ma'lumotlari.</param>
         /// <response code="200">Rol muvaffaqiyatli yaratildi.</response>
-        /// <response code="400">Validatsiya yoki scope mos kelmagan permission xatosi.</response>
-        /// <response code="403">Permission yetarli emas yoki scopedan tashqarida.</response>
-        /// <response code="404">Berilgan tashkilot yoki stansiya topilmadi.</response>
+        /// <response code="400">Validatsiya yoki kindga mos kelmagan permission xatosi.</response>
+        /// <response code="403">Ruxsat yetarli emas yoki scopedan tashqarida.</response>
+        /// <response code="404">Berilgan merchant topilmadi.</response>
         [HttpPost]
         [RequirePermission(Permissions.RoleCreateRole)]
         [TypeFilter(typeof(CreateRoleValidationFilter))]
@@ -96,13 +82,11 @@ namespace AdminApi.Controllers
         /// Caller scopeiga tegishli rollar ro'yxatini olish.
         /// </summary>
         /// <remarks>
-        /// Faqat caller kira oladigan scopelardagi rollar qaytariladi:
-        /// - Tashkilot foydalanuvchisi — o'z tashkiloti LegalRole lari.
-        /// - Merchant foydalanuvchisi — o'z merchanti MerchantRole lari.
-        /// - Global foydalanuvchi — NaturalRole, hamda `organization.admin.getall` /
-        ///   `merchant.admin.getall` permissionlari bo'yicha mos scopelardagi rollar.
+        /// Faqat caller kira oladigan scopelardagi platform rollar qaytariladi:
+        /// - Manage — barcha platform rollar (PlatformManage + barcha PlatformMerchant).
+        /// - Merchant operator — faqat o'z merchanti PlatformMerchant rollari.
         ///
-        /// **Permission:** `role.getall`
+        /// **Permission:** `Role.GetAll`
         /// </remarks>
         /// <response code="200">Rollar ro'yxati muvaffaqiyatli qaytarildi.</response>
         /// <response code="403">Permission yetarli emas.</response>
@@ -145,9 +129,9 @@ namespace AdminApi.Controllers
         /// </summary>
         /// <remarks>
         /// Faqat name, description, isActive va permissionlar yangilanadi.
-        /// Rol scopei (RoleType, OrganizationId, MerchantId) o'zgartirilmaydi.
+        /// Rol kindi va `MerchantId` o'zgartirilmaydi.
         ///
-        /// **Permission:** `role.update`
+        /// **Permission:** `Role.Update`
         ///
         /// **Yangilanishi mumkin bo'lgan maydonlar:**
         ///
@@ -225,26 +209,18 @@ namespace AdminApi.Controllers
         }
 
         /// <summary>
-        /// Berilgan rol turi uchun caller biriktira oladigan permissionlar ro'yxati.
+        /// Berilgan platform rol kindi uchun biriktirilishi mumkin bo'lgan permissionlar ro'yxati.
         /// </summary>
         /// <remarks>
-        /// Caller scopeiga qarab — shu rol turiga biriktirish mumkin bo'lgan
-        /// maximal permissionlar ro'yxati qaytariladi.
+        /// `kind` — `RoleKind`: `PlatformManage` yoki `PlatformMerchant` (query param; nom yoki raqam).
+        /// `PermissionScopes.IsAllowedFor(kind, ...)` bo'yicha ruxsat etilgan permissionlar qaytariladi.
         ///
-        /// **Permission:** `role.getallowedpermissions`
-        ///
-        /// **Qoidalar:**
-        /// - Tashkilot foydalanuvchisi faqat `LegalRole` uchun so'rashi mumkin.
-        /// - Merchant foydalanuvchisi faqat `MerchantRole` uchun so'rashi mumkin.
-        /// - Global foydalanuvchi `NaturalRole` ni boshqarishi mumkin va
-        ///   tegishli cross-scope permissionlari bo'lsa `LegalRole` / `MerchantRole`
-        ///   ham qaytariladi.
-        /// - Rol scopega mos kelmagan permissionlar (masalan, `LegalRole` uchun
-        ///   merchant tarafdagi permissionlar) ro'yxatdan chiqarib tashlanadi.
+        /// **Permission:** `Role.GetAllowedPermissions`. PlatformManage kindini faqat Manage so'ray oladi.
+        /// (Corporate rol uchun: `/api/CorporateRole/AllowedPermissions`.)
         /// </remarks>
-        /// <param name="roleType">Rol turi: NaturalRole, LegalRole yoki MerchantRole.</param>
+        /// <param name="kind">Rol kindi: PlatformManage yoki PlatformMerchant.</param>
         /// <response code="200">Permissionlar ro'yxati muvaffaqiyatli qaytarildi.</response>
-        /// <response code="403">Caller bu rol turini boshqara olmaydi.</response>
+        /// <response code="403">Caller bu rol kindini boshqara olmaydi.</response>
         [HttpGet]
         [RequirePermission(Permissions.RoleGetAllowedPermissions)]
         [ProducesResponseType(StatusCodes.Status200OK)]

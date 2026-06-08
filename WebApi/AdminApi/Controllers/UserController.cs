@@ -12,31 +12,19 @@ using Microsoft.AspNetCore.Mvc;
 namespace AdminApi.Controllers
 {
     /// <summary>
-    /// Foydalanuvchilarni admin tomonidan boshqarish.
+    /// Platform foydalanuvchilarini (Manage/Merchant) admin tomonidan boshqarish.
     /// </summary>
     /// <remarks>
-    /// Barcha turdagi foydalanuvchilar (LegalUser, MerchantUser) ustida CRUD operatsiyalari.
+    /// `/api/User/*` faqat **Platform** guruhini boshqaradi:
+    /// - **Manage** (`type=0`) — scope cheklovi yo'q (butun platforma). Rol global bo'lishi shart (`role.MerchantId == null`).
+    /// - **Merchant** (`type=1`) — `merchantId` majburiy; o'z merchantiga scoped operator. Rol shu merchantga tegishli bo'lishi shart.
     ///
-    /// **Foydalanuvchi turlari:**
-    /// - **LegalUser** — yuridik iste'molchi tashkilotiga (Organization) biriktirilgan foydalanuvchi. `OrganizationId` berilsa yaratiladi.
-    /// - **MerchantUser** — merchant stansiyasiga (Station) biriktirilgan xodim. `StationId` berilsa yaratiladi.
+    /// **Scope:** Manage → cheklovsiz; Merchant operator (UserAdmin.* ruxsati bo'lsa) faqat o'z merchantining operatorlarini boshqaradi.
     ///
-    /// **Ikki alohida ierarxiya:**
-    /// - **Organization** → LegalUsers (yuridik iste'molchilar tomoni)
-    /// - **Merchant** → Station → MerchantUser (sotuvchi tomoni)
+    /// **Customer foydalanuvchilari bu yerda EMAS:** Natural o'zi ro'yxatdan o'tadi (AuthApi), Corporate esa `/api/CorporateUser/*` orqali.
     ///
-    /// **Muhim qoidalar:**
-    /// - `OrganizationId` va `StationId` bir vaqtda ikkalasi ham bo'sh bo'lishi mumkin emas (kamida bittasi kerak).
-    /// - Agar ikkalasi ham berilsa — `OrganizationId` ustuvor (LegalUser yaratiladi).
-    /// - Yangi user `IsOtpVerified = true`, `IsVerified = false` holati bilan yaratiladi.
-    /// - Response da yaratilgan user ID si qaytariladi — shu ID orqali `SetPassword` chaqiriladi.
-    ///
-    /// **Permission level:**
-    /// - User yaratishda ham permission level hisobga olinadi (ierarxiya bo'yicha).
-    /// - Yuqoriroq darajadagi permissionga ega user boshqa tashkilot/stansiyalar uchun ham user yaratishi mumkin.
-    ///
-    /// Barcha endpointlar JWT token va tegishli permission talab qiladi.
-    /// Xatolik bo'lsa response body'da `{ "message": "..." }` formatida sabab qaytariladi.
+    /// Yangi user `IsOtpVerified=true`, `IsVerified=false` holatida yaratiladi — keyin `SetPassword`.
+    /// Barcha endpointlar JWT + tegishli permission talab qiladi. Xatolik: `{ "message": "..." }`.
     /// </remarks>
     [Route("api/[controller]/[action]")]
     [ApiController]
@@ -49,46 +37,34 @@ namespace AdminApi.Controllers
             => _service = service;
 
         /// <summary>
-        /// Yangi foydalanuvchi yaratish.
+        /// Yangi platform foydalanuvchi (Manage/Merchant) yaratish.
         /// </summary>
         /// <remarks>
-        /// Yangi foydalanuvchini tizimga qo'shadi. Berilgan maydonlarga qarab LegalUser yoki MerchantUser yaratiladi.
-        ///
-        /// **Permission:** `user.admin.create`
-        ///
-        /// **Permission level:** User yaratishda ham permission level hisobga olinadi.
-        /// Yuqoriroq darajadagi permissionga ega user boshqa tashkilot/stansiyalar uchun ham user yarata oladi.
+        /// **Permission:** `UserAdmin.Create`. Faqat Manage (yoki o'z merchanti uchun Merchant operator).
         ///
         /// **Request body maydonlari:**
         ///
-        /// | Maydon         | Turi   | Majburiy | ReadOnly | Tavsif                                                                                                               |
-        /// |----------------|--------|----------|----------|----------------------------------------------------------------------------------------------------------------------|
-        /// | PhoneId        | string | **Ha**   | Ha       | Foydalanuvchining telefon identifikatori. Yaratilgandan keyin o'zgartirilmaydi.                                      |
-        /// | Mail           | string | **Ha**   | Yo'q     | Elektron pochta manzili.                                                                                             |
-        /// | PhoneNumber    | string | **Ha**   | Yo'q     | Telefon raqami.                                                                                                      |
-        /// | RoleId         | long   | **Ha**   | Yo'q     | Tayinlanadigan rol ID si.                                                                                            |
-        /// | OrganizationId | long   | Yo'q     | Ha       | Tashkilot ID si. Berilsa — LegalUser yaratiladi va tashkilotga biriktiriladi. Yaratilgandan keyin o'zgartirilmaydi.  |
-        /// | StationId      | long   | Yo'q     | Ha       | Stansiya ID si. Berilsa — MerchantUser yaratiladi va stansiyaga biriktiriladi. Yaratilgandan keyin o'zgartirilmaydi. |
+        /// | Maydon      | Turi   | Majburiy | Tavsif                                                              |
+        /// |-------------|--------|----------|--------------------------------------------------------------------|
+        /// | PhoneId     | string | **Ha**   | Foydalanuvchi qurilma identifikatori.                              |
+        /// | Mail        | string | **Ha**   | Elektron pochta.                                                    |
+        /// | PhoneNumber | string | **Ha**   | Telefon raqami (998XXXXXXXXX, unique).                             |
+        /// | RoleId      | long   | **Ha**   | Platform rol. Manage uchun global rol; Merchant uchun shu merchant roli. |
+        /// | Type        | int    | **Ha**   | Subtip: `0=Manage`, `1=Merchant` (enum RAQAM sifatida).            |
+        /// | MerchantId  | long   | Type=1 da| Merchant operatori biriktiriladigan merchant.                      |
         ///
-        /// **Muhim qoidalar:**
-        /// - `OrganizationId` yoki `StationId` dan kamida bittasi berilishi shart.
-        /// - Agar ikkalasi ham berilsa — `OrganizationId` ustuvor, LegalUser yaratiladi.
-        /// - `OrganizationId` berilsa va tashkilot mavjud bo'lsa — yangi user LegalUser sifatida yuridik iste'molchi tashkilotiga qo'shiladi.
-        /// - `StationId` berilsa va station hamda uning merchanti mavjud bo'lsa — yangi user MerchantUser sifatida merchant stansiyasiga qo'shiladi.
-        /// - Yangi user `IsOtpVerified = true`, `IsVerified = false` holati bilan yaratiladi.
+        /// **Qoidalar:**
+        /// - `Type=Manage` → rol global bo'lishi shart (`role.MerchantId == null`).
+        /// - `Type=Merchant` → `MerchantId` majburiy, merchant `IsActive`, rol shu merchantga tegishli.
+        /// - Yangi user `IsOtpVerified=true`, `IsVerified=false` — keyin `SetPassword`.
         ///
-        /// **Response:** Yaratilgan foydalanuvchining ID si qaytariladi. Shu ID bo'yicha `SetPassword` chaqirib parol o'rnatish kerak.
-        ///
-        /// **Xatolik holatlari:**
-        /// - `OrganizationId` va `StationId` ikkalasi ham berilmasa — xatolik.
-        /// - Ko'rsatilgan Organization yoki Station topilmasa — xatolik.
-        /// - Permission level yetarli bo'lmasa — xatolik.
+        /// **Response:** yaratilgan user ID si — shu ID bo'yicha `SetPassword`.
         /// </remarks>
-        /// <param name="request">Foydalanuvchi yaratish uchun ma'lumotlar.</param>
-        /// <response code="200">Foydalanuvchi muvaffaqiyatli yaratildi. Response da user ID qaytariladi.</response>
-        /// <response code="400">Validatsiya xatosi (majburiy maydonlar to'ldirilmagan yoki OrganizationId/StationId berilmagan).</response>
-        /// <response code="403">Permission yetarli emas.</response>
-        /// <response code="404">Ko'rsatilgan tashkilot yoki stansiya topilmadi.</response>
+        /// <param name="request">Platform foydalanuvchi yaratish ma'lumotlari.</param>
+        /// <response code="200">Yaratildi — response da user ID.</response>
+        /// <response code="400">Validatsiya yoki rol/merchant mosligi xatosi.</response>
+        /// <response code="403">Ruxsat yoki scope yetarli emas.</response>
+        /// <response code="404">Rol yoki merchant topilmadi.</response>
         [HttpPost]
         [RequirePermission(Permissions.UserAdminCreate)]
         [TypeFilter(typeof(CreateUserValidationFilter))]

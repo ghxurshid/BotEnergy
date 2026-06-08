@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 BotEnergy — IoT charging/dispenser station backend. .NET 8, PostgreSQL, Redis, RabbitMQ, MQTT, SignalR. Seven independently-runnable Web APIs in one solution sharing a Clean Architecture core.
 
-For deep API reference and business flows see `README.md` (1700+ lines, the canonical doc) and `ARCHITECTURE.md` (older, partially stale — trust the code over it).
+For deep API reference, architecture overview, and business flows see `README.md` (the canonical doc). `PROMTS.md` holds the business-process spec (extracted from code). (`ARCHITECTURE.md` was removed — its content was merged into `README.md`.)
 
 ## Commands
 
@@ -37,7 +37,7 @@ Production deploy is a self-hosted GitHub Actions runner that executes `deploy.s
 
 | API | Port | Purpose |
 |---|---|---|
-| `AuthApi` | 5002 | Public — register/OTP/login/refresh. No `[Authorize]`, no `PermissionFilter`. |
+| `AuthApi` | 5002 | Public. Two surfaces: `/api/Auth/*` (Customer — register/OTP/login/refresh) and `/api/PlatformAuth/{Login,RefreshToken}` (Platform — no self-register). No `[Authorize]`, no `PermissionFilter`. |
 | `UserApi` | 5006 | Mobile app endpoints — profile, balance read, reports. JWT + permissions. |
 | `AdminApi` | 5001 | Admin/operator endpoints. JWT + permissions. |
 | `DeviceApi` | 5004 | Device identity & CRUD (DeviceAuth, DeviceController). DeviceProcess/DevicePayment are legacy HTTP stubs. MQTT bridge moved to SessionApi. |
@@ -63,7 +63,8 @@ Configuration lives in `Infrastructure/CommonConfiguration/ConfigurationFile/Con
 
 In `CommonConfiguration/ConfigurationExtensions/ConfigurationAddExtensions.cs`:
 
-- `RegisterServices()` — shared by all APIs (Auth, User, Role, Device, Product, Merchant, Billing services + repos).
+- `RegisterServices()` — shared by all APIs. Includes the split user/role layer: `IPlatformUserRepository`+`ICustomerUserRepository`, `IPlatformRoleRepository`+`ICustomerRoleRepository`, `IPermissionRepository`; services `IUserService`, `IUserAdminService` (platform), `ICustomerAdminService` (corporate), `IRoleService` (platform), `ICustomerRoleService`, plus Device/Product/Merchant/Organization/Billing.
+- `RegisterAuthServices()` — AuthApi: `IAuthService` (customer) + `IPlatformAuthService` + `ITokenService` + `IOtpService`.
 - `RegisterSessionServices()` — SessionApi-only (`ISessionService`, `IProcessService`, `IBootstrapService`, `IPushNotificationService`, `IdleSessionCleanerService` HostedService).
 - `RegisterDeviceServices()` — DeviceApi-only (legacy; DeviceApi no longer carries live traffic).
 - `AddRedisServices()` — Redis multiplexer + `IRefreshTokenStore` (resilient: Redis primary, in-memory fallback) + `IIdempotencyStore` + `IdempotencyFilter`.
@@ -87,7 +88,20 @@ All permission strings live as constants in `Core/Domain/Constants/Permissions.c
 2. Add it to `Permissions.All`.
 3. Apply `[RequirePermission(Permissions.X)]`.
 
-`DataSeeder` reads `Permissions.All` and inserts missing rows on startup.
+`DataSeeder` reads `Permissions.All` and inserts missing rows on startup. `Permissions` is split into `PlatformAll` (admin/merchant management) and `CustomerAll` (session/process/profile/report/payment-self + corporate `CustomerAdmin.*`); `All` is their union. `PermissionScopes.IsAllowedFor(RoleKind, name)` gates which permissions attach to which role kind.
+
+### User & Role model: two groups, separate tables (NOT TPH)
+
+The user/role domain is split into two independent groups, each with its own table and its own role table (no shared `users`/`roles` table, no discriminator):
+
+- **Platform** (`auth.platform_users`) — `PlatformUserEntity`, subtype enum `PlatformUserType {Manage, Merchant}` (int column `type`). `Manage` = full access (no scope limit). `Merchant` = scoped to its `MerchantId` (whole business: all its stations/devices/products). Roles: `auth.platform_roles` (`PlatformRoleEntity`, `MerchantId?` null=Manage/global role). Created only by Manage. Login via PlatformAuth.
+- **Customer** (`auth.customer_users`) — `CustomerUserEntity`, subtype `CustomerUserType {Natural, Corporate}`. `Natural` = self-registers (mobile), own `Balance`. `Corporate` = created by Manage/corp-admin, shares `Organization.Balance` via `OrganizationId`. Roles: `auth.customer_roles` (`CustomerRoleEntity`, `OrganizationId?` null=global Natural role). Join tables: `platform_role_permissions`, `customer_role_permissions` (shared `permissions` catalog).
+
+`UserBase`/`RoleBase` are unmapped abstract bases for shared columns only (each concrete entity `ToTable`s separately). There is no `UserRoleEntity` (m:n) — a single `RoleId` FK per user.
+
+`AccessScope` (`Core/Domain/Auth/AccessScope.cs`, built from JWT claims `UserGroup`/`UserSubType`/`MerchantId`/`OrganizationId`): `IsManage` = full access, `IsMerchant`/`IsCorporate` = scoped, `CanAccessMerchant/Organization`. Scope-aware services (Station/Device/Product/Merchant/Organization/User/Role/Corporate) use it — `IsManage` means "no scope limit" (NOT old `IsPlatform`). Sessions/payments FK to `customer_users` only.
+
+Refresh tokens are namespaced by group prefix in the token value: `c:` (customer) / `p:` (platform), so each auth service only accepts its own.
 
 ### Two-layer service split inside a session
 

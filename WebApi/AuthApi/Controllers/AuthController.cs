@@ -8,8 +8,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace UserApi.Controllers
 {
     /// <summary>
-    /// Autentifikatsiya va avtorizatsiya endpointlari.
-    /// Ro'yxatdan o'tish, OTP tasdiqlash, parol o'rnatish, login va parol tiklash jarayonlarini boshqaradi.
+    /// Customer (jismoniy/corporate) autentifikatsiyasi.
+    /// Ro'yxatdan o'tish (faqat Natural/jismoniy), OTP tasdiqlash, parol o'rnatish, login va parol tiklash.
+    /// Platform (Manage/Merchant) administratorlari uchun alohida: <c>PlatformAuthController</c> (`/api/PlatformAuth`).
     ///
     /// **Jarayon ketma-ketligi (yangi foydalanuvchi):**
     /// 1. Register → telefon raqam bilan ro'yxatdan o'tish, OTP kodi SMS orqali yuboriladi, userId qaytariladi

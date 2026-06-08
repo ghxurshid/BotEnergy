@@ -8,22 +8,25 @@ Bu hujjat platformaning **hozirgi koddan ekstrakt qilingan** asosiy biznes-jaray
 
 ## 1) Auth — Autentifikatsiya
 
-Maqsad: telefon raqam orqali jismoniy shaxs (NaturalUser) o'zi ro'yxatdan o'tadi; yuridik (LegalUser) va merchant (MerchantUser) xodimlarni admin yaratadi (qarang: 2/3/4-bo'limlar). Hamma auth endpointlari **ochiq** (`[Authorize]` yo'q), JWT keyingi APIlar uchun.
+Maqsad: foydalanuvchilar **ikki guruhga** bo'lingan. **Customer** — jismoniy shaxs (`CustomerUser/Natural`) o'zi ro'yxatdan o'tadi; tashkilot xodimi (`CustomerUser/Corporate`) ni admin yaratadi (4-bo'lim). **Platform** — Manage/Merchant (`PlatformUser`) ni Manage yaratadi, **self-register yo'q** (2-bo'lim). Hamma auth endpointlari **ochiq** (`[Authorize]` yo'q), JWT keyingi APIlar uchun. Ikki yuza: `/api/Auth/*` (customer) va `/api/PlatformAuth/{Login,RefreshToken}` (platform).
 
-### 1.1 Ro'yxat (4 qadam) — faqat jismoniy shaxs uchun
-1. **Register** — `{ phoneId, phoneNumber, mail? }` qabul qiladi. Telefon bo'yicha:
+### 1.1 Customer ro'yxat (4 qadam) — faqat jismoniy shaxs (Natural) uchun
+1. **Register** (`/api/Auth/Register`) — `{ phoneId, phoneNumber, mail? }`. Telefon bo'yicha:
    - Allaqachon `IsVerified=true` → "Allaqachon ro'yxatdan o'tilgan, login qiling".
    - Mavjud lekin OTP tasdiqlanmagan → yangi OTP generatsiya.
-   - Yangi → `NaturalUserEntity` yaratiladi, OTP generatsiya.
+   - Yangi → `CustomerUserEntity` (Type=Natural) yaratiladi, **default global Natural rol avtomatik biriktiriladi**, OTP generatsiya.
    OTP konsolga chiqariladi (SMS integratsiya yo'q). **Test OTP: `123456`** har doim qabul qilinadi.
 2. **Verify** — `{ userId, otpCode }` → `IsOtpVerified=true`. Allaqachon tasdiqlangan bo'lsa 400.
 3. **SetPassword** — `{ userId, password }` (min 6 belgi). Parol SHA-256+salt bilan saqlanadi. `IsVerified=true`. Bu qadamda **access + refresh token juftligi qaytadi**.
-4. **Login** — `{ phoneNumber, password }` → parol mos kelishi + `IsVerified=true` + `IsBlocked=false`. Yangi token juftligi, `LastLoginDate` yangilanadi.
+4. **Login** — `{ phoneNumber, password }` → parol mos + `IsVerified=true` + `IsBlocked=false`. Yangi token juftligi, `LastLoginDate` yangilanadi.
+
+### 1.1b Platform login (Manage/Merchant)
+- `POST /api/PlatformAuth/Login` `{ phoneNumber, password }` — self-register yo'q; userni Manage yaratadi va parol o'rnatadi. `POST /api/PlatformAuth/RefreshToken` `{ refreshToken }`.
 
 ### 1.2 Token
-- **Access token** — 15 daqiqa, claimlar: `nameid` (userId), `unique_name` (telefon), `Permission` (ro'l ichidagi har bir permission alohida claim), `exp`.
-- **Refresh token** — 7 kun, Redis'da `refresh:{token}` kalit. **Token rotation**: har refresh'da eski token revoke qilinadi, yangi juftlik beriladi. Redis ishlamaganda in-memory fallback ishlaydi.
-- **RefreshToken** endpoint — `{ refreshToken }` → eski o'chiriladi, user `IsBlocked/IsDeleted` tekshiriladi, yangi juftlik.
+- **Access token** — 15 daqiqa, claimlar: `nameid` (userId), `unique_name` (telefon), `UserGroup` (Platform|Customer), `UserSubType` (Manage|Merchant|Natural|Corporate), Merchant→`MerchantId`, Corporate→`OrganizationId`, `Permission` (har biri alohida claim), `exp`.
+- **Refresh token** — 7 kun, qiymat guruh prefiksi bilan: `c:` (customer) / `p:` (platform). Redis'da kalit. **Token rotation**: har refresh'da eski revoke, yangi juftlik. Redis yo'q bo'lsa in-memory fallback.
+- **RefreshToken** — har yuza faqat o'z prefiksli tokenini qabul qiladi; eski o'chiriladi, `IsBlocked/IsDeleted` tekshiriladi, yangi juftlik.
 
 ### 1.3 Parolni tiklash (3 qadam)
 1. **ResetPasswordRequest** — `{ phoneNumber }` → reset uchun OTP yuboriladi.
@@ -59,18 +62,20 @@ Platform admin **istalgan merchant'ga** quyi resurslar yaratishi mumkin (Merchan
 - Device `serialNumber` unikal; yaratilganda `SecretKey` (32-belgi hex) avtomatik generatsiya — qurilma MQTT envelope HMAC uchun ishlatadi.
 - Product turi device turiga **mos** kelishi shart (DeviceType→ProductType mapping bor: `FUEL_DISPENSER → Petrol/Diesel/Methane/Propane`, `WASH_BOX → Water/Foam/Wax`, `CHARGER → Electricity`, `WATER_DISPENSER → PurifiedWater/ColdWater/HotWater`, `VACUUM_CLEANER → VacuumService`, `VENDING_MACHINE → Coffee/Tea/ColdDrink/Snack`).
 
-### 2.4 Foydalanuvchi yaratish (platform tomonidan)
-Platform admin **`LegalUser`** yoki **`MerchantUser`** yarata oladi:
-- `{ phoneId, mail, phoneNumber, roleId, organizationId? | stationId? }`.
-- Ikkalasi ham berilsa **`OrganizationId` ustun** (LegalUser yaratiladi).
-- Yangi user `IsOtpVerified=true`, `IsVerified=false` — admin keyin `SetPassword` chaqirib parol beradi.
-- Telefon unikal (409 dublikat).
+### 2.4 Platform foydalanuvchi yaratish (`/api/User/Create`, faqat Manage)
+Manage **Manage** yoki **Merchant** platform user yarata oladi:
+- `{ phoneId, mail, phoneNumber, roleId, type, merchantId? }`. `type` — enum **raqam**: `0=Manage`, `1=Merchant`.
+- `type=Manage` → rol global bo'lishi shart (`role.MerchantId == null`).
+- `type=Merchant` → `merchantId` majburiy, merchant `IsActive`, rol shu merchantga tegishli (`role.MerchantId == merchantId`).
+- Scope: Merchant operator (UserAdmin.* ruxsati bo'lsa) faqat o'z `MerchantId` operatorlarini yaratadi.
+- Yangi user `IsOtpVerified=true`, `IsVerified=false` — keyin `SetPassword`. Telefon unikal (409).
+- Corporate userlar bu yerda emas — `/api/CorporateUser/*` (4-bo'lim).
 
-### 2.5 Role / Permission boshqaruvi
-- **GetAllowedPermissions** (`?roleType=`) — qaysi roleType uchun qanday permission'lar ruxsat etilganini qaytaradi.
-- **CreateRole** — `{ name, description, isActive, permissionIds[] }`. Mavjud permission'lar `RolePermissionEntity` orqali bog'lanadi.
-- **Update** — yangi permission ro'yxati bilan: yo'q bo'lganlar `IsDeleted=true`, yangilari yaratiladi.
-- Permission claim'lari JWT'ga login/refresh paytida yoziladi.
+### 2.5 Platform Role / Permission boshqaruvi (`/api/Role/*`)
+- **GetAllowedPermissions** (`?kind=PlatformManage|PlatformMerchant`) — `RoleKind` uchun ruxsat etilgan permission'lar.
+- **CreateRole** — `{ name, description, isActive, merchantId?, permissionIds[] }`. `merchantId` null → PlatformManage (global) rol; to'ldirilsa → PlatformMerchant. Har permission `PermissionScopes.IsAllowedFor(kind, ...)` bilan tekshiriladi.
+- **Update** — yangi permission ro'yxati bilan: yo'q bo'lganlar `IsDeleted=true`, yangilari `PlatformRolePermissionEntity`.
+- Corporate rollar `/api/CorporateRole/*` da. Permission claim'lari JWT'ga login/refresh paytida yoziladi.
 
 ### 2.6 Foydalanuvchi statusi (admin)
 - **Block / Unblock** — `IsBlocked` flag. Bloklangan user login/refresh/session yaratolmaydi.
@@ -78,7 +83,7 @@ Platform admin **`LegalUser`** yoki **`MerchantUser`** yarata oladi:
 - **Delete** — soft delete.
 
 ### 2.7 Balans (admin)
-- `POST /api/Balance/TopUp` — `{ userId, amount }` (`amount > 0`). NaturalUser → `user.Balance`, LegalUser → `organization.Balance`.
+- `POST /api/Balance/TopUp` — `{ userId, amount }` (`amount > 0`). Customer user: `Natural` → `user.Balance`, `Corporate` → `organization.Balance`.
 
 ### 2.8 Audit / to'lov boshqaruvi (admin)
 - Barcha to'lov tranzaksiyalari ro'yxati (filtr: `status`, `from/to` sana, paginatsiya).
@@ -92,19 +97,18 @@ Platform admin **`LegalUser`** yoki **`MerchantUser`** yarata oladi:
 
 ## 3) Merchant admin / Merchant user
 
-**Merchant** — sotuvchi tashkilot (yoqilg'i kompaniyasi, avtomoyka tarmog'i, va h.k.). Ierarxiya: `Merchant → Station → Device → Product`. **MerchantUser** — Station'ga biriktirilgan xodim (operator, kassir, station-admin).
+**Merchant** — sotuvchi biznes (yoqilg'i kompaniyasi, avtomoyka tarmog'i, va h.k.). Ierarxiya: `Merchant → Station → Device → Product`. Operatorlar — **PlatformUser/Merchant** (subtip `Merchant`), `MerchantId` orqali butun biznesga scoped (avvalgidek bitta Station'ga emas).
 
-### 3.1 Merchant admin (Merchant doirasida)
-- O'z merchant'i uchun **Station/Device/Product CRUD** qila oladi:
-  - Station yaratishda — `Merchant.IsActive=true` tekshiruvi + caller'ning merchant'iga tegishliligi tekshiruvi (`MerchantAdmin.Register` permission'i bo'lsa cheklov yo'q).
-  - Device yaratishda — Station `IsActive=true` + caller `MerchantUser` bo'lsa `station.MerchantId == caller.MerchantId` shart.
-  - Product yaratishda — Device `IsActive=true` + parent Station orqali merchant tekshiriladi + Product type device turi bilan mos.
-- O'z merchant'i ichida yangi MerchantUser yaratish (`UserAdmin.Create` + `stationId` berib).
+### 3.1 Merchant operator (o'z biznesi doirasida)
+- O'z `MerchantId` biznesi uchun **Station/Device/Product CRUD**:
+  - Station yaratishda — `Merchant.IsActive=true` + caller `MerchantId == dto.MerchantId` (`MerchantAdmin.Register` Manage permission'i bo'lsa cheklov yo'q).
+  - Device yaratishda — Station `IsActive=true` + caller PlatformUser/Merchant bo'lsa `station.MerchantId == caller.MerchantId` shart.
+  - Product yaratishda — Device `IsActive=true` + parent Station orqali merchant tekshiriladi + Product type device turiga mos.
+- O'z biznesi ichida yangi Merchant operator yaratish (`UserAdmin.Create` + `type=Merchant, merchantId`).
 - Soft delete; physical delete yo'q.
 
-### 3.2 Merchant user (xodim)
-- Faqat **o'z merchant** ierarxiyasidagi resurslarni ko'radi (read-only yoki admin bergan permission'larga ko'ra).
-- Login → JWT'da permission'lar.
+### 3.2 Scope (AccessScope)
+- JWT'da `UserGroup=Platform, UserSubType=Merchant, MerchantId=<id>`. Scope servislari: Manage → cheklovsiz (`IsManage`); Merchant → `CanAccessMerchant(id)` (faqat `MerchantId`); read/GetAll merchant bo'yicha filtrlanadi.
 - Hisobot — qaysi station, qaysi qurilma necha so'm tushum keltirgani (qarang 7-bo'lim).
 
 ### 3.3 Hisobotlar (Merchant tomonidan)
@@ -114,26 +118,27 @@ Platform admin **`LegalUser`** yoki **`MerchantUser`** yarata oladi:
 - Davr 1 yildan oshmasligi tekshiriladi.
 
 ### 3.4 Cheklovlar
-- Merchant admin **organization tomon ishlay olmaydi** (alohida ierarxiya).
-- `MerchantAdmin.Register` (super-admin permission) bo'lmasa **boshqa merchant'larga station qo'sha olmaydi**.
+- Merchant operator **customer/organization tomon ishlay olmaydi** (alohida guruh).
+- `MerchantAdmin.Register` / `OrganizationAdmin.*` / `Balance.TopUp` — `ManageOnly`, Merchant rolga biriktirilmaydi → boshqa merchant'larga ham aralasholmaydi.
 
 ---
 
-## 4) Organization admin / Organization user
+## 4) Corporate (tashkilot) admin / Corporate user
 
-**Organization** — iste'molchi yuridik tashkilot (kompaniya). Tashkilotning **bitta umumiy balansi** bo'ladi va uning ostidagi yuridik foydalanuvchilar (LegalUser) shu balansdan xizmatlardan foydalanadi.
+**Organization** — iste'molchi tashkilot. **Bitta umumiy balansi** bor; uning **Corporate** customer userlari (`CustomerUser/Corporate`) shu balansdan foydalanadi. Organization yozuvini Manage yaratadi (`/api/Organization/*`).
 
-### 4.1 Organization admin
-- O'z tashkiloti doirasida **LegalUser CRUD**.
-- LegalUser yaratish: `{ phoneId, mail, phoneNumber, roleId, organizationId }`. `OrganizationId` caller'niki bilan mos kelishi shart (agar `OrganizationAdmin.Create` super-permission'i bo'lmasa).
-- LegalUser parolini birinchi marta o'rnatish va keyin reset qilish, bloklash/unblock.
-- Tashkilot balansini ko'rish va to'ldirish (manual yoki Payme orqali — qarang 6-bo'lim).
-- Tashkilot ma'lumotlarini yangilash: `Address`, `PhoneNumber`, `IsActive` (Name/Inn — read-only).
+### 4.1 Corporate admin (`/api/CorporateUser/*`, `/api/CorporateRole/*`)
+- O'z tashkiloti doirasida **Corporate user CRUD** (Manage istalgan org uchun; corp-admin faqat o'z org'i — `AccessScope.CanAccessOrganization`). Gating: `CustomerAdmin.*`.
+- Corporate user yaratish: `{ phoneId, mail, phoneNumber, roleId, organizationId }`. Rol shu tashkilotning `CustomerRole`'i bo'lishi shart.
+- Corporate rol: `/api/CorporateRole/Create` `{ name, description, isActive, organizationId, permissionIds }` (CorporateAllowed to'plamdan); `AllowedPermissions` endpoint mavjud.
+- Corporate user parolini o'rnatish/reset, block/unblock/delete.
+- Tashkilot balansini to'ldirish (admin BillingApi yoki Payme — 6-bo'lim).
+- Tashkilot ma'lumotlarini yangilash (`/api/Organization/Update`): `Address`, `PhoneNumber`, `IsActive` (Name/Inn read-only).
 
-### 4.2 Organization user (LegalUser — xodim)
-- Mobile app orqali kiradi va xizmatdan foydalanadi.
+### 4.2 Corporate user (xodim)
+- Mobile app orqali kiradi (customer login) va xizmatdan foydalanadi.
 - **Balans**: o'z `user.Balance` emas, `organization.Balance` ko'rinadi va shu yerdan yechiladi.
-- Sessiya/jarayon endpointlari oddiy NaturalUser bilan **bir xil** — farq faqat balans manbai.
+- Sessiya/jarayon endpointlari Natural bilan **bir xil** — farq faqat balans manbai (`CustomerUserType` orqali aniqlanadi).
 
 ### 4.3 Hisobotlar (Organization)
 - `OrganizationReport.Usage` — tashkilot xodimlari qaysi davrda, qaysi qurilmada qancha xizmat olgan (sahifalab).
@@ -141,9 +146,9 @@ Platform admin **`LegalUser`** yoki **`MerchantUser`** yarata oladi:
 - Filtr: `organizationId` (shart) + davr.
 - Tashkilot doirasidan tashqari ma'lumot **ko'rsatilmaydi**.
 
-### 4.4 To'lov tarixi (LegalUser ham, OrgAdmin ham)
+### 4.4 To'lov tarixi (Corporate user ham, corp-admin ham)
 - O'z shaxsiy tarixi: `Payment.GetMyTransactions` (faqat shu user initiate qilgan to'lovlar).
-- Tashkilot tarixi: `Payment.GetOrganizationTransactions` — caller LegalUser bo'lishi shart, **URL parametri sifatida `organizationId` qabul qilinmaydi** (caller profilidan olinadi) — boshqa tashkilot ma'lumotini ko'rishni oldini olish uchun.
+- Tashkilot tarixi: `Payment.GetOrganizationTransactions` — caller Corporate user bo'lishi shart, **URL parametri sifatida `organizationId` qabul qilinmaydi** (caller profilidan olinadi) — boshqa tashkilot ma'lumotini ko'rishni oldini olish uchun.
 
 ---
 
@@ -259,7 +264,7 @@ Ikkita alohida tushuncha:
 - **Payment** — Payme orqali QR balans to'ldirish (foydalanuvchi o'zi).
 
 ### 6.1 Billing — Balans
-- `GET /api/UserBalance/GetMyBalance` (UserApi, JWT shart, `[SkipPermissionCheck]`). NaturalUser → `user.Balance`, LegalUser → `organization.Balance`.
+- `GET /api/UserBalance/GetMyBalance` (UserApi, JWT shart, `[SkipPermissionCheck]`). Customer: `Natural` → `user.Balance`, `Corporate` → `organization.Balance`.
 - `POST /api/Balance/TopUp` (BillingApi) — admin uchun: `{ userId, amount }` (`amount > 0`), permission `Balance.TopUp`.
 - **Balansdan yechish** (`DeductForProcessAsync`) automatik chaqiriladi process tugaganda. Idempotent (`IsBalanceDeducted` flag). Balansdan ortiq yechmaydi (cost > balans bo'lsa balans 0 ga tushadi va shuncha yechiladi).
 
@@ -271,7 +276,7 @@ Ikkita alohida tushuncha:
   - `Idempotency-Key` header tavsiya etiladi.
   - PayeeType bo'yicha alohida permission: `Payment.TopUpSelf` yoki `Payment.TopUpOrganization`.
   - Server Payme bilan: `receipts.create` → `receipts.pay`. `state=4` (paid) bo'lsa balans to'ldiriladi.
-  - `payeeType=Organization` bo'lsa caller LegalUser bo'lishi shart va tashkilot caller'niki bo'ladi.
+  - `payeeType=Organization` bo'lsa caller Corporate user bo'lishi shart va tashkilot caller'niki bo'ladi.
 - Response:
   ```
   { transactionId, status, amount, newBalance, message? }
@@ -282,7 +287,7 @@ Ikkita alohida tushuncha:
 
 ### 6.3 Tarix
 - **Foydalanuvchi**: `GET /api/Payment/MyTransactions?status=&pageNumber=&pageSize=` — faqat o'zi initiate qilgan.
-- **OrgAdmin**: `GET /api/Payment/OrganizationTransactions?status=&pageNumber=&pageSize=` — caller LegalUser bo'lishi shart, tashkilot ID URL'da emas, profildan olinadi.
+- **Corporate admin**: `GET /api/Payment/OrganizationTransactions?status=&pageNumber=&pageSize=` — caller Corporate user bo'lishi shart, tashkilot ID URL'da emas, profildan olinadi.
 
 ### 6.4 Admin audit
 - `GET /api/PaymentAdmin/All?status=&from=&to=&pageNumber=&pageSize=` — barcha to'lovlar ro'yxati.
@@ -308,7 +313,7 @@ Hammada bir xil model: davr filtri + paginatsiya yoki Excel eksport. Davr 1 yild
 ### 7.2 Tashkilot hisoboti (OrgAdmin)
 - `GET /api/OrganizationReport/Usage?organizationId=&from=&to=&pageNumber=&pageSize=`.
 - `GET /api/OrganizationReport/UsageExport?organizationId=&from=&to=`.
-- Tashkilotning **barcha LegalUser** xodimlari foydalanishlarini birlashtiradi. Foydalanuvchi ustuni qo'shiladi.
+- Tashkilotning **barcha Corporate** xodimlari foydalanishlarini birlashtiradi. Foydalanuvchi ustuni qo'shiladi.
 - Permission: `OrganizationReport.Usage`, `OrganizationReport.UsageExport`.
 
 ### 7.3 Merchant savdo hisoboti (Merchant admin)

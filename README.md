@@ -6,33 +6,28 @@ IoT qurilmalarni boshqarish va foydalanuvchilarga xizmat ko'rsatish platformasi.
 
 ## Arxitektura
 
+Bitta Clean Architecture yadrosini bo'lishadigan **7 ta mustaqil ishga tushadigan Web API**. Hammasi bitta PostgreSQL bazasi (`AppDbContext`) va `CommonConfiguration` (DI, filterlar, middleware, Redis/RabbitMQ) ni bo'lishadi.
+
 ```
-                    +------------------+
-                    |   Mobile App     |
-                    +--------+---------+
-                             |
-              +--------------+--------------+
-              |              |              |
-         +----v----+   +-----v-----+  +-----v-----+
-         | AuthApi |   |  UserApi  |  | BillingApi|
-         | :5002   |   |  :5006   |  |  :5003    |
-         +---------+   +----+-----+  +-----------+
-                             |
-                        SignalR (real-time)
-                        RabbitMQ (commands)
-                             |
-         +-------------------+-------------------+
-         |                                       |
-   +-----v-----+                          +------v------+
-   | AdminApi  |                          |  DeviceApi  |
-   |  :5001    |                          |   :5004     |
-   +-----------+                          +------+------+
-                                                 |
-                                            MQTT Bridge
-                                                 |
-                                          +------v------+
-                                          | IoT Devices |
-                                          +-------------+
+            +--------------+            +--------------+
+            |  Mobile App  |            | Admin Panel  |
+            +------+-------+            +------+-------+
+                   |                           |
+   +-------+-------+-------+-------+      +-----v-----+
+   |       |               |       |      | AdminApi  |
++--v--+ +--v---+      +----v----+ ...     |  :5001    |
+|Auth | |User  |      |Session  |         +-----------+
+|:5002| |:5006 |      |:5007    |
++-----+ +------+      +----+----+
+  ↑                        | SignalR /hubs/session (real-time)
+  |  /api/Auth (customer)  | RabbitMQ (device.commands / events)
+  |  /api/PlatformAuth     | MQTT Bridge (qurilma ↔ server)
+  (platform)               |
+                      +----v------+        +-----------+ +-----------+
+                      |IoT Devices|        | BillingApi| | DeviceApi |
+                      +-----------+        |  :5003    | |  :5004    |
+                                           +-----------+ +-----------+
+                                           (PaymentApi :5005 — stub)
 ```
 
 ### Tech Stack
@@ -40,61 +35,81 @@ IoT qurilmalarni boshqarish va foydalanuvchilarga xizmat ko'rsatish platformasi.
 | Komponent | Texnologiya |
 |-----------|-------------|
 | Runtime | .NET 8 |
-| Database | PostgreSQL |
+| Database | PostgreSQL (`timestamp without time zone`, lokal vaqt) |
 | ORM | Entity Framework Core |
-| Cache & Locks | Redis (StackExchange.Redis) |
+| Cache & Locks | Redis (StackExchange.Redis, resilient fallback) |
 | Message Broker | RabbitMQ |
 | IoT Protocol | MQTT (MQTTnet) |
 | Real-time | SignalR |
-| Auth | JWT (Access + Refresh Token) |
+| Auth | JWT (Access 15m + Refresh 7d), 2 yuza (customer/platform) |
 | API Docs | Swagger / Swashbuckle |
+
+### Clean Architecture qatlamlari va bog'liqlik zanjiri
+
+```
+Domain  ←  Application  ←  Infrastructure/Persistence
+                        ←  Infrastructure/CommonConfiguration
+                        ←  WebApi/*
+```
+Domain hech narsaga bog'liq emas (entity, DTO, interfeys, enum, constants). Application — biznes logika (servislar), faqat Domain'ga bog'liq. Infrastructure — EF Core, Redis, RabbitMQ, MQTT, JWT implementatsiyalari. WebApi — yupqa controller qatlami.
 
 ### Loyiha strukturasi
 
 ```
 BotEnergy/
   Core/
-    Domain/           # Entity, DTO, Interface, Enum, Constants
-    Application/      # Service (biznes logika)
+    Domain/                 # Entity, DTO, Interface, Enum, Constants, Auth (AccessScope)
+    Application/            # Service (biznes logika), Helpers, BackgroundServices
   Infrastructure/
-    Persistence/      # EF Core DbContext, Repository, Migration
-    CommonConfiguration/  # JWT, Redis, RabbitMQ, Filters, Middleware
-    External/         # Tashqi integratsiyalar
+    Persistence/            # EF Core DbContext, Repository, Migration, Seed
+    CommonConfiguration/    # DI extensions, JWT, Redis, RabbitMQ, Filters, Middleware, Payme
   WebApi/
-    AdminApi/         # Admin panel API (port 5001)
-    AuthApi/          # Autentifikatsiya API (port 5002)
-    BillingApi/       # Balans va to'lov API (port 5003)
-    DeviceApi/        # Qurilma API + MQTT Bridge (port 5004)
-    PaymentApi/       # To'lov tizimi API (port 5005)
-    UserApi/          # Foydalanuvchi API + SignalR + RabbitMQ Consumer (port 5006)
+    AuthApi/      :5002      # Customer (/api/Auth) + Platform (/api/PlatformAuth) auth. Public.
+    AdminApi/     :5001      # Admin/operator: merchant/station/device/product/org/user/role/corporate/report
+    BillingApi/   :5003      # Admin balans to'ldirish (/api/Balance/TopUp)
+    DeviceApi/    :5004      # Qurilma identifikatsiyasi & CRUD (live MQTT SessionApi'da)
+    PaymentApi/   :5005      # Stub (Payme integratsiyasi rejada)
+    UserApi/      :5006      # Mobil: profil, balans o'qish, hisobot
+    SessionApi/   :5007      # Sessiya/process/to'lov + MQTT bridge + SignalR hub + RabbitMQ consumerlar
 ```
 
 ---
 
 ## Entity ierarxiyasi
 
+Foydalanuvchilar **ikki mustaqil guruhga** bo'lingan — har biri alohida jadval va alohida rol jadvaliga ega (TPH emas, discriminator yo'q):
+
 ```
-MerchantEntity (Sotuvchi kompaniya)
+MerchantEntity (Sotuvchi biznes)
   └── StationEntity (Stansiya/filial)
         └── DeviceEntity (IoT qurilma)
               └── ProductEntity (Mahsulot/xizmat)
 
-OrganizationEntity (Iste'molchi tashkilot)
-  └── LegalUserEntity (Yuridik foydalanuvchi)
+OrganizationEntity (Iste'molchi tashkilot — corporate balans)
 
-UserEntity (abstract)
-  ├── NaturalUserEntity   (Jismoniy shaxs — o'z balansi bor)
-  ├── LegalUserEntity     (Yuridik shaxs — Organization balansi)
-  └── MerchantUserEntity  (Merchant xodimi — Station ga biriktirilgan)
+── PLATFORM guruhi (platformani boshqaradi) ──
+PlatformUserEntity  → jadval: auth.platform_users  (subtip: PlatformUserType {Manage, Merchant})
+  ├── Manage    — scope cheklovi yo'q (butun platforma)
+  └── Merchant  — faqat o'z MerchantId biznesiga tegishli elementlar
+PlatformRoleEntity  → jadval: auth.platform_roles  (MerchantId? null=Manage/global rol)
 
-RoleEntity
-  └── RolePermissionEntity → PermissionEntity
+── CUSTOMER guruhi (platformadan xizmat oladi) ──
+CustomerUserEntity  → jadval: auth.customer_users  (subtip: CustomerUserType {Natural, Corporate})
+  ├── Natural   — jismoniy shaxs, o'z Balance'i (app orqali self-register)
+  └── Corporate — tashkilot xodimi, OrganizationId orqali tashkilot balansi
+CustomerRoleEntity  → jadval: auth.customer_roles  (OrganizationId? null=global Natural rol)
 
-UsageSessionEntity (Xizmat sessiyasi)
-  ├── → UserEntity
+PermissionEntity (umumiy katalog)
+  ├── PlatformRolePermissionEntity → platform_roles ↔ permissions
+  └── CustomerRolePermissionEntity → customer_roles ↔ permissions
+
+SessionEntity (Xizmat sessiyasi — faqat Customer)
+  ├── → CustomerUserEntity
   ├── → DeviceEntity
-  └── → ProductEntity
+  └── → ProductProcessEntity
 ```
+
+> `UserBase`/`RoleBase` — umumiy ustunlar uchun mapped bo'lmagan abstrakt bazalar (har konkret entity o'z jadvaliga map qilinadi). `UserRoleEntity` (m:n) yo'q — har userda bitta `RoleId` FK.
 
 ### Soft Delete
 
@@ -104,10 +119,22 @@ Barcha entity larda `IsDeleted` maydoni mavjud. EF Core Global Query Filter orqa
 
 ## 1. AuthApi — Autentifikatsiya
 
-**Port:** `5002` | **Full Base URL:** `http://localhost:5002/api/Auth`
+**Port:** `5002`
 **Authorize:** Yo'q (barcha endpoint lar ochiq)
 
-### 1.1 Ro'yxatdan o'tish (4 qadamli flow)
+AuthApi ikki alohida auth yuzasiga ega:
+
+| Yuza | Base URL | Kim uchun |
+|---|---|---|
+| **Customer** | `http://localhost:5002/api/Auth` | Jismoniy (Natural) self-register + login; corporate userlar admin yaratadi, shu yerdan login qiladi |
+| **Platform** | `http://localhost:5002/api/PlatformAuth` | Manage/Merchant login + refresh. **Self-register yo'q** — Manage yaratadi |
+
+Refresh token qiymati guruh prefiksi bilan ajratiladi: `c:` (customer) / `p:` (platform). Har bir auth servisi faqat o'z prefiksli tokenini qabul qiladi.
+
+**Platform login:** `POST /api/PlatformAuth/Login` `{ phoneNumber, password }` → JWT (`UserGroup=Platform`, `UserSubType=Manage|Merchant`, Merchant uchun `MerchantId` claim). Seed Manage SuperAdmin: `998901234567` / `Admin@123`.
+**Platform refresh:** `POST /api/PlatformAuth/RefreshToken` `{ refreshToken }`.
+
+### 1.1 Ro'yxatdan o'tish (4 qadamli flow) — faqat Customer/Natural
 
 #### Qadam 1: Register
 
@@ -129,7 +156,7 @@ POST /api/Auth/Register
 2. Agar topilsa va `IsVerified=true` → "Siz allaqachon ro'yxatdan o'tgansiz, login qiling"
 3. Agar topilsa va `IsOtpVerified=true` → "OTP tasdiqlangan, parol o'rnating"
 4. Agar topilsa, lekin OTP tasdiqlanmagan → yangi OTP generatsiya qilinadi
-5. Agar yangi user → `NaturalUserEntity` yaratiladi, OTP yuboriladi
+5. Agar yangi user → `CustomerUserEntity` (Type=Natural) yaratiladi, default global Natural rol biriktiriladi, OTP yuboriladi
 
 **Response (201):**
 ```json
@@ -218,6 +245,8 @@ POST /api/Auth/SetPassword
 ```
 POST /api/Auth/Login
 ```
+
+> Bu **Customer** (Natural/Corporate) login. Platform (Manage/Merchant) administratorlari `POST /api/PlatformAuth/Login` dan foydalanadi (1-bo'lim boshiga qarang).
 
 **Request:**
 ```json
@@ -520,9 +549,9 @@ Permission: StationAdmin.Create
 1. `Merchant` topiladi (global filter: `IsDeleted=false`)
 2. **Merchant faolligi** tekshiriladi (`IsActive=true` bo'lishi shart)
 3. **Access control:**
-   - `MerchantAdmin.Register` permission bor → cheklov yo'q
-   - `MerchantUserEntity` → faqat o'z merchant iga tegishli station yaratishi mumkin
-   - Boshqa user type → 403
+   - `MerchantAdmin.Register` permission bor → cheklov yo'q (Manage)
+   - PlatformUser/Merchant operator → faqat o'z `MerchantId` biznesiga station yaratishi mumkin
+   - Boshqa hollar → 403
 
 **Response (200):**
 ```json
@@ -624,9 +653,8 @@ Permission: DeviceAdmin.Register
 **Logika:**
 1. Station topiladi va **faolligi** tekshiriladi
 2. **Access control:**
-   - `MerchantAdmin.Register` permission → cheklov yo'q
-   - `MerchantUserEntity` → station o'z merchant iga tegishli bo'lishi shart
-   - `LegalUserEntity` → station o'z organization iga tegishli bo'lishi shart
+   - `MerchantAdmin.Register` permission → cheklov yo'q (Manage)
+   - PlatformUser/Merchant operator → station o'z `MerchantId` biznesiga tegishli bo'lishi shart
 3. `SerialNumber` unikalligi tekshiriladi → 409 agar mavjud
 4. `SecretKey` avtomatik generatsiya qilinadi (qurilma autentifikatsiyasi uchun)
 
@@ -788,7 +816,7 @@ DELETE /api/Product/{id}  → Permission: ProductAdmin.Delete
 
 ### 2.5 Organization boshqaruvi
 
-**Organization** — iste'molchi tashkilot. LegalUser lar shu tashkilotga tegishli bo'ladi va tashkilot balansi orqali xizmatlardan foydalanadi.
+**Organization** — iste'molchi tashkilot. Corporate customer userlar (`CustomerUser/Corporate`) shu tashkilotga biriktiriladi va bitta tashkilot balansi orqali xizmatlardan foydalanadi.
 
 #### Create
 
@@ -868,11 +896,11 @@ Permission: OrganizationAdmin.Delete
 
 ---
 
-### 2.6 User boshqaruvi (Admin)
+### 2.6 Platform user boshqaruvi (Admin)
 
-Admin tomonidan `LegalUserEntity` yoki `MerchantUserEntity` yaratish.
+`/api/User/*` — **Platform** foydalanuvchilarini (Manage/Merchant) boshqaradi. Faqat Manage chaqira oladi; Merchant operator (agar `UserAdmin.*` ruxsati bo'lsa) faqat o'z merchantining operatorlarini boshqaradi (scope `AccessScope` orqali).
 
-> `NaturalUserEntity` faqat o'zi ro'yxatdan o'tadi (AuthApi orqali).
+> **Customer** foydalanuvchilari bu yerda emas: Natural o'zi ro'yxatdan o'tadi (AuthApi), Corporate esa `/api/CorporateUser/*` orqali yaratiladi (2.8-bo'limga qarang).
 
 #### Create
 
@@ -881,41 +909,37 @@ POST /api/User/Create
 Permission: UserAdmin.Create
 ```
 
-**LegalUser yaratish (Organization ga):**
+`type` — enum **raqam**: `0=Manage`, `1=Merchant` (JsonStringEnumConverter sozlanmagan).
+
+**Manage user yaratish (global rol bilan):**
 ```json
 {
   "phoneId": "device-uuid-456",
-  "mail": "employee@techcorp.uz",
-  "phoneNumber": "+998901234568",
+  "mail": "manager@botenergy.uz",
+  "phoneNumber": "998901234568",
   "roleId": 2,
-  "organizationId": 1
+  "type": 0
 }
 ```
 
-**MerchantUser yaratish (Station ga):**
+**Merchant operator yaratish (merchantga bog'liq):**
 ```json
 {
   "phoneId": "device-uuid-789",
   "mail": "operator@ecofuel.uz",
-  "phoneNumber": "+998901234569",
+  "phoneNumber": "998901234569",
   "roleId": 3,
-  "stationId": 1
+  "type": 1,
+  "merchantId": 1
 }
 ```
 
 **Logika:**
-1. Telefon raqam unikalligi → 409
-2. Role mavjudligi → 404
-3. Agar `OrganizationId` va `StationId` ikkalasi ham berilsa → `StationId = null` (Organization ustunlik qiladi)
-4. **OrganizationId berilsa:**
-   - Organization topiladi va `IsActive` tekshiriladi
-   - `OrganizationAdmin.Create` permission yo'q bo'lsa, caller faqat o'z organization iga qo'sha oladi
-   - `LegalUserEntity` yaratiladi
-5. **StationId berilsa:**
-   - Station topiladi va `IsActive` tekshiriladi
-   - Station `MerchantId` bo'lishi shart
-   - `MerchantAdmin.Register` permission yo'q bo'lsa, caller faqat o'z merchant iga qo'sha oladi
-   - `MerchantUserEntity` yaratiladi
+1. Scope: Manage → har qanday; Merchant operator → faqat `type=Merchant` va o'z `MerchantId` (aks holda 403)
+2. Telefon raqam unikalligi → 409
+3. Role mavjudligi → 404
+4. **type=Merchant:** `merchantId` majburiy; merchant topiladi + `IsActive`; tanlangan rol shu merchantga tegishli bo'lishi shart (`role.MerchantId == merchantId`)
+5. **type=Manage:** tanlangan rol global bo'lishi shart (`role.MerchantId == null`)
 6. User `IsOtpVerified=true`, `IsVerified=false` holda yaratiladi (parol hali o'rnatilmagan)
 
 **Response:**
@@ -978,45 +1002,37 @@ GET /api/User/{id}     → Permission: UserAdmin.GetById
 ```json
 {
   "id": 5,
-  "phoneNumber": "+998901234568",
-  "mail": "employee@techcorp.uz",
-  "userType": "LegalEntity",
+  "phoneNumber": "998901234568",
+  "mail": "operator@ecofuel.uz",
+  "subType": "Merchant",
+  "merchantId": 1,
   "isVerified": true,
   "isBlocked": false,
-  "roleId": 2,
+  "roleId": 3,
   "roleName": "Station Operator",
-  "balance": 1000000.00,
   "createdDate": "2026-04-20T10:00:00",
   "lastLoginDate": "2026-04-20T12:00:00"
 }
 ```
 
-> `balance` — NaturalUser uchun o'z balansi, LegalUser uchun Organization balansi qaytariladi.
+> Platform userlarda balans yo'q. Balans Customer (Natural/Corporate) tomonida.
 
 ---
 
-### 2.7 Role va Permission boshqaruvi
+### 2.7 Platform rol va permission boshqaruvi
+
+`/api/Role/*` — **Platform** rollari (kind: `PlatformManage` global, yoki `PlatformMerchant` merchant scope). Manage barcha platform rollarni; Merchant operator faqat o'z merchanti rollarini boshqaradi (scope).
 
 #### Ruxsat etilgan permission larni olish
 
 ```
-GET /api/Role/GetAllowedPermissions
+GET /api/Role/GetAllowedPermissions?kind=PlatformManage
 Permission: Role.GetAllowedPermissions
 ```
 
-**Response:**
-```json
-{
-  "isSuccess": true,
-  "result": {
-    "permissions": [
-      { "id": 1, "name": "StationAdmin.Create" },
-      { "id": 2, "name": "DeviceAdmin.Register" },
-      { "id": 3, "name": "Session.Create" }
-    ]
-  }
-}
-```
+`kind` — `RoleKind` enum: `PlatformManage` yoki `PlatformMerchant` (query param, nom yoki raqam qabul qilinadi). PlatformManage → barcha platform permissionlar; PlatformMerchant → ManageOnly'dan tashqari merchant scope to'plami.
+
+**Response:** `{ "result": { "kind": "PlatformManage", "permissions": [ { "id":1, "name":"StationAdmin.Create" }, ... ] } }`
 
 #### Create Role
 
@@ -1025,50 +1041,62 @@ POST /api/Role/CreateRole
 Permission: Role.CreateRole
 ```
 
-**Request:**
+**Request:** `merchantId` null bo'lsa — PlatformManage (global) rol; to'ldirilsa — shu merchantning PlatformMerchant roli.
 ```json
 {
   "name": "Station Operator",
-  "description": "Stansiya operatori — qurilma va mahsulotlarni boshqaradi",
+  "description": "Stansiya operatori",
   "isActive": true,
+  "merchantId": 1,
   "permissionIds": [1, 2, 5, 10]
 }
 ```
 
 **Logika:**
-1. Role yaratiladi
-2. `PermissionIds` berilsa — har bir ID mavjudligi tekshiriladi
-3. Mavjud permission lar `RolePermissionEntity` orqali bog'lanadi
+1. Scope: Manage → istalgan (merchantId ixtiyoriy); Merchant operator → faqat o'z `merchantId`
+2. `permissionIds` har biri `PermissionScopes.IsAllowedFor(kind, ...)` bo'yicha tekshiriladi (mos kelmasa 400)
+3. `PlatformRolePermissionEntity` orqali bog'lanadi
 
-#### Update Role (Permission lar bilan)
-
-```
-PUT /api/Role/{id}
-Permission: Role.Update
-```
-
-**Request:**
-```json
-{
-  "name": "Senior Operator",
-  "isActive": true,
-  "permissionIds": [1, 2, 5, 10, 15, 20]
-}
-```
-
-**Logika:**
-1. Mavjud role permission lari olinadi
-2. Yangi ro'yxatda yo'q bo'lganlar `IsDeleted=true` ga o'zgartiriladi
-3. Yangi qo'shilganlar `RolePermissionEntity` sifatida yaratiladi
-
-#### GetAll / GetById / GetPermissions / Delete
+#### Update / GetAll / GetById / GetPermissions / Delete
 
 ```
-GET /api/Role/GetAll              → Permission: Role.GetAll
-GET /api/Role/{id}                → Permission: Role.GetById
-GET /api/Role/{roleId}/Permissions → Permission: Role.GetPermissions
-DELETE /api/Role/{id}             → Permission: Role.Delete
+PUT    /api/Role/Update/{id}            → Permission: Role.Update
+GET    /api/Role/GetAll                 → Permission: Role.GetAll
+GET    /api/Role/GetById/{id}           → Permission: Role.GetById
+GET    /api/Role/GetPermissions/{roleId}→ Permission: Role.GetPermissions
+DELETE /api/Role/Delete/{id}            → Permission: Role.Delete
 ```
+
+Update logikasi: yangi ro'yxatda yo'q permissionlar `IsDeleted=true`, yangilari qo'shiladi (kind bo'yicha validatsiya bilan).
+
+---
+
+### 2.8 Corporate user va rol boshqaruvi
+
+Tashkilot (corporate) tomoni alohida controllerlarda. Manage istalgan tashkilot uchun; Corporate bosh admini faqat o'z tashkiloti uchun (scope `AccessScope.CanAccessOrganization`). Gating — `CustomerAdmin.*` permissionlari.
+
+**Corporate userlar** (`/api/CorporateUser/*`):
+```
+POST   /api/CorporateUser/Create                       → CustomerAdmin.Create
+GET    /api/CorporateUser/GetByOrganization/{orgId}    → CustomerAdmin.GetAll
+GET    /api/CorporateUser/GetById/{id}                 → CustomerAdmin.GetById
+PUT    /api/CorporateUser/SetPassword/{id}             → CustomerAdmin.SetPassword
+PUT    /api/CorporateUser/Block/{id} | Unblock/{id}    → CustomerAdmin.Block/Unblock
+DELETE /api/CorporateUser/Delete/{id}                  → CustomerAdmin.Delete
+```
+Create: `{ phoneId, mail, phoneNumber, roleId, organizationId }`. Rol shu tashkilotga tegishli `CustomerRole` bo'lishi shart. Barcha corporate userlar bitta `Organization.Balance`dan foydalanadi.
+
+**Corporate rollar** (`/api/CorporateRole/*`):
+```
+POST   /api/CorporateRole/Create               → CustomerAdmin.Create
+GET    /api/CorporateRole/GetAll                → CustomerAdmin.GetAll
+GET    /api/CorporateRole/GetById/{id}         → CustomerAdmin.GetById
+GET    /api/CorporateRole/GetPermissions/{id}  → CustomerAdmin.GetById
+GET    /api/CorporateRole/AllowedPermissions   → CustomerAdmin.GetAll
+PUT    /api/CorporateRole/Update/{id}          → CustomerAdmin.Create
+DELETE /api/CorporateRole/Delete/{id}          → CustomerAdmin.Delete
+```
+Create: `{ name, description, isActive, organizationId, permissionIds }` (CorporateAllowed to'plamidan).
 
 ---
 
@@ -1139,7 +1167,7 @@ Permission: Yo'q (SkipPermissionCheck)
 }
 ```
 
-> NaturalUser → o'z balansi, LegalUser → Organization balansi. Balans to'ldirish admin uchun BillingApi'da: `POST /api/Balance/TopUp` (4-bo'limga qarang).
+> Natural → o'z balansi, Corporate → Organization balansi. Balans to'ldirish admin uchun BillingApi'da: `POST /api/Balance/TopUp` (4-bo'limga qarang).
 
 ---
 
@@ -1302,9 +1330,9 @@ Permission: Session.SetQuantity
 
 **Logika:**
 1. Sessiya topiladi, status `DeviceConnected` bo'lishi shart
-2. User balansi tekshiriladi:
-   - `NaturalUserEntity` → `natural.Balance`
-   - `LegalUserEntity` → `legal.Organization.Balance`
+2. User balansi tekshiriladi (`CustomerUserEntity`):
+   - `Type=Natural` → `user.Balance`
+   - `Type=Corporate` → `user.Organization.Balance`
 3. `maxQuantity = balance / pricePerUnit`
 4. `limit = min(requestedQuantity, maxQuantity)`
 5. Agar `limit <= 0` → "Balans yetarli emas"
@@ -1466,7 +1494,7 @@ Authorize: JWT
 }
 ```
 
-> NaturalUser → o'z balansi, LegalUser → Organization balansi.
+> Natural → o'z balansi, Corporate → Organization balansi.
 
 ### Balansni to'ldirish (admin)
 
@@ -1486,9 +1514,9 @@ Permission: Balance.TopUp
 
 **Logika:**
 1. `Amount > 0` tekshiriladi
-2. User topiladi
-3. NaturalUser → `Balance += Amount`
-4. LegalUser → `Organization.Balance += Amount`
+2. Customer user topiladi
+3. `Type=Natural` → `Balance += Amount`
+4. `Type=Corporate` → `Organization.Balance += Amount`
 
 **Response:**
 ```json
@@ -1607,33 +1635,29 @@ POST /api/Payment/verify   → { "paid": true }
 | `ProductAdmin.GetAllowedTypes` | Ruxsat etilgan mahsulot turlarini ko'rish |
 | `ProductAdmin.Update` | Mahsulotni tahrirlash |
 | `ProductAdmin.Delete` | Mahsulotni o'chirish |
-| `UserAdmin.Create` | Foydalanuvchi yaratish (Legal/Merchant) |
-| `UserAdmin.GetAll` | Barcha foydalanuvchilarni ko'rish |
-| `UserAdmin.GetById` | Foydalanuvchini ko'rish |
-| `UserAdmin.SetPassword` | Parol o'rnatish (birinchi marta) |
-| `UserAdmin.ResetPassword` | Parol tiklash |
-| `UserAdmin.Block` | Foydalanuvchini bloklash |
-| `UserAdmin.Unblock` | Blokdan chiqarish |
-| `UserAdmin.Delete` | Foydalanuvchini o'chirish |
+| `UserAdmin.*` | Platform user (Manage/Merchant) yaratish/ko'rish/SetPassword/ResetPassword/Block/Unblock/Delete |
+| `CustomerAdmin.*` | Corporate user va rol boshqaruvi (Create/GetAll/GetById/SetPassword/Block/Unblock/Delete) |
 
-### User app permission lari
+> Permission `Permissions.PlatformAll` (admin/merchant boshqaruvi) va `Permissions.CustomerAll` (session/process/profil/report/payment-self + `CustomerAdmin.*`) guruhlariga bo'lingan; `All` — ikkalasining birlashmasi.
+
+### Customer (mobil) permission lari
 
 | Permission | Tavsif |
 |------------|--------|
-| `Balance.TopUp` | Balansni to'ldirish |
-| `Session.Create` | Sessiya yaratish |
-| `Session.SetQuantity` | Miqdor belgilash va start |
-| `Session.Close` | Sessiyani yopish |
+| `Session.Create` / `Session.Close` / `Session.Read` / `Session.Heartbeat` | Sessiya |
+| `Process.Start` / `Stop` / `Pause` / `Resume` | Mahsulot berish jarayoni |
+| `User.Me` / `User.UpdateMe` / `User.Bootstrap` | Profil |
+| `Report.MyUsage` / `Report.MyUsageExport` | O'z hisoboti |
+| `Payment.TopUpSelf` / `Payment.GetMyTransactions` | Self to'lov (Natural) |
+| `Payment.TopUpOrganization` / `Payment.GetOrganizationTransactions` / `OrganizationReport.Usage*` | Corporate qo'shimcha |
+| `Balance.TopUp` | Admin balans to'ldirish (BillingApi, ManageOnly) |
 
-### Permission ierarxiyasi
+### Rol-kind bo'yicha ruxsat (PermissionScopes.IsAllowedFor)
 
-`MerchantAdmin.Register` — bu super admin permission. Uni egallagan user:
-- Istalgan merchant ga station yaratishi mumkin
-- Istalgan station ga device ro'yxatdan o'tkazishi mumkin
-- Istalgan device ga product yaratishi mumkin
-- Istalgan merchant ga user qo'shishi mumkin
-
-Oddiy `StationAdmin.Create` yoki `DeviceAdmin.Register` — faqat o'z merchant/organization doirasida ishlaydi.
+- **PlatformManage** → barcha permissionlar (to'liq nazorat).
+- **PlatformMerchant** → `PlatformAll` ∖ `ManageOnly` (o'z merchanti station/device/product/operator/rollari; Organization yaratish, Merchant register/delete, Balance.TopUp, Payment audit yo'q).
+- **CustomerNatural** → `NaturalAllowed` (session/process/profil/report-self/payment-self).
+- **CustomerCorporate** → `CorporateAllowed` (Natural + org balans/hisobot + `CustomerAdmin.*`).
 
 ---
 
@@ -1652,14 +1676,16 @@ Barcha querylar avtomatik `WHERE is_deleted = false` sharti bilan ishlaydi. O'ch
 | StationService.Create | Merchant mavjud + `IsActive=true` |
 | DeviceService.Register | Station mavjud + `IsActive=true` |
 | ProductService.Create | Device mavjud + `IsActive=true`, Station `IsActive=true` |
-| UserAdminService.Create | Organization/Station mavjud + `IsActive=true` |
-| SessionService.Create | User mavjud + `IsBlocked=false` |
+| UserAdminService.Create | (platform) Merchant mavjud + `IsActive=true`, rol scope mos |
+| CustomerAdminService.Create | (corporate) Organization mavjud + `IsActive=true`, rol scope mos |
+| SessionService.Create | Customer user mavjud + `IsBlocked=false` |
 
 ### 3. Access Control (ownership tekshiruvi)
 
-Har bir Create/Update operatsiyada caller ning tegishli Merchant/Organization ga egaligi tekshiriladi:
-- `MerchantUserEntity` → `callerStation.MerchantId == targetStation.MerchantId`
-- `LegalUserEntity` → `caller.OrganizationId == target.OrganizationId`
+Har bir Create/Update operatsiyada caller ning scope'i (`AccessScope`, JWT claimlardan) tekshiriladi:
+- **Manage** (`IsManage`) → cheklov yo'q
+- **PlatformUser/Merchant** → `scope.MerchantId == target merchant` (`CanAccessMerchant`)
+- **CustomerUser/Corporate** → `scope.OrganizationId == target org` (`CanAccessOrganization`)
 
 ### 4. Token xavfsizligi
 
