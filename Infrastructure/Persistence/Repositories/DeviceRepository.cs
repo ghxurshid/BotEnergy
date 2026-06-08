@@ -1,4 +1,5 @@
 using Domain.Dtos.Base;
+using Domain.Dtos.Device;
 using Domain.Entities;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -74,22 +75,58 @@ namespace Persistence.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public Task<int> TouchLastSeenAsync(string serialNumber)
+        public async Task<bool> MarkSeenAsync(string serialNumber)
         {
             var now = DateTime.Now;
-            return _context.Devices
+
+            // 1) Edge: faqat oldin offline bo'lsa o'zgaradi (rows-affected == 1 ⇒ reconnect).
+            var edge = await _context.Devices
+                .Where(d => d.SerialNumber == serialNumber && d.IsActive && !d.IsOnline)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(d => d.IsOnline, true)
+                    .SetProperty(d => d.LastSeenAt, now)
+                    .SetProperty(d => d.UpdatedDate, now));
+
+            if (edge > 0)
+                return true;
+
+            // 2) Allaqachon online — faqat LastSeenAt ni arzon yangilash (hot path).
+            await _context.Devices
                 .Where(d => d.SerialNumber == serialNumber && d.IsActive)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(d => d.LastSeenAt, now)
-                    .SetProperty(d => d.IsOnline, true)
                     .SetProperty(d => d.UpdatedDate, now));
+
+            return false;
         }
 
         public async Task<List<DeviceEntity>> GetStaleOnlineDevicesAsync(DateTime threshold)
         {
             return await _context.Devices
+                .Include(d => d.Station)
                 .Where(d => d.IsOnline && (d.LastSeenAt == null || d.LastSeenAt < threshold))
                 .ToListAsync();
         }
+
+        public Task<DeviceStatusInfo?> GetStatusInfoBySerialAsync(string serialNumber)
+            => _context.Devices
+                .Where(d => d.SerialNumber == serialNumber && d.IsActive)
+                .Select(StatusProjection)
+                .FirstOrDefaultAsync();
+
+        public Task<DeviceStatusInfo?> GetStatusInfoByIdAsync(long deviceId)
+            => _context.Devices
+                .Where(d => d.Id == deviceId && d.IsActive)
+                .Select(StatusProjection)
+                .FirstOrDefaultAsync();
+
+        public async Task<List<DeviceStatusInfo>> GetStatusInfoByMerchantAsync(long merchantId)
+            => await _context.Devices
+                .Where(d => d.IsActive && d.Station!.MerchantId == merchantId)
+                .Select(StatusProjection)
+                .ToListAsync();
+
+        private static readonly System.Linq.Expressions.Expression<System.Func<DeviceEntity, DeviceStatusInfo>> StatusProjection =
+            d => new DeviceStatusInfo(d.Id, d.SerialNumber, d.StationId, d.Station!.MerchantId, d.IsOnline, d.LastSeenAt);
     }
 }

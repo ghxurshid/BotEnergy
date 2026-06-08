@@ -1,4 +1,5 @@
 using Domain.Dtos.Base;
+using Domain.Dtos.Device;
 using Domain.Entities;
 
 namespace Domain.Repositories
@@ -15,14 +16,23 @@ namespace Domain.Repositories
         Task DeleteAsync(long id);
 
         /// <summary>
-        /// Heartbeat / telemetry kelganda chaqiriladi — LastSeenAt va IsOnline ni yangilaydi.
-        /// Atomic SQL update — entity yuklab kelmasdan ishlaydi.
+        /// Inbound kelganda chaqiriladi — LastSeenAt ni yangilaydi va, agar qurilma oldin
+        /// offline bo'lgan bo'lsa, IsOnline=true ga o'tkazadi. Atomik SQL (entity yuklamaydi).
         /// </summary>
-        Task<int> TouchLastSeenAsync(string serialNumber);
+        /// <returns><c>true</c> — offline→online edge yuz berdi (reconnect); <c>false</c> — allaqachon online edi.</returns>
+        Task<bool> MarkSeenAsync(string serialNumber);
 
         /// <summary>
-        /// LastSeenAt belgilangan vaqtdan eskirib qolgan, lekin hali IsOnline=true bo'lgan qurilmalarni topadi.
+        /// LastSeenAt belgilangan vaqtdan eskirib qolgan, lekin hali IsOnline=true bo'lgan qurilmalarni topadi
+        /// (Station bilan — MerchantId uchun).
         /// </summary>
         Task<List<DeviceEntity>> GetStaleOnlineDevicesAsync(DateTime threshold);
+
+        /// <summary>Bitta qurilma holati (scope/event uchun yengil proyeksiya).</summary>
+        Task<DeviceStatusInfo?> GetStatusInfoBySerialAsync(string serialNumber);
+        Task<DeviceStatusInfo?> GetStatusInfoByIdAsync(long deviceId);
+
+        /// <summary>Merchantning barcha aktiv qurilmalari holati (admin snapshot uchun).</summary>
+        Task<List<DeviceStatusInfo>> GetStatusInfoByMerchantAsync(long merchantId);
     }
 }

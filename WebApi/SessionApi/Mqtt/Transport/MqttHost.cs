@@ -1,5 +1,5 @@
 using System.Text;
-using Domain.Repositories;
+using Domain.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -101,8 +101,9 @@ namespace SessionApi.Mqtt.Transport
 
                 if (context.Device is not null)
                 {
-                    var deviceRepo = scope.ServiceProvider.GetRequiredService<IDeviceRepository>();
-                    await deviceRepo.TouchLastSeenAsync(parsed.SerialNumber);
+                    // LastSeenAt yangilash + offline→online edge bo'lsa DeviceStatusChanged{Online} chiqarish.
+                    var deviceStatus = scope.ServiceProvider.GetRequiredService<IDeviceStatusService>();
+                    await deviceStatus.MarkSeenAsync(parsed.SerialNumber);
                 }
             }
             catch (Exception ex)

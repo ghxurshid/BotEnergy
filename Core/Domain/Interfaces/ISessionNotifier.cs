@@ -31,5 +31,12 @@ namespace Domain.Interfaces
         /// Klient SignalR hub'ga ulanishi bilan avtomatik shu group'ga qo'shiladi.
         /// </summary>
         Task NotifyUserAsync(long userId, string eventName, object payload);
+
+        /// <summary>
+        /// Qurilma holati o'zgarganini (online/offline/lost) tracking qilayotgan guruhlarga yuboradi:
+        /// <c>device:{DeviceId}</c> (app session ekrani, admin device sahifasi) va
+        /// <c>merchant:{MerchantId}</c> (admin device ro'yxati). Event nomi: <c>DeviceStatusChanged</c>.
+        /// </summary>
+        Task NotifyDeviceStatusAsync(Domain.Dtos.Device.DeviceStatusChangedDto e);
     }
 }

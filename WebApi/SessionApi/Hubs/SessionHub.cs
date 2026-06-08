@@ -1,3 +1,5 @@
+using Domain.Dtos.Device;
+using Domain.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
@@ -5,63 +7,92 @@ using System.Security.Claims;
 namespace SessionApi.Hubs
 {
     /// <summary>
-    /// Server → Client real-time push uchun ishlatiladi.
-    /// Klient sessiya guruhiga qo'shilishi va undan chiqishi mumkin — boshqa hech qanday
-    /// state-modifying operatsiya hub orqali qabul qilinmaydi (ownership-check va
-    /// audit-trail uchun barcha buyruqlar REST endpoint orqali yuboriladi).
+    /// Server → Client real-time push. Klient guruhlarga obuna bo'ladi (state-modifying yo'q).
     ///
     /// Group sxemasi:
-    ///   - sessionToken — sessiyaga ulangan barcha klientlar
-    ///   - "user:{userId}" — JWT'dan olingan userId, ulanganda avtomatik join
+    ///   - sessionToken          — sessiyaga ulangan klientlar (planshet+telefon)
+    ///   - "user:{userId}"       — JWT'dan userId, ulanganda avtomatik join
+    ///   - "device:{deviceId}"   — bitta qurilma statusini kuzatish (app session, admin device sahifasi)
+    ///   - "merchant:{merchantId}" — merchant qurilmalari ro'yxatini kuzatish (admin)
     ///
-    /// Server → Client eventlar:
-    ///   DeviceConnected   { device_id, products, ... }
-    ///   ProcessStarted    { process_id, product_id, requested_amount, ... }
-    ///   ProcessUpdated    { process_id, total_given, current_cost, product_id, unit, price_per_unit }
-    ///   ProcessEnded      { process_id, end_reason, total_given, total_cost, ended_at }
-    ///   SessionUpdated    { session_id, status, ... }
-    ///   SessionClosed     { reason, total_delivered, total_cost, closed_at }  // session-level — barcha jarayonlar yig'indisi
+    /// Eventlar: DeviceConnected, ProcessStarted/Updated/Ended, SessionUpdated/Closed,
+    ///           DeviceStatusChanged { deviceId, serial, status, isOnline, ... },
+    ///           DeviceStatusSnapshot [ ...DeviceStatusChanged ]  (obuna paytida joriy holat)
     /// </summary>
     [Authorize]
     public sealed class SessionHub : Hub
     {
         private readonly ILogger<SessionHub> _logger;
+        private readonly IDeviceRepository _deviceRepo;
 
-        public SessionHub(ILogger<SessionHub> logger)
+        public SessionHub(ILogger<SessionHub> logger, IDeviceRepository deviceRepo)
         {
             _logger = logger;
+            _deviceRepo = deviceRepo;
         }
 
         public static string UserGroup(long userId) => $"user:{userId}";
+        public static string DeviceGroup(long deviceId) => $"device:{deviceId}";
+        public static string MerchantGroup(long merchantId) => $"merchant:{merchantId}";
 
         public override async Task OnConnectedAsync()
         {
             var userId = GetUserId();
             if (userId.HasValue)
-            {
                 await Groups.AddToGroupAsync(Context.ConnectionId, UserGroup(userId.Value));
-                _logger.LogDebug("Client {ConnectionId} auto-joined user group {UserId}", Context.ConnectionId, userId);
-            }
 
             await base.OnConnectedAsync();
         }
 
-        public async Task JoinSession(string sessionToken)
+        // ── Sessiya guruhi ──────────────────────────────────────────────
+        public Task JoinSession(string sessionToken)
+            => Groups.AddToGroupAsync(Context.ConnectionId, sessionToken);
+
+        public Task LeaveSession(string sessionToken)
+            => Groups.RemoveFromGroupAsync(Context.ConnectionId, sessionToken);
+
+        // ── Qurilma statusini kuzatish ──────────────────────────────────
+        /// <summary>Bitta qurilma statusiga obuna + joriy holatni darhol qaytaradi.</summary>
+        public async Task SubscribeDevice(long deviceId)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, sessionToken);
-            _logger.LogDebug("Client {ConnectionId} joined session {Token}", Context.ConnectionId, sessionToken);
+            await Groups.AddToGroupAsync(Context.ConnectionId, DeviceGroup(deviceId));
+            var info = await _deviceRepo.GetStatusInfoByIdAsync(deviceId);
+            if (info is not null)
+                await Clients.Caller.SendAsync("DeviceStatusChanged", ToDto(info));
         }
 
-        public async Task LeaveSession(string sessionToken)
+        public Task UnsubscribeDevice(long deviceId)
+            => Groups.RemoveFromGroupAsync(Context.ConnectionId, DeviceGroup(deviceId));
+
+        /// <summary>Merchant qurilmalari ro'yxatiga obuna (scope tekshiriladi) + snapshot.</summary>
+        public async Task SubscribeMerchant(long merchantId)
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, sessionToken);
-            _logger.LogDebug("Client {ConnectionId} left session {Token}", Context.ConnectionId, sessionToken);
+            if (!CanAccessMerchant(merchantId))
+                throw new HubException("Bu merchant qurilmalarini kuzatishga ruxsatingiz yo'q.");
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, MerchantGroup(merchantId));
+
+            var list = await _deviceRepo.GetStatusInfoByMerchantAsync(merchantId);
+            await Clients.Caller.SendAsync("DeviceStatusSnapshot", list.Select(ToDto));
         }
 
-        public override async Task OnDisconnectedAsync(Exception? exception)
+        public Task UnsubscribeMerchant(long merchantId)
+            => Groups.RemoveFromGroupAsync(Context.ConnectionId, MerchantGroup(merchantId));
+
+        // ── Helpers ─────────────────────────────────────────────────────
+        private static DeviceStatusChangedDto ToDto(DeviceStatusInfo i)
+            => new(i.DeviceId, i.Serial, i.StationId, i.MerchantId,
+                   i.IsOnline ? "Online" : "Offline", i.IsOnline, i.LastSeenAt, null, DateTime.Now);
+
+        /// <summary>Manage → har doim; Platform/Merchant → faqat o'z merchanti; aks holda yo'q.</summary>
+        private bool CanAccessMerchant(long merchantId)
         {
-            _logger.LogDebug("Client {ConnectionId} disconnected", Context.ConnectionId);
-            await base.OnDisconnectedAsync(exception);
+            var subType = Context.User?.FindFirstValue("UserSubType");
+            if (string.Equals(subType, "Manage", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var raw = Context.User?.FindFirstValue("MerchantId");
+            return long.TryParse(raw, out var own) && own == merchantId;
         }
 
         private long? GetUserId()

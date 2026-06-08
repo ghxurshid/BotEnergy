@@ -277,6 +277,7 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<ISessionRepository, SessionRepository>();
             services.AddScoped<IProcessService, ProcessService>();
             services.AddScoped<ISessionService, SessionService>();
+            services.AddScoped<IDeviceStatusService, DeviceStatusService>();
             services.AddScoped<IBootstrapService, BootstrapService>();
             services.AddSingleton<IPushNotificationService, LoggingPushNotificationService>();
             // ISessionNotifier va IDeviceSessionService — SessionApi Program.cs da

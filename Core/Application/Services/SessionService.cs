@@ -24,6 +24,7 @@ namespace Application.Services
         private readonly IBillingService _billing;
         private readonly IPushNotificationService _push;
         private readonly IPendingSessionStore _pendingStore;
+        private readonly IDeviceStatusService _deviceStatus;
 
         private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan PendingSessionTtl = TimeSpan.FromMinutes(30);
@@ -39,7 +40,8 @@ namespace Application.Services
             IDeviceLockService deviceLock,
             IBillingService billing,
             IPushNotificationService push,
-            IPendingSessionStore pendingStore)
+            IPendingSessionStore pendingStore,
+            IDeviceStatusService deviceStatus)
         {
             _sessionRepo = sessionRepo;
             _deviceRepo = deviceRepo;
@@ -51,6 +53,7 @@ namespace Application.Services
             _billing = billing;
             _push = push;
             _pendingStore = pendingStore;
+            _deviceStatus = deviceStatus;
         }
 
         public async Task<GenericDto<CreateSessionResultDto>> CreateSessionAsync(CreateSessionDto dto)
@@ -402,6 +405,13 @@ namespace Application.Services
 
                 device.IsOnline = false;
                 await _deviceRepo.UpdateAsync(device);
+
+                // Offline edge — tracking qilayotgan barchaga (app session, admin) xabar.
+                // Aktiv sessiya bo'lsa "Lost", aks holda oddiy "Offline".
+                await _deviceStatus.NotifyOfflineAsync(
+                    device.SerialNumber,
+                    lost: activeSessions.Count > 0,
+                    sessionId: activeSessions.FirstOrDefault()?.Id);
             }
         }
 
