@@ -50,11 +50,13 @@ namespace AdminApi.Controllers
         ///
         /// **Request body maydonlari:**
         ///
-        /// | Maydon       | Turi   | Majburiy | ReadOnly | Tavsif                                                                      |
-        /// |--------------|--------|----------|----------|-----------------------------------------------------------------------------|
-        /// | Name         | string | **Ha**   | Yo'q     | Stansiya nomi. Keyinchalik o'zgartirish mumkin.                             |
-        /// | Location     | string | Yo'q     | Yo'q     | Stansiya joylashuvi (ixtiyoriy).                                            |
-        /// | MerchantId   | long   | **Ha**   | Ha       | Stansiya biriktirilgan merchant ID si. Yaratilgandan keyin o'zgartirilmaydi.|
+        /// | Maydon       | Turi    | Majburiy | ReadOnly | Tavsif                                                                      |
+        /// |--------------|---------|----------|----------|-----------------------------------------------------------------------------|
+        /// | Name         | string  | **Ha**   | Yo'q     | Stansiya nomi. Keyinchalik o'zgartirish mumkin.                             |
+        /// | Address      | string  | **Ha**   | Yo'q     | Stansiya matnli manzili (masalan "Toshkent, Yunusobod tumani").            |
+        /// | Latitude     | decimal | **Ha**   | Yo'q     | Kenglik, -90..90. Longitude bilan birga majburiy.                          |
+        /// | Longitude    | decimal | **Ha**   | Yo'q     | Uzunlik, -180..180. Latitude bilan birga majburiy.                         |
+        /// | MerchantId   | long    | **Ha**   | Ha       | Stansiya biriktirilgan merchant ID si. Yaratilgandan keyin o'zgartirilmaydi.|
         ///
         /// **Xatolik holatlari:**
         /// - Ko'rsatilgan `MerchantId` bo'yicha merchant topilmasa — xatolik qaytadi.
@@ -162,13 +164,16 @@ namespace AdminApi.Controllers
         ///
         /// **Yangilanishi mumkin bo'lgan maydonlar:**
         ///
-        /// | Maydon    | Turi    | Tavsif                    |
-        /// |-----------|---------|---------------------------|
-        /// | Name      | string? | Stansiya nomi.            |
-        /// | Location  | string? | Stansiya joylashuvi.      |
-        /// | IsActive  | bool?   | Faol holati.              |
+        /// | Maydon    | Turi     | Tavsif                                                              |
+        /// |-----------|----------|--------------------------------------------------------------------|
+        /// | Name      | string?  | Stansiya nomi.                                                     |
+        /// | Address   | string?  | Stansiya matnli manzili.                                          |
+        /// | Latitude  | decimal? | Kenglik (-90..90). Longitude bilan **birga** yuborilishi shart.   |
+        /// | Longitude | decimal? | Uzunlik (-180..180). Latitude bilan **birga** yuborilishi shart.  |
+        /// | IsActive  | bool?    | Faol holati.                                                      |
         ///
-        /// Faqat yuborilgan (null bo'lmagan) maydonlar yangilanadi.
+        /// Faqat yuborilgan (null bo'lmagan) maydonlar yangilanadi. Koordinata majburiy bo'lgani uchun
+        /// tozalab bo'lmaydi — faqat yangi qiymatga (lat+lng birga) almashtiriladi.
         /// </remarks>
         /// <param name="id">Yangilanadigan stansiya ID si.</param>
         /// <param name="request">Yangilanadigan maydonlar.</param>
@@ -177,7 +182,9 @@ namespace AdminApi.Controllers
         /// <response code="404">Berilgan ID bo'yicha stansiya topilmadi.</response>
         [HttpPut("{id}")]
         [RequirePermission(Permissions.StationAdminUpdate)]
+        [TypeFilter(typeof(UpdateStationValidationFilter))]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Update(long id, [FromBody] UpdateStationRequest request)

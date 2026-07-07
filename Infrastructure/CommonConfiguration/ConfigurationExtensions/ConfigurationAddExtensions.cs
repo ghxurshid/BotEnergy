@@ -221,11 +221,13 @@ namespace CommonConfiguration.ConfigurationExtensions
             var connectionString = config.GetConnectionString("DefaultConnection");
 
             var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+            dataSourceBuilder.UseNetTopologySuite(); // PostGIS geografik turlar (StationEntity.Coordinates) uchun
             var dataSource = dataSourceBuilder.Build();
 
             services.AddDbContext<AppDbContext>(options =>
                 options.UseNpgsql(dataSource, npgsql =>
-                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"))
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public")
+                        .UseNetTopologySuite())
                 .ConfigureWarnings(w =>
                     w.Ignore(RelationalEventId.PendingModelChangesWarning)));
 

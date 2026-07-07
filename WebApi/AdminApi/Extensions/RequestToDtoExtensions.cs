@@ -68,7 +68,9 @@ namespace AdminApi.Extensions
             => new CreateStationDto
             {
                 Name = request.Name,
-                Location = request.Location,
+                Address = request.Address,
+                Latitude = request.Latitude!.Value,   // validatsiya filtri null emasligini kafolatlaydi
+                Longitude = request.Longitude!.Value,
                 MerchantId = request.MerchantId
             };
 
@@ -76,7 +78,9 @@ namespace AdminApi.Extensions
             => new UpdateStationDto
             {
                 Name = request.Name,
-                Location = request.Location,
+                Address = request.Address,
+                Latitude = request.Latitude,
+                Longitude = request.Longitude,
                 IsActive = request.IsActive
             };
 

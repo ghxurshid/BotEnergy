@@ -20,6 +20,9 @@ namespace Persistence.Context
 
             modelBuilder.HasDefaultSchema(AppSchema);
 
+            // PostGIS — StationEntity.Coordinates (geography Point) uchun.
+            modelBuilder.HasPostgresExtension("postgis");
+
             ConfigurePlatformUser(modelBuilder);
             ConfigureCustomerUser(modelBuilder);
             ConfigureOrganization(modelBuilder);
@@ -312,7 +315,9 @@ namespace Persistence.Context
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
 
                 b.Property(x => x.Name).HasColumnName("name").IsRequired().HasMaxLength(150);
-                b.Property(x => x.Location).HasColumnName("location").HasMaxLength(300);
+                b.Property(x => x.Address).HasColumnName("address").IsRequired().HasMaxLength(300);
+                b.Property(x => x.Coordinates).HasColumnName("coordinates")
+                    .HasColumnType("geography(Point,4326)").IsRequired();
                 b.Property(x => x.MerchantId).HasColumnName("merchant_id").IsRequired();
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
@@ -325,6 +330,8 @@ namespace Persistence.Context
                     .OnDelete(DeleteBehavior.Restrict);
 
                 b.HasIndex(x => new { x.MerchantId, x.Name });
+                // Geografik so'rovlar (ST_DWithin/ST_Distance) uchun GiST spatial indeks.
+                b.HasIndex(x => x.Coordinates).HasMethod("gist");
             });
         }
 

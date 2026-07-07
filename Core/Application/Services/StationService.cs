@@ -5,6 +5,7 @@ using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Interfaces;
 using Domain.Repositories;
+using NetTopologySuite.Geometries;
 
 namespace Application.Services
 {
@@ -47,7 +48,8 @@ namespace Application.Services
             var station = new StationEntity
             {
                 Name = dto.Name,
-                Location = dto.Location,
+                Address = dto.Address,
+                Coordinates = MakePoint(dto.Latitude, dto.Longitude),
                 MerchantId = dto.MerchantId,
                 IsActive = true
             };
@@ -102,7 +104,10 @@ namespace Application.Services
                 return GenericDto<StationResultDto>.Error(403, "Bu stansiya sizning doirangizga tegishli emas.");
 
             if (!string.IsNullOrWhiteSpace(dto.Name)) station.Name = dto.Name;
-            if (!string.IsNullOrWhiteSpace(dto.Location)) station.Location = dto.Location;
+            if (!string.IsNullOrWhiteSpace(dto.Address)) station.Address = dto.Address;
+            // Koordinata majburiy — tozalanmaydi; faqat ikkalasi kelsa almashtiriladi (validatsiya filtri juftlikni kafolatlaydi).
+            if (dto.Latitude.HasValue && dto.Longitude.HasValue)
+                station.Coordinates = MakePoint(dto.Latitude.Value, dto.Longitude.Value);
             if (dto.IsActive.HasValue) station.IsActive = dto.IsActive.Value;
 
             await _repo.UpdateAsync(station);
@@ -136,11 +141,17 @@ namespace Application.Services
         {
             Id = s.Id,
             Name = s.Name,
-            Location = s.Location,
+            Address = s.Address,
+            Latitude = (decimal)s.Coordinates.Y,   // Y = kenglik (latitude)
+            Longitude = (decimal)s.Coordinates.X,  // X = uzunlik (longitude)
             MerchantId = s.MerchantId,
             MerchantName = s.Merchant?.CompanyName ?? string.Empty,
             IsActive = s.IsActive,
             CreatedDate = s.CreatedDate
         };
+
+        /// <summary>SRID 4326 (WGS84) Point yasaydi. Diqqat: Point(X=uzunlik, Y=kenglik).</summary>
+        private static Point MakePoint(decimal latitude, decimal longitude)
+            => new Point((double)longitude, (double)latitude) { SRID = 4326 };
     }
 }

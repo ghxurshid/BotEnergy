@@ -32,7 +32,8 @@ namespace Persistence.Context
 
             var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
             optionsBuilder.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"));
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public")
+                    .UseNetTopologySuite());
 
             return new AppDbContext(optionsBuilder.Options);
         }
