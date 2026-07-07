@@ -61,7 +61,8 @@ namespace Persistence.Repositories
 
         public async Task<DeviceEntity> UpdateAsync(DeviceEntity device)
         {
-            _context.Devices.Update(device);
+            if (_context.Entry(device).State == EntityState.Detached)
+                _context.Devices.Update(device);
             await _context.SaveChangesAsync();
             return device;
         }

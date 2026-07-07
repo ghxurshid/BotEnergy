@@ -20,9 +20,9 @@ builder.Services.AddSwaggerWithJwtAuth(
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
 
-builder.Services.AddJwtAuthentication(builder.Configuration);
+builder.Services.AddJwtAuthentication(builder.Configuration, acceptedAudiences: Domain.Auth.JwtAudiences.Customer);
 
-builder.Services.AddSimulatorCors();
+builder.Services.AddSimulatorCors(builder.Configuration);
 
 var app = builder.Build();
 
@@ -40,6 +40,7 @@ app.UseSimulatorCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.RunApi("UserApi", 5006);

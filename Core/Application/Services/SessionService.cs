@@ -5,6 +5,7 @@ using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services
 {
@@ -25,6 +26,8 @@ namespace Application.Services
         private readonly IPushNotificationService _push;
         private readonly IPendingSessionStore _pendingStore;
         private readonly IDeviceStatusService _deviceStatus;
+        private readonly ITransactionRunner _tx;
+        private readonly ILogger<SessionService> _logger;
 
         private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan PendingSessionTtl = TimeSpan.FromMinutes(30);
@@ -41,7 +44,9 @@ namespace Application.Services
             IBillingService billing,
             IPushNotificationService push,
             IPendingSessionStore pendingStore,
-            IDeviceStatusService deviceStatus)
+            IDeviceStatusService deviceStatus,
+            ITransactionRunner tx,
+            ILogger<SessionService> logger)
         {
             _sessionRepo = sessionRepo;
             _deviceRepo = deviceRepo;
@@ -54,6 +59,8 @@ namespace Application.Services
             _push = push;
             _pendingStore = pendingStore;
             _deviceStatus = deviceStatus;
+            _tx = tx;
+            _logger = logger;
         }
 
         public async Task<GenericDto<CreateSessionResultDto>> CreateSessionAsync(CreateSessionDto dto)
@@ -202,6 +209,10 @@ namespace Application.Services
                 closed_at = session.ClosedAt
             });
 
+            _logger.LogInformation(
+                "Sessiya yopildi (user): sessionId={SessionId} userId={UserId} delivered={Delivered} cost={Cost}",
+                session.Id, session.UserId, totalDelivered, totalCost);
+
             return GenericDto<CloseSessionResultDto>.Success(new CloseSessionResultDto
             {
                 ResultMessage = "Sessiya muvaffaqiyatli yopildi.",
@@ -244,6 +255,10 @@ namespace Application.Services
                     Body = $"Sessiyangiz harakatsizlik tufayli yopildi. Jami: {totalCost:N2}",
                     DeepLink = $"botenergy://sessions/{session.Id}"
                 });
+
+                _logger.LogInformation(
+                    "Sessiya yopildi (idle timeout): sessionId={SessionId} userId={UserId} cost={Cost}",
+                    session.Id, session.UserId, totalCost);
             }
         }
 
@@ -401,6 +416,10 @@ namespace Application.Services
                         Body = $"Qurilma {device.SerialNumber} javob bermayapti. Sessiya yopildi. Jami: {totalCost:N2}",
                         DeepLink = $"botenergy://sessions/{session.Id}"
                     });
+
+                    _logger.LogWarning(
+                        "Sessiya yopildi (device lost): sessionId={SessionId} serial={Serial} cost={Cost}",
+                        session.Id, device.SerialNumber, totalCost);
                 }
 
                 device.IsOnline = false;
@@ -447,9 +466,13 @@ namespace Application.Services
                 process.Status = ProcessStatus.Ended;
                 process.EndReason = endReason;
                 process.EndedAt = DateTime.Now;
-                await _processRepo.UpdateAsync(process);
 
-                var deducted = await _billing.DeductForProcessAsync(process.Id);
+                // Yakunlash + balans yechish — bitta tranzaksiya (crash-safe).
+                var deducted = await _tx.RunAsync(async () =>
+                {
+                    await _processRepo.UpdateAsync(process);
+                    return await _billing.DeductForProcessAsync(process.Id);
+                });
 
                 totalDelivered += process.GivenAmount;
                 totalCost += deducted;

@@ -54,9 +54,9 @@ builder.Services.AddScoped<IDeviceSessionService, DeviceSessionService>();
 builder.Services.Configure<MqttOptions>(builder.Configuration.GetSection("Mqtt"));
 builder.Services.AddMqttPipeline(typeof(Program).Assembly);
 
-builder.Services.AddJwtAuthentication(builder.Configuration, signalRHubPath: "/hubs");
+builder.Services.AddJwtAuthentication(builder.Configuration, signalRHubPath: "/hubs", acceptedAudiences: Domain.Auth.JwtAudiences.Customer);
 
-builder.Services.AddSimulatorCors();
+builder.Services.AddSimulatorCors(builder.Configuration);
 
 var app = builder.Build();
 
@@ -76,6 +76,7 @@ app.UseSimulatorCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health");
 app.MapControllers();
 app.MapHub<SessionHub>("/hubs/session");
 

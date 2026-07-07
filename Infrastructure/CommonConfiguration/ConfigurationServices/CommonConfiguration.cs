@@ -14,6 +14,7 @@ namespace CommonConfiguration.ConfigurationServices
                 .SetBasePath(configBasePath)
                 .AddJsonFile("Configuration.json", optional: false, reloadOnChange: true)
                 .AddJsonFile($"Configuration.{environment}.json", optional: true, reloadOnChange: true)
+                // Env var'lar json'dagi "Env_*" placeholder'larni override qiladi (server secretlari).
                 .AddEnvironmentVariables();
 
             return builder.Build();

@@ -1,8 +1,9 @@
-using Application.Helpers;
+using Domain.Helpers;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services
 {
@@ -16,6 +17,7 @@ namespace Application.Services
         private readonly ITokenService _tokenService;
         private readonly IPlatformRoleRepository _roleRepository;
         private readonly IRefreshTokenStore _refreshTokenStore;
+        private readonly ILogger<PlatformAuthService> _logger;
 
         private const string TokenPrefix = "p:";
         private static readonly TimeSpan RefreshTokenExpiry = TimeSpan.FromDays(7);
@@ -24,12 +26,14 @@ namespace Application.Services
             IPlatformUserRepository userRepository,
             ITokenService tokenService,
             IPlatformRoleRepository roleRepository,
-            IRefreshTokenStore refreshTokenStore)
+            IRefreshTokenStore refreshTokenStore,
+            ILogger<PlatformAuthService> logger)
         {
             _userRepository = userRepository;
             _tokenService = tokenService;
             _roleRepository = roleRepository;
             _refreshTokenStore = refreshTokenStore;
+            _logger = logger;
         }
 
         public async Task<GenericDto<LoginResultDto>> LoginAsync(LoginDto request)
@@ -43,7 +47,10 @@ namespace Application.Services
 
             var isPasswordValid = PasswordHelper.Verify(request.Password, user.PasswordHash, user.PasswordSalt!);
             if (!isPasswordValid)
+            {
+                _logger.LogWarning("Platform login failed (noto'g'ri parol): userId={UserId}", user.Id);
                 return GenericDto<LoginResultDto>.Error(401, "Telefon raqam yoki parol noto'g'ri.");
+            }
 
             if (!user.IsVerified)
                 return GenericDto<LoginResultDto>.Error(403, "Akkaunt tasdiqlanmagan.");
@@ -51,11 +58,21 @@ namespace Application.Services
             if (user.IsBlocked)
                 return GenericDto<LoginResultDto>.Error(403, "Akkaunt bloklangan.");
 
+            // Legacy SHA256 hash bo'lsa — parol to'g'ri kelgan paytda PBKDF2 ga ko'chiramiz.
+            if (PasswordHelper.NeedsRehash(user.PasswordHash))
+            {
+                var (hash, salt) = PasswordHelper.CreatePassword(request.Password);
+                user.PasswordHash = hash;
+                user.PasswordSalt = salt;
+            }
+
             user.LastLoginDate = DateTime.Now;
             user.LastActiveDate = DateTime.Now;
             await _userRepository.UpdateAsync(user);
 
             var tokens = await GenerateAndPersistTokensAsync(user.Id, user.RoleId);
+
+            _logger.LogInformation("Platform login OK: userId={UserId} type={Type}", user.Id, user.Type);
 
             return GenericDto<LoginResultDto>.Success(new LoginResultDto
             {

@@ -39,5 +39,12 @@ namespace Domain.Repositories
         /// yoki boshqa scope o'zgartirgan satrni in-memory bilan sinxronlash uchun.
         /// </summary>
         Task ReloadAsync(ProductProcessEntity process);
+
+        /// <summary>
+        /// Balans yechishni atomik "claim" qilish: is_balance_deducted false→true (bitta UPDATE).
+        /// True qaytsa — claim shu chaqiruvniki (balansni yechish mumkin); false — boshqa oqim
+        /// allaqachon yechgan/yechmoqda. Double-deduction'ga qarshi asosiy himoya.
+        /// </summary>
+        Task<bool> TryClaimBalanceDeductionAsync(long processId);
     }
 }

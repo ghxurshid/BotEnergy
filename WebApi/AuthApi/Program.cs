@@ -19,12 +19,15 @@ builder.Services.AddSwaggerWithJwtAuth(
 builder.Configuration.AddCommonConfiguration();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
-builder.Services.RegisterAuthServices();
+builder.Services.RegisterAuthServices(builder.Configuration);
 
 // Redis (RegisterAuthServices'dagi AuthService IRefreshTokenStore'ga bog'liq)
 builder.Services.AddRedisServices(builder.Configuration);
 
-builder.Services.AddSimulatorCors();
+// Login/OTP brute-force himoyasi — IP boshiga 30 req/min, oshsa 429.
+builder.Services.AddIpRateLimiting(builder.Configuration);
+
+builder.Services.AddSimulatorCors(builder.Configuration);
 
 var app = builder.Build();
 
@@ -40,8 +43,11 @@ app.UseHttpsIfEnabled();
 
 app.UseSimulatorCors();
 
+app.UseRateLimiter();
+
 app.UseAuthorization();
 
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.RunApi("AuthApi", 5002);

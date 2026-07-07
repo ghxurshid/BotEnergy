@@ -1,6 +1,25 @@
 {
+  "_note": "Hozircha secretlar shu faylda (git'da). Xavfsizlikni keyinchalik oshirish rejalashtirilgan: sensitive qiymatlarni env var'ga ('Jwt__Secret', 'Mqtt__Password', 'ConnectionStrings__DefaultConnection', ...) ko'chirish — env var json'ni override qiladi.",
+
   "ConnectionStrings": {
     "DefaultConnection": "Host=51.38.127.221;Port=5432;Database=botenergy_db;Username=botenergy_user;Password=WsfR5sDcVfABT2F1"
+  },
+  "Jwt": {
+    "Secret": "c061e39def619081133343efbd56042235b53d09045c21e07f720e3687005007d514feff0de5cbf4af04c101d0b46b74"
+  },
+  "Seed": {
+    "AdminPassword": "Admin@123"
+  },
+  "Otp": {
+    "AllowTestCode": false,
+    "TtlMinutes": 3,
+    "MaxAttempts": 5
+  },
+  "RateLimit": {
+    "PermitPerMinute": 30
+  },
+  "Cors": {
+    "AllowedOrigins": []
   },
   "Mqtt": {
     "BrokerHost": "localhost",

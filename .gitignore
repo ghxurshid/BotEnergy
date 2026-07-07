@@ -366,3 +366,5 @@ FodyWeavers.xsd
 /skills-lock.json
 /.claude/skills
 /.claude/settings.local.json
+/.github
+

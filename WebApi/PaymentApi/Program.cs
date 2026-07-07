@@ -24,7 +24,7 @@ builder.Services.AddRedisServices(builder.Configuration);
 
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
-builder.Services.AddSimulatorCors();
+builder.Services.AddSimulatorCors(builder.Configuration);
 
 var app = builder.Build();
 
@@ -42,6 +42,7 @@ app.UseSimulatorCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.RunApi("PaymentApi", 5005);

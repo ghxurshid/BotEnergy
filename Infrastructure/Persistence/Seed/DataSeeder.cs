@@ -1,4 +1,4 @@
-using Application.Helpers;
+using Domain.Helpers;
 using Domain.Constants;
 using Domain.Entities;
 using Domain.Enums;
@@ -12,16 +12,27 @@ namespace Persistence.Seed
         private const string ManageRoleName = "SuperAdmin";
         private const string NaturalRoleName = "Customer";
         private const string DefaultPhoneNumber = "998901234567";
-        private const string DefaultPassword = "Admin@123";
+        private const string DevFallbackPassword = "Admin@123"; // faqat Development
         private const string DefaultMail = "admin@botenergy.uz";
         private const string DefaultPhoneId = "default-admin-device";
 
-        public static async Task SeedAsync(AppDbContext context)
+        /// <summary>
+        /// <paramref name="adminPassword"/> — Seed:AdminPassword (env: Seed__AdminPassword).
+        /// Berilmasa: Development'da <see cref="DevFallbackPassword"/> ishlatiladi,
+        /// Production'da admin user YARATILMAYDI (mavjudiga tegilmaydi) — hardcoded parol
+        /// prod'ga chiqib ketmasligi uchun.
+        /// </summary>
+        public static async Task SeedAsync(AppDbContext context, string? adminPassword = null, bool isDevelopment = true)
         {
             await EnsurePermissionRowsAsync(context);
 
             var manageRole = await SeedManageRoleAsync(context);
-            await SeedManageUserAsync(context, manageRole.Id);
+
+            var effectivePassword = !string.IsNullOrWhiteSpace(adminPassword)
+                ? adminPassword
+                : (isDevelopment ? DevFallbackPassword : null);
+
+            await SeedManageUserAsync(context, manageRole.Id, effectivePassword);
 
             await SeedNaturalRoleAsync(context);
         }
@@ -130,14 +141,18 @@ namespace Persistence.Seed
             await context.SaveChangesAsync();
         }
 
-        private static async Task SeedManageUserAsync(AppDbContext context, long roleId)
+        private static async Task SeedManageUserAsync(AppDbContext context, long roleId, string? password)
         {
             var user = await context.PlatformUsers
                 .FirstOrDefaultAsync(u => u.PhoneNumber == DefaultPhoneNumber && !u.IsDeleted);
 
             if (user is null)
             {
-                var (hash, salt) = PasswordHelper.CreatePassword(DefaultPassword);
+                // Parol berilmagan (prod, Seed__AdminPassword yo'q) — admin yaratilmaydi.
+                if (password is null)
+                    return;
+
+                var (hash, salt) = PasswordHelper.CreatePassword(password);
 
                 user = new PlatformUserEntity
                 {

@@ -30,17 +30,9 @@ namespace CommonConfiguration.Middlewares
 
         private Task HandleExceptionAsync(HttpContext context, Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception on {Method} {Path}: {Message}",
-                context.Request.Method, context.Request.Path, ex.Message);
-
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"[EXCEPTION] {DateTime.Now:HH:mm:ss} {context.Request.Method} {context.Request.Path}");
-            Console.WriteLine($"  Type:    {ex.GetType().FullName}");
-            Console.WriteLine($"  Message: {ex.Message}");
-            if (ex.InnerException != null)
-                Console.WriteLine($"  Inner:   {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
-            Console.WriteLine(ex.StackTrace);
-            Console.ResetColor();
+            // Serilog console+file sink'lariga bitta structured yozuv — Console.WriteLine dublikati olib tashlandi.
+            _logger.LogError(ex, "Unhandled exception on {Method} {Path}",
+                context.Request.Method, context.Request.Path);
 
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;

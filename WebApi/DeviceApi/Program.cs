@@ -21,7 +21,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
 builder.Services.RegisterDeviceServices();
 
-builder.Services.AddSimulatorCors();
+builder.Services.AddSimulatorCors(builder.Configuration);
 
 var app = builder.Build();
 
@@ -35,6 +35,7 @@ app.UseHttpsIfEnabled();
 app.UseSimulatorCors();
 
 app.UseAuthorization();
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.RunApi("DeviceApi", 5004);

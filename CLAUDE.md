@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project context
 
-BotEnergy — IoT charging/dispenser station backend. .NET 8, PostgreSQL, Redis, RabbitMQ, MQTT, SignalR. Seven independently-runnable Web APIs in one solution sharing a Clean Architecture core.
+BotEnergy — IoT charging/dispenser station backend. .NET 8, PostgreSQL, Redis, MQTT, SignalR. Seven independently-runnable Web APIs in one solution sharing a Clean Architecture core. (RabbitMQ removed — device messaging is MQTT-only.)
 
 For deep API reference, architecture overview, and business flows see `README.md` (the canonical doc). `PROMTS.md` holds the business-process spec (extracted from code). (`ARCHITECTURE.md` was removed — its content was merged into `README.md`.)
 
@@ -41,17 +41,17 @@ Production deploy is a self-hosted GitHub Actions runner that executes `deploy.s
 | `UserApi` | 5006 | Mobile app endpoints — profile, balance read, reports. JWT + permissions. |
 | `AdminApi` | 5001 | Admin/operator endpoints. JWT + permissions. |
 | `DeviceApi` | 5004 | Device identity & CRUD (DeviceAuth, DeviceController). DeviceProcess/DevicePayment are legacy HTTP stubs. MQTT bridge moved to SessionApi. |
-| `SessionApi` | 5007 | Owns sessions, processes, payments, MQTT bridge (qurilma ↔ server), SignalR hub `/hubs/session`, and all device-event RabbitMQ consumers. |
+| `SessionApi` | 5007 | Owns sessions, processes, payments, MQTT transport+pipeline (qurilma ↔ server), SignalR hub `/hubs/session`, and all device-event handlers. |
 | `BillingApi` | 5003 | Admin balance top-up (`/api/Balance/TopUp`). User balance read lives in UserApi. |
 | `PaymentApi` | 5005 | Stub (Payme integration planned). |
 
-All APIs share `Persistence/AppDbContext` (single PostgreSQL DB) and `CommonConfiguration` (DI extensions, filters, middleware, Redis/RabbitMQ wiring).
+All APIs share `Persistence/AppDbContext` (single PostgreSQL DB) and `CommonConfiguration` (DI extensions, filters, middleware, Redis wiring, health checks).
 
 ## Architecture invariants worth remembering
 
 ### Configuration loading is custom — `appsettings.json` is mostly ignored
 
-Configuration lives in `Infrastructure/CommonConfiguration/ConfigurationFile/Configuration{.Development,.Production}.json` and is loaded by `builder.Configuration.AddCommonConfiguration()` (see `ConfigurationServices/CommonConfiguration.cs`). Connection strings, MQTT/RabbitMQ/Redis settings, port overrides all live there. The `appsettings.json` files in each WebApi exist but are not the primary source.
+Configuration lives in `Infrastructure/CommonConfiguration/ConfigurationFile/Configuration{.Development,.Production}.json` and is loaded by `builder.Configuration.AddCommonConfiguration()` (see `ConfigurationServices/CommonConfiguration.cs`). Load order: `Configuration.json` (Hosting/ports) → `Configuration.{env}.json` → env vars. Both env files carry the SAME field set; in Production sensitive values are `Env_<EnvVarName>` placeholders — the server supplies same-named env vars (`Jwt__Secret`, `Mqtt__Password`, ...) at service start, which override the json. `ResolveSecret` treats `Env_*` values as unset, so a missing env var fails fast instead of leaking the placeholder as a secret. The `appsettings.json` files in each WebApi exist but are not the primary source.
 
 `RunApi(name, defaultPort)` extension reads `Hosting:Ports:{apiName}` and `Hosting:UseHttps` from config to pick port and scheme.
 
@@ -64,11 +64,12 @@ Configuration lives in `Infrastructure/CommonConfiguration/ConfigurationFile/Con
 In `CommonConfiguration/ConfigurationExtensions/ConfigurationAddExtensions.cs`:
 
 - `RegisterServices()` — shared by all APIs. Includes the split user/role layer: `IPlatformUserRepository`+`ICustomerUserRepository`, `IPlatformRoleRepository`+`ICustomerRoleRepository`, `IPermissionRepository`; services `IUserService`, `IUserAdminService` (platform), `ICustomerAdminService` (corporate), `IRoleService` (platform), `ICustomerRoleService`, plus Device/Product/Merchant/Organization/Billing.
-- `RegisterAuthServices()` — AuthApi: `IAuthService` (customer) + `IPlatformAuthService` + `ITokenService` + `IOtpService`.
+- `RegisterAuthServices(config)` — AuthApi: `IAuthService` (customer) + `IPlatformAuthService` + `ITokenService` + `IOtpService` (singleton) + `JwtSettings`/`OtpSettings` singletonlari.
 - `RegisterSessionServices()` — SessionApi-only (`ISessionService`, `IProcessService`, `IBootstrapService`, `IPushNotificationService`, `IdleSessionCleanerService` HostedService).
 - `RegisterDeviceServices()` — DeviceApi-only (legacy; DeviceApi no longer carries live traffic).
 - `AddRedisServices()` — Redis multiplexer + `IRefreshTokenStore` (resilient: Redis primary, in-memory fallback) + `IIdempotencyStore` + `IdempotencyFilter`.
-- `AddRabbitMq()` — connection manager + publisher.
+- `AddIpRateLimiting()` — IP-based fixed window limiter (AuthApi'da yoqilgan).
+- `RegisterServices()` ichida `ITransactionRunner` ham bor — bir nechta repo chaqiruvini bitta DB tranzaksiyada bajarish uchun (nested chaqiruv tashqi tranzaksiyaga qo'shiladi).
 
 `ISessionNotifier` is *not* registered in any shared extension — SessionApi `Program.cs` registers `SignalRSessionNotifier` itself, because it depends on the SignalR hub which only SessionApi hosts.
 
@@ -114,35 +115,30 @@ Sessions and processes are separate services with distinct responsibilities:
 
 `SessionService` keeps `LastActivityAt` as a sliding idle timeout (30 min). Background `IdleSessionCleanerService` invokes `CloseTimedOutSessionsAsync` and `CloseOfflineDeviceSessionsAsync`. Anything that mutates a session should also touch `LastActivityAt` (use `ISessionRepository.TouchAsync(sessionId)` for the heartbeat hot-path — it's a single SQL UPDATE without entity tracking).
 
-### Message flow (mobile ↔ device) is async via two brokers
+### Message flow (mobile ↔ device) — single broker (MQTT), no RabbitMQ
+
+RabbitMQ has been removed — commands publish straight to MQTT (`MqttDeviceCommandPublisher`), inbound MQTT messages run through an in-process middleware pipeline (`WebApi/SessionApi/Mqtt/`).
 
 ```
 Mobile → REST (SessionApi)
        → SessionService/ProcessService → DB + IDeviceCommandPublisher
-                                       → RabbitMQ (device.commands)
-                                       → SessionApi DeviceCommandConsumer
-                                       → MqttBridge (same process)
-                                       → MQTT topic device/{serial}/command
+                                       → MqttDeviceCommandPublisher (direct, same process)
+                                       → MQTT topic device/{serial}/...
                                        → IoT device
 
-IoT device → MQTT topic device/{serial}/telemetry
-           → MqttBridge.HandleTelemetryAsync (device auth: serial+secret)
-           → ProcessService.ReportTelemetryAsync (DIRECT call, no broker hop)
-           → DB update + ISessionNotifier (SignalR `ProcessUpdated`)
-           → Mobile
-
-IoT device → MQTT topic device/{serial}/{connect,event,heartbeat,payment_qr}
-           → MqttBridge.OnMessage
-           → RabbitMQ (device.events / device.payment-events)
-           → SessionApi consumers (DeviceEventConsumer / DevicePaymentEventConsumer)
-           → SessionService.NotifyDeviceConnectedAsync / ProcessService.ReportDeviceFinishedAsync / ...
+IoT device → MQTT topics (request/response/event/telemetry/state)
+           → MqttHost (BackgroundService) → MqttPipeline middlewares:
+             Deserialize → DeviceAuth → Hmac → Timestamp → Replay → Dispatcher
+           → handler (SessionConnectHandler / ProcessTelemetryHandler /
+             ProcessFinishedHandler / PaymentQrHandler / ...)
+           → SessionService / ProcessService / DeviceSessionService
            → DB update + ISessionNotifier (SignalR)
            → Mobile
 ```
 
-**Telemetry path is intentionally broker-less** — real-time latency matters (mobile UI updates per device tick), and MqttBridge + ProcessService share a process, so the broker hop adds nothing. Non-telemetry events (connect, finished, payment) still flow through RabbitMQ for backpressure/queue durability.
+Envelope security: every device message is `{id, type, timestamp, payload, hmac}` — HMAC-SHA256 keyed off the device `SecretKey`, verified constant-time; replay protection is per-device monotonic `id` (in-memory store, single instance).
 
-All five pieces — REST controllers, MqttBridge, RabbitMQ consumers, ProcessService, SignalR hub — live in the SessionApi process.
+All pieces — REST controllers, MQTT transport+pipeline, handlers, ProcessService, SignalR hub — live in the SessionApi process.
 
 SignalR hub path: `/hubs/session`. Two group schemes:
 - `sessionToken` — tablet+phone watching same session.
@@ -177,5 +173,10 @@ Currently applied to `Session.Create` and `Process.Start`. Apply to other state-
 - **Don't write `appsettings.json` for new config** — add to `Infrastructure/CommonConfiguration/ConfigurationFile/Configuration.{env}.json`.
 - **Don't switch `DateTime.Now` → `DateTime.UtcNow`** in isolation — the whole stack is local-time and PostgreSQL columns are `timestamp without time zone`. User has explicitly declined this change.
 - **Don't call `DELETE FROM`** — soft delete only (`IsDeleted = true`).
-- **JWT secret is hardcoded** as `DefaultJwtSecret` in `ConfigurationAddExtensions.cs` (overridable via `Jwt:Secret`). It's a known issue, not a bug to fix opportunistically.
-- **OTP `"123456"` is hardcoded** to always pass — test mode by design. Don't "fix" it; OTP service is in-memory and resets on restart.
+- **Production secrets never go into config files as real values.** `Configuration.Production.json` holds `Env_<EnvVarName>` placeholders; real values come from env vars at service start (`ConnectionStrings__DefaultConnection`, `Jwt__Secret`, `Mqtt__Password`, `InternalApi__SharedSecret`, `Seed__AdminPassword`, ...). `GetJwtSecret` throws in Production if `Jwt:Secret` is missing/placeholder; Development falls back to a dev-only constant. Signing (`TokenService` via `JwtSettings`) and validation (`AddJwtAuthentication`) read the same value.
+- **JWT audience is per user group** (`JwtAudiences.Customer` / `.Platform`): AdminApi/BillingApi accept platform-only, UserApi/SessionApi customer-only. New APIs must pass `acceptedAudiences` to `AddJwtAuthentication`.
+- **OTP test code `"123456"`** works only when `Otp:AllowTestCode` is true (set in `Configuration.Development.json`, NOT in prod). OTP has TTL (3 min) + attempt limit (5); service is in-memory and resets on restart.
+- **Passwords are PBKDF2** (`Domain/Helpers/PasswordHelper`, 600k iterations); legacy SHA256 hashes are re-hashed lazily on successful login. Don't compare hashes with `==`.
+- **Money mutations must be atomic**: use `ICustomerUserRepository/IOrganizationRepository.DeductBalanceAsync/TopUpBalanceAsync` (FOR UPDATE lock) and claim the process via `TryClaimBalanceDeductionAsync` inside `ITransactionRunner.RunAsync` — never read-modify-write `Balance` on the entity.
+- **Default admin** is seeded only when `Seed:AdminPassword` is set (Development falls back to `Admin@123`; Production skips creation).
+- **`/health`** is mapped on every API (DB + Redis checks). AuthApi has IP rate limiting (30 req/min → 429 + `Retry-After`).

@@ -4,18 +4,30 @@ using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services
 {
     public class BillingService : IBillingService
     {
         private readonly ICustomerUserRepository _userRepo;
+        private readonly IOrganizationRepository _orgRepo;
         private readonly IProductProcessRepository _processRepo;
+        private readonly ITransactionRunner _tx;
+        private readonly ILogger<BillingService> _logger;
 
-        public BillingService(ICustomerUserRepository userRepo, IProductProcessRepository processRepo)
+        public BillingService(
+            ICustomerUserRepository userRepo,
+            IOrganizationRepository orgRepo,
+            IProductProcessRepository processRepo,
+            ITransactionRunner tx,
+            ILogger<BillingService> logger)
         {
             _userRepo = userRepo;
+            _orgRepo = orgRepo;
             _processRepo = processRepo;
+            _tx = tx;
+            _logger = logger;
         }
 
         public async Task<GenericDto<GetBalanceResultDto>> GetBalanceAsync(long userId)
@@ -40,27 +52,30 @@ namespace Application.Services
             if (user is null)
                 return GenericDto<TopUpBalanceResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
-            decimal newBalance;
+            decimal? newBalance;
 
             if (user.Type == CustomerUserType.Natural)
             {
-                user.Balance += dto.Amount;
-                newBalance = user.Balance;
+                newBalance = await _userRepo.TopUpBalanceAsync(user.Id, dto.Amount);
             }
             else // Corporate
             {
-                if (user.Organization is null)
+                if (user.OrganizationId is null)
                     return GenericDto<TopUpBalanceResultDto>.Error(400, "Corporate foydalanuvchining tashkiloti topilmadi.");
 
-                user.Organization.Balance += dto.Amount;
-                newBalance = user.Organization.Balance;
+                newBalance = await _orgRepo.TopUpBalanceAsync(user.OrganizationId.Value, dto.Amount);
             }
 
-            await _userRepo.UpdateAsync(user);
+            if (newBalance is null)
+                return GenericDto<TopUpBalanceResultDto>.Error(404, "Balans egasi topilmadi.");
+
+            _logger.LogInformation(
+                "Balans to'ldirildi: userId={UserId} type={Type} amount={Amount} newBalance={NewBalance}",
+                dto.UserId, user.Type, dto.Amount, newBalance);
 
             return GenericDto<TopUpBalanceResultDto>.Success(new TopUpBalanceResultDto
             {
-                NewBalance = newBalance,
+                NewBalance = newBalance.Value,
                 ResultMessage = $"{dto.Amount:N0} UZS muvaffaqiyatli to'ldirildi."
             });
         }
@@ -73,48 +88,56 @@ namespace Application.Services
 
         public async Task<decimal> DeductForProcessAsync(long processId)
         {
-            var process = await _processRepo.GetByIdWithSessionAsync(processId);
-            if (process is null)
-                return 0;
-
-            // ExecuteUpdateAsync orqali ushbu scope ichida row allaqachon yangilangan bo'lishi mumkin
-            // (telemetry hot path), shuning uchun freshlatib olamiz.
-            await _processRepo.ReloadAsync(process);
-
-            if (process.IsBalanceDeducted)
-                return 0;
-
-            var cost = process.GivenAmount * process.PricePerUnit;
-            if (cost <= 0)
+            // Claim + yechish bitta tranzaksiyada: yechish yiqilsa claim ham rollback bo'ladi
+            // (aks holda process "yechilgan" deb belgilanib, pul yechilmay qolardi).
+            return await _tx.RunAsync(async () =>
             {
-                process.IsBalanceDeducted = true;
-                await _processRepo.UpdateAsync(process);
-                return 0;
-            }
+                var process = await _processRepo.GetByIdWithSessionAsync(processId);
+                if (process is null)
+                    return 0m;
 
-            var user = process.Session?.User ?? await _userRepo.GetByIdAsync(process.Session?.UserId ?? 0);
-            if (user is null)
-                return 0;
+                // Telemetry hot path ExecuteUpdateAsync bilan yangilagan bo'lishi mumkin —
+                // tracker'dagi GivenAmount eskirgan bo'lsa freshlaymiz.
+                await _processRepo.ReloadAsync(process);
 
-            decimal deducted = 0;
+                // Atomic claim — parallel chaqiruvlardan (device finished + watchdog +
+                // session close) faqat bittasi yutadi. Double-deduction himoyasi.
+                if (!await _processRepo.TryClaimBalanceDeductionAsync(processId))
+                    return 0m;
 
-            if (user.Type == CustomerUserType.Natural)
-            {
-                deducted = Math.Min(user.Balance, cost);
-                user.Balance -= deducted;
-                await _userRepo.UpdateAsync(user);
-            }
-            else if (user.Type == CustomerUserType.Corporate && user.Organization is not null)
-            {
-                deducted = Math.Min(user.Organization.Balance, cost);
-                user.Organization.Balance -= deducted;
-                await _userRepo.UpdateAsync(user);
-            }
+                var cost = process.GivenAmount * process.PricePerUnit;
+                if (cost <= 0)
+                    return 0m;
 
-            process.IsBalanceDeducted = true;
-            await _processRepo.UpdateAsync(process);
+                var user = process.Session?.User ?? await _userRepo.GetByIdAsync(process.Session?.UserId ?? 0);
+                if (user is null)
+                {
+                    _logger.LogWarning("Balans yechilmadi — process {ProcessId} foydalanuvchisi topilmadi.", processId);
+                    return 0m;
+                }
 
-            return deducted;
+                decimal deducted = 0;
+
+                if (user.Type == CustomerUserType.Natural)
+                {
+                    deducted = await _userRepo.DeductBalanceAsync(user.Id, cost);
+                }
+                else if (user.Type == CustomerUserType.Corporate && user.OrganizationId is not null)
+                {
+                    deducted = await _orgRepo.DeductBalanceAsync(user.OrganizationId.Value, cost);
+                }
+
+                if (deducted < cost)
+                    _logger.LogWarning(
+                        "Balans yetmadi: processId={ProcessId} userId={UserId} cost={Cost} deducted={Deducted}",
+                        processId, user.Id, cost, deducted);
+                else
+                    _logger.LogInformation(
+                        "Balans yechildi: processId={ProcessId} userId={UserId} amount={Deducted}",
+                        processId, user.Id, deducted);
+
+                return deducted;
+            });
         }
 
         private static decimal ResolveBalance(CustomerUserEntity user) => user.Type switch

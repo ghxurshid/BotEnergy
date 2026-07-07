@@ -50,7 +50,8 @@ namespace Persistence.Repositories
 
         public async Task<ProductProcessEntity> UpdateAsync(ProductProcessEntity process)
         {
-            _context.ProductProcesses.Update(process);
+            if (_context.Entry(process).State == EntityState.Detached)
+                _context.ProductProcesses.Update(process);
             await _context.SaveChangesAsync();
             return process;
         }
@@ -115,5 +116,17 @@ namespace Persistence.Repositories
 
         public Task ReloadAsync(ProductProcessEntity process)
             => _context.Entry(process).ReloadAsync();
+
+        public async Task<bool> TryClaimBalanceDeductionAsync(long processId)
+        {
+            var now = DateTime.Now;
+            var affected = await _context.ProductProcesses
+                .Where(p => p.Id == processId && !p.IsBalanceDeducted)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(p => p.IsBalanceDeducted, true)
+                    .SetProperty(p => p.UpdatedDate, now));
+
+            return affected > 0;
+        }
     }
 }

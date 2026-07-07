@@ -1,7 +1,25 @@
 {
+  "_note": "Development qiymatlari. Struktura Configuration.Production.json bilan bir xil. Jwt.Secret va Seed.AdminPassword bo'sh — dev fallback'lar ishlaydi (dev const secret, Admin@123).",
+
   "ConnectionStrings": {
-    //"DefaultConnection": "Host=localhost;Port=5432;Database=botenergy_db;Username=postgres;Password=postgres;CommandTimeout=300",
     "DefaultConnection": "Host=51.38.127.221;Port=5432;Database=botenergy_db;Username=botenergy_user;Password=WsfR5sDcVfABT2F1"
+  },
+  "Jwt": {
+    "Secret": ""
+  },
+  "Seed": {
+    "AdminPassword": ""
+  },
+  "Otp": {
+    "AllowTestCode": true,
+    "TtlMinutes": 3,
+    "MaxAttempts": 5
+  },
+  "RateLimit": {
+    "PermitPerMinute": 100
+  },
+  "Cors": {
+    "AllowedOrigins": []
   },
   "Mqtt": {
     "BrokerHost": "localhost",
@@ -19,6 +37,14 @@
   },
   "InternalApi": {
     "SharedSecret": "botenergy-internal-secret-2026"
+  },
+  "Kestrel": {
+    "Certificates": {
+      "Default": {
+        "Path": "",
+        "Password": ""
+      }
+    }
   },
   "Payme": {
     "BaseUrl": "https://checkout.test.paycom.uz/api",

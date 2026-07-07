@@ -14,5 +14,15 @@ namespace Domain.Repositories
         Task<CustomerUserEntity> CreateAsync(CustomerUserEntity user);
         Task<CustomerUserEntity> UpdateAsync(CustomerUserEntity user);
         Task DeleteAsync(long userId);
+
+        /// <summary>
+        /// Balansdan atomik yechish: min(balans, <paramref name="maxAmount"/>) yechiladi,
+        /// yechilgan miqdor qaytadi (satr FOR UPDATE lock ostida — parallel yechishlar navbatlanadi).
+        /// Foydalanuvchi topilmasa 0.
+        /// </summary>
+        Task<decimal> DeductBalanceAsync(long userId, decimal maxAmount);
+
+        /// <summary>Balansni atomik to'ldirish. Yangi balans qaytadi; foydalanuvchi topilmasa null.</summary>
+        Task<decimal?> TopUpBalanceAsync(long userId, decimal amount);
     }
 }

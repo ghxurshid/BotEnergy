@@ -10,5 +10,14 @@ namespace Domain.Repositories
         Task<OrganizationEntity> CreateAsync(OrganizationEntity organization);
         Task<OrganizationEntity> UpdateAsync(OrganizationEntity organization);
         Task DeleteAsync(long id);
+
+        /// <summary>
+        /// Tashkilot balansidan atomik yechish: min(balans, <paramref name="maxAmount"/>) yechiladi,
+        /// yechilgan miqdor qaytadi (FOR UPDATE lock). Tashkilot topilmasa 0.
+        /// </summary>
+        Task<decimal> DeductBalanceAsync(long organizationId, decimal maxAmount);
+
+        /// <summary>Balansni atomik to'ldirish. Yangi balans qaytadi; tashkilot topilmasa null.</summary>
+        Task<decimal?> TopUpBalanceAsync(long organizationId, decimal amount);
     }
 }

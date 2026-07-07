@@ -99,29 +99,70 @@ namespace CommonConfiguration.ConfigurationExtensions
             return services;
         }
 
-        private const string DefaultJwtSecret = "3f1e2d4c5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d";
+        // Faqat Development fallback. Production'da Jwt:Secret (env: Jwt__Secret) majburiy —
+        // GetJwtSecret set qilinmagan bo'lsa prod'da exception otadi.
+        private const string DevFallbackJwtSecret = "3f1e2d4c5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d";
+
+        /// <summary>
+        /// Config'dagi secret qiymatni o'qiydi. Bo'sh yoki "Env_" bilan boshlangan qiymat
+        /// (Configuration.Production.json'dagi placeholder — env var hali berilmagan) null sanaladi.
+        /// </summary>
+        internal static string? ResolveSecret(IConfiguration config, string key)
+        {
+            var value = config[key];
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+            if (value.StartsWith("Env_", StringComparison.Ordinal))
+                return null;
+            return value;
+        }
+
+        /// <summary>
+        /// JWT secret'ning yagona manbasi — imzolash (TokenService) ham, tekshirish
+        /// (AddJwtAuthentication) ham shu metod orqali oladi.
+        /// </summary>
+        private static string GetJwtSecret(IConfiguration config)
+        {
+            var secret = ResolveSecret(config, "Jwt:Secret");
+            if (secret is not null)
+                return secret;
+
+            var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
+            if (string.Equals(env, "Production", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "Jwt:Secret production'da majburiy. Env var sifatida bering: Jwt__Secret=<kamida 64 belgi random>.");
+
+            return DevFallbackJwtSecret;
+        }
 
         /// <summary>
         /// JWT Bearer autentifikatsiya. SignalR ishlatadigan API lar uchun
         /// <paramref name="signalRHubPath"/> ni ko'rsating (masalan, "/hubs").
+        /// <paramref name="acceptedAudiences"/> — shu API qabul qiladigan token guruhlari
+        /// (<see cref="Domain.Auth.JwtAudiences"/>). Berilmasa ikkala guruh ham qabul qilinadi.
         /// </summary>
         public static IServiceCollection AddJwtAuthentication(
             this IServiceCollection services,
             IConfiguration config,
-            string? signalRHubPath = null)
+            string? signalRHubPath = null,
+            params string[] acceptedAudiences)
         {
+            var audiences = acceptedAudiences is { Length: > 0 }
+                ? acceptedAudiences
+                : Domain.Auth.JwtAudiences.All;
+
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidateIssuer = false,
-                        ValidateAudience = false,
+                        ValidateAudience = true,
+                        ValidAudiences = audiences,
                         ValidateLifetime = true,
                         ValidateIssuerSigningKey = true,
                         IssuerSigningKey = new SymmetricSecurityKey(
-                            Encoding.UTF8.GetBytes(
-                                config["Jwt:Secret"] ?? DefaultJwtSecret))
+                            Encoding.UTF8.GetBytes(GetJwtSecret(config)))
                     };
 
                     if (signalRHubPath is not null)
@@ -143,6 +184,38 @@ namespace CommonConfiguration.ConfigurationExtensions
             return services;
         }
 
+        /// <summary>
+        /// IP bo'yicha fixed-window rate limiting (default: 30 req/min, RateLimit:PermitPerMinute
+        /// bilan sozlanadi). Limit oshsa 429 + Retry-After: 60. Brute-force'ga ochiq API'larda
+        /// (birinchi navbatda AuthApi — login/OTP) yoqiladi; app.UseRateLimiter() ham kerak.
+        /// </summary>
+        public static IServiceCollection AddIpRateLimiting(this IServiceCollection services, IConfiguration config)
+        {
+            var permitPerMinute = int.TryParse(config["RateLimit:PermitPerMinute"], out var p) ? p : 30;
+
+            services.AddRateLimiter(options =>
+            {
+                options.RejectionStatusCode = Microsoft.AspNetCore.Http.StatusCodes.Status429TooManyRequests;
+                options.OnRejected = (context, _) =>
+                {
+                    context.HttpContext.Response.Headers.RetryAfter = "60";
+                    return ValueTask.CompletedTask;
+                };
+                options.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter
+                    .Create<Microsoft.AspNetCore.Http.HttpContext, string>(httpContext =>
+                        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                            {
+                                PermitLimit = permitPerMinute,
+                                Window = TimeSpan.FromMinutes(1),
+                                QueueLimit = 0
+                            }));
+            });
+
+            return services;
+        }
+
         public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
         {
             var connectionString = config.GetConnectionString("DefaultConnection");
@@ -155,6 +228,11 @@ namespace CommonConfiguration.ConfigurationExtensions
                     npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"))
                 .ConfigureWarnings(w =>
                     w.Ignore(RelationalEventId.PendingModelChangesWarning)));
+
+            // /health endpoint uchun (Program.cs'da app.MapHealthChecks("/health") kerak).
+            services.AddHealthChecks()
+                .AddCheck<HealthChecks.DbHealthCheck>("database")
+                .AddCheck<HealthChecks.RedisHealthCheck>("redis");
 
             return services;
         }
@@ -191,6 +269,9 @@ namespace CommonConfiguration.ConfigurationExtensions
 
         public static IServiceCollection RegisterServices(this IServiceCollection services)
         {
+            // Bir nechta repo chaqiruvini bitta DB tranzaksiyada bajarish uchun
+            services.AddScoped<ITransactionRunner, TransactionRunner>();
+
             // User repos (Platform / Customer alohida)
             services.AddScoped<IPlatformUserRepository, PlatformUserRepository>();
             services.AddScoped<ICustomerUserRepository, CustomerUserRepository>();
@@ -246,12 +327,23 @@ namespace CommonConfiguration.ConfigurationExtensions
         /// AuthService IRefreshTokenStore'ga bog'liq, shu sabab <see cref="AddRedisServices"/>
         /// ham AuthApi'da chaqirilishi shart.
         /// </summary>
-        public static IServiceCollection RegisterAuthServices(this IServiceCollection services)
+        public static IServiceCollection RegisterAuthServices(this IServiceCollection services, IConfiguration config)
         {
+            // Imzolash tekshirish bilan bir xil secret'dan foydalanadi (GetJwtSecret — yagona manba).
+            services.AddSingleton(new Domain.Auth.JwtSettings { Secret = GetJwtSecret(config) });
+
+            // OTP: test kodi (123456) faqat config ruxsat bersa (Development) ishlaydi.
+            services.AddSingleton(new Domain.Auth.OtpSettings
+            {
+                AllowTestCode = bool.TryParse(config["Otp:AllowTestCode"], out var allow) && allow,
+                TtlMinutes = int.TryParse(config["Otp:TtlMinutes"], out var ttl) ? ttl : 3,
+                MaxAttempts = int.TryParse(config["Otp:MaxAttempts"], out var max) ? max : 5
+            });
+
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IPlatformAuthService, PlatformAuthService>();
             services.AddScoped<ITokenService, TokenService>();
-            services.AddScoped<IOtpService, OtpService>();
+            services.AddSingleton<IOtpService, OtpService>();
 
             // Auth servislar repository larga bog'liq (CommonConfiguration AuthApi'da
             // RegisterServices chaqirmasligi mumkin, shuning uchun shu yerda ham ro'yxatga olamiz).

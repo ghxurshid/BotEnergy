@@ -19,7 +19,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Infrastructure\CommonConfiguration\CommonConfiguration.csproj" />
-    <ProjectReference Include="..\..\Infrastructure\External\External.csproj" />
     <ProjectReference Include="..\..\Infrastructure\Persistence\Persistence.csproj" />
   </ItemGroup>
 

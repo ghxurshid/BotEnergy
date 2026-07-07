@@ -48,7 +48,10 @@ namespace Persistence.Repositories
 
         public async Task<SessionEntity> UpdateAsync(SessionEntity session)
         {
-            _context.Sessions.Update(session);
+            // Tracked entity'da Update() barcha ustunlarni Modified qilib yuboradi —
+            // faqat detached bo'lsa attach qilamiz, aks holda change-tracking o'zi yetarli.
+            if (_context.Entry(session).State == EntityState.Detached)
+                _context.Sessions.Update(session);
             await _context.SaveChangesAsync();
             return session;
         }
@@ -88,7 +91,9 @@ namespace Persistence.Repositories
 
         public async Task<SessionEntity?> GetActiveByUserAsync(long userId)
         {
+            // Faqat o'qish uchun (GetCurrent/Bootstrap) — tracking keraksiz.
             return await _context.Sessions
+                .AsNoTracking()
                 .Include(s => s.Device)
                     .ThenInclude(d => d!.Products!.Where(p => p.IsActive))
                 .Include(s => s.Processes!.OrderByDescending(p => p.StartedAt))

@@ -4,6 +4,7 @@ using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services
 {
@@ -20,6 +21,8 @@ namespace Application.Services
         private readonly IDeviceLockService _deviceLock;
         private readonly IBillingService _billing;
         private readonly ISessionNotifier _notifier;
+        private readonly ITransactionRunner _tx;
+        private readonly ILogger<ProcessService> _logger;
 
         /// <summary>
         /// Stop/pause buyrug'i yuborilgach qurilmadan tasdiq (yoki telemetry) shuncha vaqt kelmasa,
@@ -34,7 +37,9 @@ namespace Application.Services
             IDeviceCommandPublisher commandPublisher,
             IDeviceLockService deviceLock,
             IBillingService billing,
-            ISessionNotifier notifier)
+            ISessionNotifier notifier,
+            ITransactionRunner tx,
+            ILogger<ProcessService> logger)
         {
             _processRepo = processRepo;
             _sessionRepo = sessionRepo;
@@ -43,6 +48,8 @@ namespace Application.Services
             _deviceLock = deviceLock;
             _billing = billing;
             _notifier = notifier;
+            _tx = tx;
+            _logger = logger;
         }
 
         public async Task<GenericDto<StartProcessResultDto>> StartAsync(StartProcessDto dto)
@@ -107,6 +114,10 @@ namespace Application.Services
             await _sessionRepo.UpdateAsync(session);
 
             await _commandPublisher.PublishStartAsync(session.Device.SerialNumber, process.Id, product.Id, limit, product.Name, product.Unit.ToString(), product.Price);
+
+            _logger.LogInformation(
+                "Jarayon boshlandi: processId={ProcessId} sessionId={SessionId} productId={ProductId} limit={Limit}",
+                process.Id, session.Id, product.Id, limit);
 
             await _notifier.NotifyProcessStartedAsync(session.SessionToken, new
             {
@@ -270,8 +281,18 @@ namespace Application.Services
             if (totalGiven >= process.RequestedAmount && process.RequestedAmount > 0)
             {
                 var endedAt = DateTime.Now;
-                var completed = await _processRepo.CompleteProcessAsync(
-                    process.Id, totalGiven, ProcessEndReason.Completed, endedAt);
+
+                // Yakunlash + balans yechish bitta tranzaksiyada — orada crash bo'lsa
+                // ikkalasi birga rollback bo'ladi (Ended-lekin-yechilmagan holat qolmaydi).
+                var (completed, deductedOnAutoComplete) = await _tx.RunAsync(async () =>
+                {
+                    var done = await _processRepo.CompleteProcessAsync(
+                        process.Id, totalGiven, ProcessEndReason.Completed, endedAt);
+                    if (done == 0)
+                        return (0, 0m);
+
+                    return (done, await _billing.DeductForProcessAsync(process.Id));
+                });
 
                 if (completed > 0)
                 {
@@ -280,8 +301,6 @@ namespace Application.Services
                         await _commandPublisher.PublishStopAsync(serial!, process.Id);
                         await _deviceLock.UnlockDeviceAsync(serial!, userId);
                     }
-
-                    var deductedOnAutoComplete = await _billing.DeductForProcessAsync(process.Id);
 
                     await _notifier.NotifyProcessEndedAsync(sessionToken, new
                     {
@@ -342,9 +361,13 @@ namespace Application.Services
             process.Status = ProcessStatus.Ended;
             process.EndReason = dto.EndReason;
             process.EndedAt = DateTime.Now;
-            await _processRepo.UpdateAsync(process);
 
-            var deducted = await _billing.DeductForProcessAsync(process.Id);
+            // Yakunlash + balans yechish — bitta tranzaksiya (crash-safe).
+            var deducted = await _tx.RunAsync(async () =>
+            {
+                await _processRepo.UpdateAsync(process);
+                return await _billing.DeductForProcessAsync(process.Id);
+            });
 
             var serial = process.Session.Device?.SerialNumber;
             if (!string.IsNullOrWhiteSpace(serial))
@@ -360,6 +383,10 @@ namespace Application.Services
                 total_cost = deducted,
                 ended_at = process.EndedAt
             });
+
+            _logger.LogInformation(
+                "Jarayon yakunlandi (device): processId={ProcessId} given={Given} deducted={Deducted} reason={Reason}",
+                process.Id, process.GivenAmount, deducted, dto.EndReason);
 
             return GenericDto<DeviceProcessReportResultDto>.Success(new DeviceProcessReportResultDto
             {
@@ -430,12 +457,22 @@ namespace Application.Services
                 var endedAt = DateTime.Now;
 
                 // Atomic — boshqa thread (kech kelgan process.finished) yutib bo'lgan bo'lsa 0 qaytaradi.
-                var completed = await _processRepo.CompleteProcessAsync(
-                    process.Id, process.GivenAmount, ProcessEndReason.DeviceError, endedAt);
+                // Yakunlash + balans yechish bitta tranzaksiyada (crash-safe).
+                var (completed, deducted) = await _tx.RunAsync(async () =>
+                {
+                    var done = await _processRepo.CompleteProcessAsync(
+                        process.Id, process.GivenAmount, ProcessEndReason.DeviceError, endedAt);
+                    if (done == 0)
+                        return (0, 0m);
+
+                    return (done, await _billing.DeductForProcessAsync(process.Id));
+                });
                 if (completed == 0)
                     continue;
 
-                var deducted = await _billing.DeductForProcessAsync(process.Id);
+                _logger.LogWarning(
+                    "Watchdog jarayonni majburan yakunladi: processId={ProcessId} given={Given} deducted={Deducted}",
+                    process.Id, process.GivenAmount, deducted);
 
                 var serial = process.Session?.Device?.SerialNumber;
                 if (!string.IsNullOrWhiteSpace(serial))
