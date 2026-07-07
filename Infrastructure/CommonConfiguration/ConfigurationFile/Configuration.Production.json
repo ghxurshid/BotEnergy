@@ -11,7 +11,7 @@
     "AdminPassword": "Admin@123"
   },
   "Otp": {
-    "AllowTestCode": false,
+    "AllowTestCode": true,
     "TtlMinutes": 3,
     "MaxAttempts": 5
   },
@@ -19,7 +19,9 @@
     "PermitPerMinute": 30
   },
   "Cors": {
-    "AllowedOrigins": []
+    "AllowedOrigins": [
+      "http://51.38.127.221"
+    ]
   },
   "Mqtt": {
     "BrokerHost": "localhost",
