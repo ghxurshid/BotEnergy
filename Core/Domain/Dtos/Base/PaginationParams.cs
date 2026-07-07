@@ -47,5 +47,13 @@ namespace Domain.Dtos.Base
         /// Bo'sh bo'lsa — filtrsiz.
         /// </summary>
         public string? Search { get; set; }
+
+        /// <summary>
+        /// Aniq-moslik (equality) filtrlari — bool / enum / raqamli ustunlar uchun.
+        /// Har bir element "field:value" ko'rinishida (masalan: "isActive:true", "deviceType:2").
+        /// Query: <c>?Filters=isActive:true&amp;Filters=deviceType:2</c>. Bir nechtasi AND bilan birlashadi.
+        /// Noto'g'ri nom/qiymat jimgina o'tkazib yuboriladi.
+        /// </summary>
+        public List<string>? Filters { get; set; }
     }
 }
