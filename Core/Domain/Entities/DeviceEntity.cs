@@ -1,3 +1,4 @@
+using Domain.Attributes;
 using Domain.Entities.BaseEntity;
 using Domain.Enums;
 
@@ -7,6 +8,7 @@ namespace Domain.Entities
     {
         public required string SerialNumber { get; set; }
 
+        [NotSearchable]
         public string SecretKey { get; set; } = Guid.NewGuid().ToString("N");
 
         public DeviceType DeviceType { get; set; }

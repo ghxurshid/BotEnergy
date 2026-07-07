@@ -20,7 +20,7 @@ namespace Persistence.Repositories
         public Task<PagedResult<MerchantEntity>> GetAllAsync(PaginationParams param, long? merchantId = null)
             => _context.Merchants
                 .Where(c => merchantId == null || c.Id == merchantId)
-                .OrderBy(c => c.CompanyName)
+                .ApplyListQuery(param)
                 .ToPagedResultAsync(param);
 
         public async Task<MerchantEntity?> GetByPhoneNumberAsync(string phoneNumber)

@@ -30,7 +30,7 @@ namespace Persistence.Repositories
             => _context.PlatformUsers
                 .Include(u => u.Role)
                 .Include(u => u.Merchant)
-                .OrderBy(u => u.PhoneNumber)
+                .ApplyListQuery(param)
                 .ToPagedResultAsync(param);
 
         public Task<PagedResult<PlatformUserEntity>> GetByMerchantAsync(long merchantId, PaginationParams param)
@@ -38,7 +38,7 @@ namespace Persistence.Repositories
                 .Include(u => u.Role)
                 .Include(u => u.Merchant)
                 .Where(u => u.MerchantId == merchantId)
-                .OrderBy(u => u.PhoneNumber)
+                .ApplyListQuery(param)
                 .ToPagedResultAsync(param);
 
         public async Task<PlatformUserEntity> CreateAsync(PlatformUserEntity user)

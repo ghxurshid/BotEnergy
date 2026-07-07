@@ -31,7 +31,7 @@ namespace Persistence.Repositories
                 .AsNoTracking()
                 .Include(u => u.Role)
                 .Include(u => u.Organization)
-                .OrderBy(u => u.PhoneNumber)
+                .ApplyListQuery(param)
                 .ToPagedResultAsync(param);
 
         public Task<PagedResult<CustomerUserEntity>> GetByOrganizationAsync(long organizationId, PaginationParams param)
@@ -40,7 +40,7 @@ namespace Persistence.Repositories
                 .Include(u => u.Role)
                 .Include(u => u.Organization)
                 .Where(u => u.OrganizationId == organizationId)
-                .OrderBy(u => u.PhoneNumber)
+                .ApplyListQuery(param)
                 .ToPagedResultAsync(param);
 
         public async Task<CustomerUserEntity> CreateAsync(CustomerUserEntity user)

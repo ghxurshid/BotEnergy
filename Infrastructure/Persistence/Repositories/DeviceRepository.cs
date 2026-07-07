@@ -42,7 +42,7 @@ namespace Persistence.Repositories
             => _context.Devices
                 .Include(d => d.Station)
                 .Where(d => merchantId == null || d.Station!.MerchantId == merchantId)
-                .OrderBy(d => d.SerialNumber)
+                .ApplyListQuery(param)
                 .ToPagedResultAsync(param);
 
         public async Task<List<DeviceEntity>> GetByStationIdAsync(long stationId)

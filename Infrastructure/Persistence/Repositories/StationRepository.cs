@@ -23,7 +23,7 @@ namespace Persistence.Repositories
             => _context.Stations
                 .Include(s => s.Merchant)
                 .Where(s => merchantId == null || s.MerchantId == merchantId)
-                .OrderBy(s => s.Name)
+                .ApplyListQuery(param)
                 .ToPagedResultAsync(param);
 
         public async Task<List<StationEntity>> GetByMerchantIdAsync(long merchantId)

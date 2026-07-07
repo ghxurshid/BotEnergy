@@ -1,3 +1,4 @@
+using Domain.Attributes;
 using Domain.Entities.BaseEntity;
 
 namespace Domain.Entities
@@ -18,7 +19,9 @@ namespace Domain.Entities
         public long? RoleId { get; set; }
         public DateTime LastLoginDate { get; set; } = DateTime.Now;
         public DateTime LastActiveDate { get; set; } = DateTime.Now;
+        [NotSearchable]
         public string? PasswordHash { get; set; }
+        [NotSearchable]
         public string? PasswordSalt { get; set; }
     }
 }
