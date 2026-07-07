@@ -1169,8 +1169,10 @@ namespace Persistence.Migrations
 
                     b.Property<Point>("Coordinates")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("geography(Point,4326)")
-                        .HasColumnName("coordinates");
+                        .HasColumnName("coordinates")
+                        .HasDefaultValueSql("ST_SetSRID(ST_MakePoint(0,0),4326)");
 
                     b.Property<DateTime>("CreatedDate")
                         .ValueGeneratedOnAdd()

@@ -317,7 +317,10 @@ namespace Persistence.Context
                 b.Property(x => x.Name).HasColumnName("name").IsRequired().HasMaxLength(150);
                 b.Property(x => x.Address).HasColumnName("address").IsRequired().HasMaxLength(300);
                 b.Property(x => x.Coordinates).HasColumnName("coordinates")
-                    .HasColumnType("geography(Point,4326)").IsRequired();
+                    .HasColumnType("geography(Point,4326)").IsRequired()
+                    // Mavjud qatorlar (va koordinatasiz insert) uchun placeholder (0,0).
+                    // Service har doim real koordinata beradi; bu faqat NOT NULL fallback.
+                    .HasDefaultValueSql("ST_SetSRID(ST_MakePoint(0,0),4326)");
                 b.Property(x => x.MerchantId).HasColumnName("merchant_id").IsRequired();
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
