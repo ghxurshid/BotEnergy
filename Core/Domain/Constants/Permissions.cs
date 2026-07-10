@@ -42,6 +42,8 @@ namespace Domain.Constants
         public const string DeviceAdminGetByStation = "DeviceAdmin.GetByStation";
         public const string DeviceAdminUpdate = "DeviceAdmin.Update";
         public const string DeviceAdminDelete = "DeviceAdmin.Delete";
+        /// <summary>Expert-rejim: qurilma EEPROM qayta flash qilinganda MQTT counter'larni 0'lash.</summary>
+        public const string DeviceAdminResetMqttCounters = "DeviceAdmin.ResetMqttCounters";
 
         // ── AdminApi — Mahsulot boshqaruvi ───────────────────────────
         public const string ProductAdminCreate = "ProductAdmin.Create";
@@ -144,6 +146,7 @@ namespace Domain.Constants
             // Device
             DeviceAdminRegister, DeviceAdminGetAll, DeviceAdminGetById,
             DeviceAdminGetByStation, DeviceAdminUpdate, DeviceAdminDelete,
+            DeviceAdminResetMqttCounters,
 
             // Product
             ProductAdminCreate, ProductAdminGetAll, ProductAdminGetByDevice,

@@ -259,9 +259,11 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddSingleton<InMemoryPendingSessionStore>();
             services.AddSingleton<IPendingSessionStore, ResilientPendingSessionStore>();
 
-            // Replay protection process xotirasida (ConcurrentDictionary) — Redis'siz.
-            // Servis restart bo'lganda counter reset bo'ladi (test/single-instance uchun mos).
-            services.AddSingleton<IMqttMessageIdStore, InMemoryMqttMessageIdStore>();
+            // Replay protection counter'lari Redis'da (TTL'siz) — restart'da yo'qolmaydi.
+            // In-memory nusxa faqat Redis yiqilganda fallback/shadow sifatida ishlaydi.
+            services.AddSingleton<RedisMqttMessageIdStore>();
+            services.AddSingleton<InMemoryMqttMessageIdStore>();
+            services.AddSingleton<IMqttMessageIdStore, ResilientMqttMessageIdStore>();
 
             services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
             services.AddScoped<Filters.IdempotencyFilter>();

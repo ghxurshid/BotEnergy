@@ -1,4 +1,3 @@
-using Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 using SessionApi.Mqtt.Abstractions;
 using SessionApi.Services;
@@ -9,24 +8,19 @@ namespace SessionApi.Mqtt.Handlers
     /// <c>device/{serial}/request</c>, <c>type=session.connect</c> — QR ulanish oqimi.
     /// Mobil ilova pending sessiya yaratadi, qurilma QR ni o'qib serverga bu request yuboradi.
     /// Server kalitlarni solishtirib sessiyani DB'da yaratadi va connect natijasini response sifatida qaytaradi.
-    ///
-    /// <para>Connect muvaffaqiyatli bo'lganda <see cref="IMqttMessageIdStore.ResetAsync"/> chaqiriladi —
-    /// qurilma reset/flash bo'lganda counter'lar mos kelishini ta'minlash uchun.</para>
+    /// Counter'larga tegilmaydi — connect ham oddiy xabar kabi monotonic id tekshiruvidan o'tadi.
     /// </summary>
     [MqttHandler(MqttHandlerTypes.SessionConnect, MqttTopicKind.Request)]
     public sealed class SessionConnectHandler : MqttCommandHandler<SessionConnectHandler.Payload, ConnectAckData>
     {
         private readonly IDeviceSessionService _sessionService;
-        private readonly IMqttMessageIdStore _idStore;
         private readonly ILogger<SessionConnectHandler> _logger;
 
         public SessionConnectHandler(
             IDeviceSessionService sessionService,
-            IMqttMessageIdStore idStore,
             ILogger<SessionConnectHandler> logger)
         {
             _sessionService = sessionService;
-            _idStore = idStore;
             _logger = logger;
         }
 
@@ -51,14 +45,9 @@ namespace SessionApi.Mqtt.Handlers
                 return MqttResponseEnvelope.Fail<ConnectAckData>(result.Code, result.Message);
             }
 
-            // Counter'larni reset qilamiz va shu connect request idini inbound counter'iga yozamiz.
-            // Replay middleware connect uchun skip qildi — endi keyingi xabarlar id > connectId bo'lishi kerak.
-            await _idStore.ResetAsync(context.SerialNumber);
-            await _idStore.TryAcceptInboundIdAsync(context.SerialNumber, context.Envelope!.Id);
-
             _logger.LogInformation(
-                "[session.connect] OK serial={Serial} sessionId={SessionId} — counter'lar reset id={Id} dan",
-                context.SerialNumber, result.SessionId, context.Envelope.Id);
+                "[session.connect] OK serial={Serial} sessionId={SessionId} id={Id}",
+                context.SerialNumber, result.SessionId, context.Envelope!.Id);
 
             return MqttResponseEnvelope.Success(
                 result.Code, result.Message,

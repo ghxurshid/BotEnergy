@@ -136,7 +136,7 @@ IoT device → MQTT topics (request/response/event/telemetry/state)
            → Mobile
 ```
 
-Envelope security: every device message is `{id, type, timestamp, payload, hmac}` — HMAC-SHA256 keyed off the device `SecretKey`, verified constant-time; replay protection is per-device monotonic `id` (in-memory store, single instance).
+Envelope security: every device message is `{id, type, timestamp, payload, hmac}` — HMAC-SHA256 keyed off the device `SecretKey`, verified constant-time; replay protection is per-device monotonic `id` stored in Redis without TTL (`mqttid:in:{serial}` / `mqttid:out:{serial}`, in-memory shadow fallback if Redis is down). Counters are NEVER reset automatically — not on `session.connect`, not on restart; the device keeps its counters in EEPROM (simulator: localStorage). The only reset path is the expert-mode endpoint `POST /api/Device/ResetMqttCounters/{id}` (AdminApi, permission `DeviceAdmin.ResetMqttCounters`, Manage-only) used after a device EEPROM re-flash.
 
 All pieces — REST controllers, MQTT transport+pipeline, handlers, ProcessService, SignalR hub — live in the SessionApi process.
 

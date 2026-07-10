@@ -22,10 +22,9 @@ namespace Domain.Interfaces
 
         /// <summary>
         /// Berilgan qurilma uchun inbound va outbound counter'larni 0'ga tushiradi.
-        /// Qurilma muvaffaqiyatli <c>connect</c> yuborganda chaqiriladi — yangi sessiya boshlanishi
-        /// qurilmaning reset/flash holatidan keyin counter'lar mos kelishini ta'minlaydi.
-        /// HMAC validatsiyasidan keyin va connect handler success natijasidan keyin chaqirilishi shart
-        /// (replay zaifligini oldini olish uchun).
+        /// Oddiy biznes oqimida HECH QACHON chaqirilmaydi (connect'da ham) — counter'lar doimiy.
+        /// Yagona istisno: qurilma EEPROM'i qayta flash qilinganda expert-rejim admin
+        /// endpoint'i (<c>DeviceAdmin.ResetMqttCounters</c>) orqali.
         /// </summary>
         Task ResetAsync(string serialNumber);
     }

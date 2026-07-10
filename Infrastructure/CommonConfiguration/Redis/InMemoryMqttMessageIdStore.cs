@@ -4,10 +4,10 @@ using Domain.Interfaces;
 namespace CommonConfiguration.Redis
 {
     /// <summary>
-    /// SessionApi process xotirasida (ConcurrentDictionary) yashovchi monotonic id tracker.
-    /// Redis'ga yozmaydi — servis restart bo'lganda counter 0'dan boshlanadi, demak
-    /// qurilma id=1 dan qayta yuborgan ham qabul qilinadi. Test va single-instance
-    /// deploy uchun mos. Multi-instance kerak bo'lsa Redis variantiga qaytarish kerak.
+    /// Process xotirasida (ConcurrentDictionary) yashovchi monotonic id tracker.
+    /// Yakka o'zi ishlatilmaydi — <see cref="ResilientMqttMessageIdStore"/> ichida
+    /// Redis'ning shadow/fallback nusxasi sifatida xizmat qiladi: Redis yiqilganda
+    /// monotonic tekshiruv xotiradagi oxirgi ko'rilgan qiymatdan davom etadi.
     /// </summary>
     public sealed class InMemoryMqttMessageIdStore : IMqttMessageIdStore
     {
@@ -32,6 +32,16 @@ namespace CommonConfiguration.Redis
         {
             var next = _outbound.AddOrUpdate(serialNumber, 1L, (_, v) => v + 1);
             return Task.FromResult(next);
+        }
+
+        /// <summary>
+        /// Outbound counter'ni kamida <paramref name="value"/> ga ko'taradi (shadow sync uchun).
+        /// Redis'dan olingan qiymatdan kichik bo'lsa fallback davomiyligi buzilmasin deb chaqiriladi.
+        /// </summary>
+        public Task SetOutboundFloorAsync(string serialNumber, long value)
+        {
+            _outbound.AddOrUpdate(serialNumber, value, (_, v) => Math.Max(v, value));
+            return Task.CompletedTask;
         }
 
         public Task ResetAsync(string serialNumber)

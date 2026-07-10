@@ -215,5 +215,37 @@ namespace AdminApi.Controllers
             var result = await _service.DeleteAsync(id, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
+
+        /// <summary>
+        /// [EXPERT] Qurilmaning MQTT replay-counter'larini 0'ga tushirish.
+        /// </summary>
+        /// <remarks>
+        /// MQTT correlation id counter'lari (inbound/outbound) hech qachon avtomatik reset qilinmaydi —
+        /// server restart'da ham (Redis'da doimiy saqlanadi). Qurilma tomonda ular EEPROM'da yuritiladi.
+        ///
+        /// Bu endpoint YAGONA istisno: qurilma EEPROM'i qayta flash qilinib counter'lar 0'dan boshlanganda,
+        /// serverdagi counter'larni ham 0'lash uchun. Aks holda qurilmaning barcha xabarlari replay deb rad etiladi.
+        ///
+        /// **Permission:** `DeviceAdmin.ResetMqttCounters` — faqat Manage (expert) rollarga biriktiriladi.
+        /// </remarks>
+        /// <param name="id">Qurilma ID si.</param>
+        /// <param name="idStore">MQTT counter store (DI).</param>
+        /// <response code="200">Counter'lar 0'ga tushirildi.</response>
+        /// <response code="403">Permission yetarli emas.</response>
+        /// <response code="404">Berilgan ID bo'yicha qurilma topilmadi.</response>
+        [HttpPost("{id}")]
+        [RequirePermission(Permissions.DeviceAdminResetMqttCounters)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> ResetMqttCounters(long id, [FromServices] IMqttMessageIdStore idStore)
+        {
+            var device = await _service.GetByIdAsync(id, User.GetScope());
+            if (!device.IsSuccess)
+                return StatusCode(device.ErrorObj!.Code, new { message = device.ErrorObj.ErrorMessage });
+
+            await idStore.ResetAsync(device.Result!.SerialNumber);
+            return Ok(new { message = $"MQTT counter'lar 0'ga tushirildi: {device.Result.SerialNumber}" });
+        }
     }
 }
