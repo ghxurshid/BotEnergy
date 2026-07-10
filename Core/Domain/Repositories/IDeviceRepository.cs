@@ -7,7 +7,16 @@ namespace Domain.Repositories
     public interface IDeviceRepository
     {
         Task<DeviceEntity?> GetByIdAsync(long id);
+
+        /// <summary>
+        /// Qurilma kanali (MQTT/auth/connect) uchun lookup — faqat FAOL qurilmani qaytaradi.
+        /// Admin CRUD uchun emas; u yerda <see cref="GetByIdAsync"/> ishlatiladi (IsActive filtrsiz).
+        /// </summary>
         Task<DeviceEntity?> GetBySerialNumberAsync(string serialNumber);
+
+        /// <summary>Seriya raqami band-emasligini tekshirish (IsActive'dan qat'i nazar — unique index bilan mos).</summary>
+        Task<bool> ExistsBySerialNumberAsync(string serialNumber);
+
         Task<bool> ValidateDeviceAsync(string serialNumber, string secretKey);
         Task<PagedResult<DeviceEntity>> GetAllAsync(PaginationParams param, long? merchantId = null);
         Task<List<DeviceEntity>> GetByStationIdAsync(long stationId);

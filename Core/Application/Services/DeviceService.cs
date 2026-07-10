@@ -34,8 +34,8 @@ namespace Application.Services
             if (accessCheck is not null)
                 return accessCheck;
 
-            var existing = await _repo.GetBySerialNumberAsync(dto.SerialNumber);
-            if (existing is not null)
+            // Nofaol qurilma ham unique indexni band qiladi — shu sabab IsActive'siz tekshiriladi.
+            if (await _repo.ExistsBySerialNumberAsync(dto.SerialNumber))
                 return GenericDto<DeviceResultDto>.Error(409, $"'{dto.SerialNumber}' seriya raqamli qurilma allaqachon mavjud.");
 
             var device = new DeviceEntity

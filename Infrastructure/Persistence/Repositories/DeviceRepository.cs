@@ -17,9 +17,10 @@ namespace Persistence.Repositories
 
         public async Task<DeviceEntity?> GetByIdAsync(long id)
         {
+            // IsActive bo'yicha filtrlanmaydi — nofaol qurilma ham ko'rish/yangilash/qayta faollashtirish uchun topilishi kerak.
             return await _context.Devices
                 .Include(d => d.Station)
-                .FirstOrDefaultAsync(d => d.Id == id && d.IsActive);
+                .FirstOrDefaultAsync(d => d.Id == id);
         }
 
         public async Task<DeviceEntity?> GetBySerialNumberAsync(string serialNumber)
@@ -29,6 +30,9 @@ namespace Persistence.Repositories
                 .Include(d => d.Products!.Where(p => p.IsActive))
                 .FirstOrDefaultAsync(d => d.SerialNumber == serialNumber && d.IsActive);
         }
+
+        public Task<bool> ExistsBySerialNumberAsync(string serialNumber)
+            => _context.Devices.AnyAsync(d => d.SerialNumber == serialNumber);
 
         public async Task<bool> ValidateDeviceAsync(string serialNumber, string secretKey)
         {
