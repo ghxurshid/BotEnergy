@@ -45,6 +45,9 @@ namespace Application.Services
             if (device is null)
                 return GenericDto<ProductResultDto>.Error(404, "Qurilma topilmadi.");
 
+            if (!device.IsActive)
+                return GenericDto<ProductResultDto>.Error(400, "Qurilma faol emas.");
+
             if (!DeviceTypeProductMap.IsAllowed(device.DeviceType, dto.ProductType))
             {
                 var allowed = string.Join(", ", DeviceTypeProductMap.GetAllowed(device.DeviceType));
