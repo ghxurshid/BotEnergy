@@ -148,6 +148,7 @@ namespace AdminApi.Controllers
         /// <response code="404">Berilgan ID bo'yicha merchant topilmadi.</response>
         [HttpPut("{id}")]
         [RequirePermission(Permissions.MerchantAdminUpdate)]
+        [TypeFilter(typeof(UpdateMerchantValidationFilter))]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]

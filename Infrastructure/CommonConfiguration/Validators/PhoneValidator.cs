@@ -1,18 +1,23 @@
-using System.Text.RegularExpressions;
+using Domain.Helpers;
 
 namespace CommonConfiguration.Validators
 {
     /// <summary>
     /// Telefon raqam formati: 998 bilan boshlanadi, jami 12 raqam, + belgisisiz.
-    /// Misol: 998901234567
+    /// Misol: 998901234567.
+    /// Yagona (canonical) logika <see cref="PhoneNumberHelper"/> da (Domain) — API filtrlar ham,
+    /// DB SaveChanges guard ham bir xil qoidadan foydalanadi.
     /// </summary>
     public static class PhoneValidator
     {
-        private static readonly Regex _regex = new(@"^998[0-9]{9}$", RegexOptions.Compiled);
+        public static bool IsValid(string? phone) => PhoneNumberHelper.IsValid(phone);
 
-        public static bool IsValid(string? phone)
-            => !string.IsNullOrEmpty(phone) && _regex.IsMatch(phone);
+        /// <summary>Yumshoq normalizatsiya (bo'sh joy/`-`/`()`/`+`/`00` prefiks tozalanadi). Format kafolatlanmaydi.</summary>
+        public static string? Normalize(string? phone) => PhoneNumberHelper.Normalize(phone);
 
-        public static string ErrorMessage => "Telefon raqam 998 bilan boshlanishi va 12 ta raqamdan iborat bo'lishi kerak (masalan: 998901234567).";
+        /// <summary>Normalizatsiya qilib, canonical formatga to'g'ri kelsa true. <paramref name="normalized"/> — tozalangan qiymat.</summary>
+        public static bool TryNormalize(string? phone, out string normalized) => PhoneNumberHelper.TryNormalize(phone, out normalized);
+
+        public static string ErrorMessage => PhoneNumberHelper.ErrorMessage;
     }
 }

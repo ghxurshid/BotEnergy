@@ -12,6 +12,10 @@ namespace Persistence.Context
         private const string TimestampWithoutTimeZone = "timestamp without time zone";
         private const string LocalTimestampDefaultSql = "LOCALTIMESTAMP";
 
+        // Telefon raqam DB-darajasidagi kafolati: canonical format 998XXXXXXXXX (12 raqam).
+        // App-layer (SaveChanges guard + validatsiya filtrlar) bilan bir xil qoida — raw SQL yozuvlar ham himoyalanadi.
+        private const string PhoneFormatCheckSql = "phone_number ~ '^998[0-9]{9}$'";
+
         partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -107,7 +111,8 @@ namespace Persistence.Context
         {
             modelBuilder.Entity<PlatformUserEntity>(b =>
             {
-                b.ToTable("platform_users", AuthSchema);
+                b.ToTable("platform_users", AuthSchema,
+                    t => t.HasCheckConstraint("ck_platform_users_phone_format", PhoneFormatCheckSql));
                 ConfigureUserCommon(b);
 
                 b.Property(x => x.Type).HasColumnName("type").HasConversion<int>();
@@ -131,7 +136,8 @@ namespace Persistence.Context
         {
             modelBuilder.Entity<CustomerUserEntity>(b =>
             {
-                b.ToTable("customer_users", AuthSchema);
+                b.ToTable("customer_users", AuthSchema,
+                    t => t.HasCheckConstraint("ck_customer_users_phone_format", PhoneFormatCheckSql));
                 ConfigureUserCommon(b);
 
                 b.Property(x => x.Type).HasColumnName("type").HasConversion<int>();
@@ -160,7 +166,8 @@ namespace Persistence.Context
         {
             modelBuilder.Entity<OrganizationEntity>(b =>
             {
-                b.ToTable("organizations", AuthSchema);
+                b.ToTable("organizations", AuthSchema,
+                    t => t.HasCheckConstraint("ck_organizations_phone_format", PhoneFormatCheckSql));
 
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
@@ -523,7 +530,8 @@ namespace Persistence.Context
         {
             modelBuilder.Entity<MerchantEntity>(b =>
             {
-                b.ToTable("merchants", AppSchema);
+                b.ToTable("merchants", AppSchema,
+                    t => t.HasCheckConstraint("ck_merchants_phone_format", PhoneFormatCheckSql));
 
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();

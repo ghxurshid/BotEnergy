@@ -1,8 +1,9 @@
 using Domain.Entities.BaseEntity;
+using Domain.Interfaces;
 
 namespace Domain.Entities
 {
-    public class OrganizationEntity : Entity
+    public class OrganizationEntity : Entity, IHasPhoneNumber
     {
         public required string Name { get; set; }
 

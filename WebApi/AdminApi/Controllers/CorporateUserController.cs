@@ -1,4 +1,5 @@
 using AdminApi.Extensions;
+using AdminApi.Filters.ValidationFilters;
 using AdminApi.Models.Requests;
 using CommonConfiguration.Attributes;
 using Domain.Dtos.Base;
@@ -25,6 +26,7 @@ namespace AdminApi.Controllers
 
         [HttpPost]
         [RequirePermission(Permissions.CustomerAdminCreate)]
+        [TypeFilter(typeof(CreateCorporateUserValidationFilter))]
         public async Task<IActionResult> Create([FromBody] CreateCorporateUserRequest request)
         {
             var result = await _service.CreateAsync(request.ToDto(), User.GetScope());

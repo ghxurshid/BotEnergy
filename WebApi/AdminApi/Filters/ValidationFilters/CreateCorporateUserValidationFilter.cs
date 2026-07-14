@@ -5,11 +5,11 @@ using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace AdminApi.Filters.ValidationFilters
 {
-    public class CreateUserValidationFilter : IActionFilter
+    public class CreateCorporateUserValidationFilter : IActionFilter
     {
         public void OnActionExecuting(ActionExecutingContext context)
         {
-            var request = context.ActionArguments["request"] as CreateUserRequest;
+            var request = context.ActionArguments["request"] as CreateCorporateUserRequest;
             if (request is null) { context.Result = new BadRequestObjectResult(new { message = "So'rov ma'lumotlari noto'g'ri." }); return; }
 
             if (string.IsNullOrWhiteSpace(request.PhoneId))
@@ -25,8 +25,8 @@ namespace AdminApi.Filters.ValidationFilters
             if (request.RoleId <= 0)
             { context.Result = new BadRequestObjectResult(new { message = "Rol ID kiritilishi shart." }); return; }
 
-            if (request.Type == Domain.Enums.PlatformUserType.Merchant && !request.MerchantId.HasValue)
-            { context.Result = new BadRequestObjectResult(new { message = "Merchant foydalanuvchi uchun MerchantId ko'rsatilishi shart." }); return; }
+            if (request.OrganizationId <= 0)
+            { context.Result = new BadRequestObjectResult(new { message = "OrganizationId kiritilishi shart." }); return; }
         }
 
         public void OnActionExecuted(ActionExecutedContext context) { }

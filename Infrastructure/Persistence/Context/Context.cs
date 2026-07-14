@@ -1,5 +1,7 @@
-using Domain.Entities;
 using Domain.Entities.BaseEntity;
+using Domain.Exceptions;
+using Domain.Helpers;
+using Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace Persistence.Context
@@ -34,8 +36,31 @@ namespace Persistence.Context
                 {
                     entry.Entity.UpdatedDate = DateTime.Now;
                 }
+
+                // Telefon raqam yozuvining yagona choke-point'i: insert yoki phone o'zgarishida
+                // normalizatsiya qilib canonical (998XXXXXXXXX) formatni kafolatlaymiz. Bu — oxirgi
+                // himoya; API validatsiya filtrlar odatda oldindan 400 bilan ushlaydi.
+                if (entry.Entity is IHasPhoneNumber && entry.State is EntityState.Added or EntityState.Modified)
+                    NormalizePhoneNumber(entry);
             }
+        }
+
+        private static void NormalizePhoneNumber(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
+        {
+            var phoneProp = entry.Property(nameof(IHasPhoneNumber.PhoneNumber));
+
+            // Update paytida phone o'zgarmagan bo'lsa — tegmaymiz (mavjud legacy qiymatni buzmaslik uchun).
+            if (entry.State == EntityState.Modified && !phoneProp.IsModified)
+                return;
+
+            var current = ((IHasPhoneNumber)entry.Entity).PhoneNumber;
+            var normalized = PhoneNumberHelper.Normalize(current);
+
+            if (!PhoneNumberHelper.IsValid(normalized))
+                throw new InvalidPhoneNumberException(PhoneNumberHelper.ErrorMessage);
+
+            if (!string.Equals(current, normalized, StringComparison.Ordinal))
+                ((IHasPhoneNumber)entry.Entity).PhoneNumber = normalized!;
         }
     }
 }
-

@@ -27,8 +27,9 @@ namespace AdminApi.Filters.ValidationFilters
             if (string.IsNullOrWhiteSpace(request.PhoneNumber))
             { context.Result = new BadRequestObjectResult(new { message = "Telefon raqam kiritilishi shart." }); return; }
 
-            if (!PhoneValidator.IsValid(request.PhoneNumber))
+            if (!PhoneValidator.TryNormalize(request.PhoneNumber, out var phone))
             { context.Result = new BadRequestObjectResult(new { message = PhoneValidator.ErrorMessage }); return; }
+            request.PhoneNumber = phone;
         }
 
         public void OnActionExecuted(ActionExecutedContext context) { }

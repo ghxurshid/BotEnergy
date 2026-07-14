@@ -1,5 +1,6 @@
 using Domain.Attributes;
 using Domain.Entities.BaseEntity;
+using Domain.Interfaces;
 
 namespace Domain.Entities
 {
@@ -8,7 +9,7 @@ namespace Domain.Entities
     /// TPH emas — bu mapped bo'lmagan baza; har konkret entity (<see cref="PlatformUserEntity"/>,
     /// <see cref="CustomerUserEntity"/>) o'z jadvaliga map qilinadi.
     /// </summary>
-    public abstract class UserBase : Entity
+    public abstract class UserBase : Entity, IHasPhoneNumber
     {
         public required string PhoneId { get; set; }
         public required string Mail { get; set; }

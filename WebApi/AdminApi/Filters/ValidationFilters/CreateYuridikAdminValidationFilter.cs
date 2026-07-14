@@ -12,8 +12,9 @@ namespace AdminApi.Filters.ValidationFilters
             var request = context.ActionArguments["request"] as CreateYuridikAdminRequest;
             if (request is null) { context.Result = new BadRequestObjectResult(new { message = "So'rov ma'lumotlari noto'g'ri." }); return; }
 
-            if (!PhoneValidator.IsValid(request.PhoneNumber))
+            if (!PhoneValidator.TryNormalize(request.PhoneNumber, out var phone))
             { context.Result = new BadRequestObjectResult(new { message = PhoneValidator.ErrorMessage }); return; }
+            request.PhoneNumber = phone;
 
             if (string.IsNullOrWhiteSpace(request.Inn))
             { context.Result = new BadRequestObjectResult(new { message = "INN kiritilishi shart." }); return; }

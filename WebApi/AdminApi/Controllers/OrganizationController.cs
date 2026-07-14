@@ -149,6 +149,7 @@ namespace AdminApi.Controllers
         /// <response code="404">Berilgan ID bo'yicha tashkilot topilmadi.</response>
         [HttpPut("{id}")]
         [RequirePermission(Permissions.OrganizationAdminUpdate)]
+        [TypeFilter(typeof(UpdateOrganizationValidationFilter))]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -1,9 +1,10 @@
 using Domain.Attributes;
 using Domain.Entities.BaseEntity;
+using Domain.Interfaces;
 
 namespace Domain.Entities
 {
-    public class MerchantEntity : Entity
+    public class MerchantEntity : Entity, IHasPhoneNumber
     {
         public required string PhoneNumber { get; set; }
 
