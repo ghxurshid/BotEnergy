@@ -53,5 +53,17 @@
     "MerchantId": "",
     "Key": "",
     "TimeoutSeconds": 30
+  },
+  "HoldInvoices": {
+    "WatcherIntervalSeconds": 5,
+    "PollSeconds": 3,
+    "LeaseSeconds": 30,
+    "BatchSize": 20,
+    "MaxAttempts": 8,
+    "BackoffBaseSeconds": 5,
+    "BackoffMaxSeconds": 300,
+    "InvoiceTtlMinutes": 30,
+    "MaxInvoicesPerSession": 10,
+    "SendReceiptToPhone": false
   }
 }

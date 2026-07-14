@@ -318,6 +318,12 @@ namespace CommonConfiguration.ConfigurationExtensions
             // PaymentService va IPaymeClient esa AddPaymeClient orqali alohida ulanadi)
             services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
 
+            // Hold invoice repo'lari — faqat DbContext'ga bog'liq, AdminApi ham ishlatadi.
+            services.AddScoped<IPaymentSessionRepository, PaymentSessionRepository>();
+            services.AddScoped<IHoldInvoiceRepository, HoldInvoiceRepository>();
+            // Operator hold boshqaruvi — Payme'ni chaqirmaydi, faqat repo'lar (AdminApi'da ishlatiladi).
+            services.AddScoped<IHoldInvoiceAdminService, HoldInvoiceAdminService>();
+
             // Reporting
             services.AddScoped<IUsageReportRepository, UsageReportRepository>();
             services.AddScoped<IUsageReportService, UsageReportService>();
@@ -406,6 +412,27 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.Configure<PaymeOptions>(config.GetSection("Payme"));
             services.AddHttpClient<IPaymeClient, PaymeClient>();
             services.AddScoped<IPaymentService, PaymentService>();
+            services.AddScoped<IPaymeCredentialResolver, PaymeCredentialResolver>();
+
+            return services;
+        }
+
+        /// <summary>
+        /// Hold invoice (Payme pre-authorization) oqimi — FAQAT SessionApi.
+        /// Servislar ISessionNotifier/IDeviceCommandPublisher'ga bog'liq bo'lgani uchun
+        /// boshqa API'larga qo'shilsa ValidateOnBuild yiqiladi.
+        /// <see cref="AddPaymeClient"/> dan keyin chaqirilishi kerak.
+        /// </summary>
+        public static IServiceCollection RegisterHoldInvoiceServices(this IServiceCollection services, IConfiguration config)
+        {
+            services.Configure<Domain.Options.HoldInvoiceOptions>(config.GetSection("HoldInvoices"));
+
+            services.AddScoped<IPaymentSessionService, PaymentSessionService>();
+            services.AddScoped<IHoldInvoiceService, HoldInvoiceService>();
+            services.AddScoped<IHoldSettlementService, HoldSettlementService>();
+            services.AddScoped<IProcessSettlementService, ProcessSettlementService>();
+
+            services.AddHostedService<Application.BackgroundServices.HoldInvoiceWatcherService>();
 
             return services;
         }

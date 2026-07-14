@@ -99,6 +99,30 @@ namespace Application.Services
             });
         }
 
+        public async Task<GenericDto<MerchantResultDto>> SetPaymeCredentialsAsync(long id, SetPaymeCredentialsDto dto, AccessScope scope)
+        {
+            if (!scope.CanAccessMerchant(id))
+                return GenericDto<MerchantResultDto>.Error(403, "Bu merchant sizning doirangizga tegishli emas.");
+
+            if (string.IsNullOrWhiteSpace(dto.CashboxId) || string.IsNullOrWhiteSpace(dto.Key))
+                return GenericDto<MerchantResultDto>.Error(400, "CashboxId va Key majburiy.");
+
+            var merchant = await _repo.GetByIdAsync(id);
+            if (merchant is null)
+                return GenericDto<MerchantResultDto>.Error(404, "Merchant topilmadi.");
+
+            merchant.PaymeCashboxId = dto.CashboxId.Trim();
+            merchant.PaymeKey = dto.Key.Trim();
+            merchant.PaymeEnabled = dto.Enabled;
+            await _repo.UpdateAsync(merchant);
+
+            return GenericDto<MerchantResultDto>.Success(new MerchantResultDto
+            {
+                Id = merchant.Id,
+                ResultMessage = "Payme credential'lari saqlandi."
+            });
+        }
+
         private static MerchantItemDto ToItem(MerchantEntity c) => new()
         {
             Id = c.Id,
@@ -107,7 +131,17 @@ namespace Application.Services
             BankAccount = c.BankAccount,
             CompanyName = c.CompanyName,
             IsActive = c.IsActive,
-            CreatedDate = c.CreatedDate
+            CreatedDate = c.CreatedDate,
+            PaymeCashboxId = c.PaymeCashboxId,
+            PaymeKeyMasked = Mask(c.PaymeKey),
+            PaymeEnabled = c.PaymeEnabled
         };
+
+        /// <summary>Kalitni maskalab qaytaradi — faqat oxirgi 4 belgi ko'rinadi.</summary>
+        private static string? Mask(string? key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+            return key.Length <= 4 ? "••••" : "••••" + key[^4..];
+        }
     }
 }

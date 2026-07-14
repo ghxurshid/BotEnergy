@@ -39,7 +39,7 @@ namespace Application.BackgroundServices
                     var sessionService = scope.ServiceProvider.GetRequiredService<ISessionService>();
                     var processService = scope.ServiceProvider.GetRequiredService<IProcessService>();
                     await sessionService.CloseTimedOutSessionsAsync();
-                    await sessionService.CloseOfflineDeviceSessionsAsync();
+                    await sessionService.PauseOfflineDeviceSessionsAsync();
                     await processService.FinalizeStalledProcessesAsync();
                 }
                 catch (Exception ex)

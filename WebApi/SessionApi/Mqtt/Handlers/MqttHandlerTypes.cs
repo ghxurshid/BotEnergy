@@ -22,5 +22,6 @@ namespace SessionApi.Mqtt.Handlers
         public const string ProcessStop = "process.stop";
         public const string PaymentResult = "payment.result";
         public const string SessionClose = "session.close";
+        public const string BalanceUpdate = "balance.update";
     }
 }

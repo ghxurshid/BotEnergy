@@ -29,6 +29,12 @@ namespace Domain.Constants
 
             Permissions.PaymentAdminGetAll,
             Permissions.PaymentAdminReverse,
+
+            // Hold invoice: moliyaviy operator amallari — faqat Manage (expert).
+            Permissions.HoldAdminCapture,
+            Permissions.HoldAdminRefund,
+            Permissions.HoldAdminRetry,
+            Permissions.MerchantAdminSetPaymeCredentials,
         };
 
         /// <summary>
@@ -49,6 +55,9 @@ namespace Domain.Constants
             Permissions.ReportMyUsage, Permissions.ReportMyUsageExport,
 
             Permissions.PaymentTopUpSelf, Permissions.PaymentGetMyTransactions,
+
+            Permissions.PaymentHoldCreate, Permissions.PaymentHoldRead,
+            Permissions.PaymentHoldCancel,
         };
 
         /// <summary>

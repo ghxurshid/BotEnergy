@@ -2,6 +2,7 @@ using Domain.Dtos.Device;
 using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Services
 {
@@ -13,11 +14,15 @@ namespace Application.Services
     {
         private readonly IDeviceRepository _deviceRepo;
         private readonly ISessionNotifier _notifier;
+        // ISessionService kech resolve qilinadi — SessionService allaqachon IDeviceStatusService'ga
+        // bog'liq bo'lgani uchun konstruktorda inject qilsak DI sikli hosil bo'ladi.
+        private readonly IServiceProvider _services;
 
-        public DeviceStatusService(IDeviceRepository deviceRepo, ISessionNotifier notifier)
+        public DeviceStatusService(IDeviceRepository deviceRepo, ISessionNotifier notifier, IServiceProvider services)
         {
             _deviceRepo = deviceRepo;
             _notifier = notifier;
+            _services = services;
         }
 
         public async Task MarkSeenAsync(string serialNumber)
@@ -31,6 +36,10 @@ namespace Application.Services
                 return;
 
             await _notifier.NotifyDeviceStatusAsync(Build(info, DeviceConnectivity.Online, sessionId: null));
+
+            // Offline→online edge — Paused sessiyalarni avto-resume qilamiz.
+            var sessionService = _services.GetRequiredService<ISessionService>();
+            await sessionService.ResumePausedSessionsForDeviceAsync(info.DeviceId);
         }
 
         public async Task NotifyOfflineAsync(string serialNumber, bool lost, long? sessionId)

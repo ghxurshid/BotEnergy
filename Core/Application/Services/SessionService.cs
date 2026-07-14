@@ -22,7 +22,8 @@ namespace Application.Services
         private readonly ISessionNotifier _notifier;
         private readonly IDeviceCommandPublisher _commandPublisher;
         private readonly IDeviceLockService _deviceLock;
-        private readonly IBillingService _billing;
+        private readonly IProcessSettlementService _settlement;
+        private readonly IHoldSettlementService _holdSettlement;
         private readonly IPushNotificationService _push;
         private readonly IPendingSessionStore _pendingStore;
         private readonly IDeviceStatusService _deviceStatus;
@@ -41,7 +42,8 @@ namespace Application.Services
             ISessionNotifier notifier,
             IDeviceCommandPublisher commandPublisher,
             IDeviceLockService deviceLock,
-            IBillingService billing,
+            IProcessSettlementService settlement,
+            IHoldSettlementService holdSettlement,
             IPushNotificationService push,
             IPendingSessionStore pendingStore,
             IDeviceStatusService deviceStatus,
@@ -55,7 +57,8 @@ namespace Application.Services
             _notifier = notifier;
             _commandPublisher = commandPublisher;
             _deviceLock = deviceLock;
-            _billing = billing;
+            _settlement = settlement;
+            _holdSettlement = holdSettlement;
             _push = push;
             _pendingStore = pendingStore;
             _deviceStatus = deviceStatus;
@@ -73,11 +76,14 @@ namespace Application.Services
                 return GenericDto<CreateSessionResultDto>.Error(403, "Foydalanuvchi bloklangan.");
 
             // DB'da aktiv sessiya bor bo'lsa — yangi pending yaratmaymiz (avval yopish kerak).
+            // Paused (device offline) va Settling (hisob-kitob) ham "band" hisoblanadi.
             var hasActive = await _sessionRepo.HasActiveAsync(
                 dto.UserId,
                 SessionStatus.Created,
                 SessionStatus.Connected,
-                SessionStatus.InProcess);
+                SessionStatus.InProcess,
+                SessionStatus.Paused,
+                SessionStatus.Settling);
 
             if (hasActive)
                 return GenericDto<CreateSessionResultDto>.Error(409, "Sizda allaqachon faol sessiya bor. Avval uni yoping.");
@@ -180,14 +186,49 @@ namespace Application.Services
             if (session.Status == SessionStatus.Closed)
                 return GenericDto<CloseSessionResultDto>.Error(400, "Sessiya allaqachon yopilgan.");
 
+            if (session.Status == SessionStatus.Settling)
+                return GenericDto<CloseSessionResultDto>.Error(409, "Sessiya hisob-kitob qilinmoqda — biroz kuting.");
+
             // Aktiv jarayon (Started/InProcess/Paused yoki stop-pending) bo'lsa, sessiyani yopishga
             // ruxsat bermaymiz — avval jarayon qurilma tasdig'i bilan to'liq yakunlanishi kerak.
             // (Background timeout/offline cleaner'lar bundan istisno — ular majburan yopadi.)
-            if (await _processRepo.HasActiveProcessAsync(session.Id))
+            // Paused sessiyada esa yopishga ruxsat beramiz (qurilma offline, user qo'lda yakunlaydi).
+            if (session.Status != SessionStatus.Paused && await _processRepo.HasActiveProcessAsync(session.Id))
                 return GenericDto<CloseSessionResultDto>.Error(409, "Avval jarayonni to'xtating, keyin sessiyani yoping.");
 
             var (totalDelivered, totalCost) = await FinalizeOpenProcessesAsync(
-                session, ProcessEndReason.UserStopped, sendStopCommand: true);
+                session, ProcessEndReason.UserStopped, sendStopCommand: session.Status != SessionStatus.Paused);
+
+            // Hold invoice'lar bor bo'lsa — capture/refund maqsadlarini qo'yib Settling qilamiz;
+            // watcher yakunlab sessiyani yopadi. Aks holda darhol yopamiz (legacy oqim).
+            var needsSettlement = await _holdSettlement.BeginSessionSettlementAsync(session.Id);
+
+            if (needsSettlement)
+            {
+                session.Status = SessionStatus.Settling;
+                session.CloseReason = SessionCloseReason.UserClosed;
+                session.LastActivityAt = DateTime.Now;
+                await _sessionRepo.UpdateAsync(session);
+
+                await _notifier.NotifySessionUpdatedAsync(session.SessionToken, new
+                {
+                    session_id = session.Id,
+                    status = SessionStatus.Settling.ToString(),
+                    total_delivered = totalDelivered,
+                    total_cost = totalCost
+                });
+
+                _logger.LogInformation(
+                    "Sessiya hisob-kitobga o'tdi (user): sessionId={SessionId} userId={UserId}",
+                    session.Id, session.UserId);
+
+                return GenericDto<CloseSessionResultDto>.Success(new CloseSessionResultDto
+                {
+                    ResultMessage = "Sessiya yakunlanmoqda — hold mablag'lari hisob-kitob qilinmoqda.",
+                    TotalDelivered = totalDelivered,
+                    TotalCost = totalCost
+                });
+            }
 
             session.Status = SessionStatus.Closed;
             session.CloseReason = SessionCloseReason.UserClosed;
@@ -228,8 +269,24 @@ namespace Application.Services
 
             foreach (var session in idleSessions)
             {
+                // Paused sessiyada qurilma offline — stop yubormaymiz (yetib bormaydi).
+                var sendStop = session.Status != SessionStatus.Paused;
+
                 var (totalDelivered, totalCost) = await FinalizeOpenProcessesAsync(
-                    session, ProcessEndReason.DeviceError, sendStopCommand: true);
+                    session, ProcessEndReason.DeviceError, sendStopCommand: sendStop);
+
+                // Hold invoice'lar bo'lsa — Settling qilamiz, watcher yopadi.
+                if (await _holdSettlement.BeginSessionSettlementAsync(session.Id))
+                {
+                    session.Status = SessionStatus.Settling;
+                    session.CloseReason = SessionCloseReason.Timeout;
+                    session.LastActivityAt = DateTime.Now;
+                    await _sessionRepo.UpdateAsync(session);
+
+                    _logger.LogInformation(
+                        "Sessiya hisob-kitobga o'tdi (idle timeout): sessionId={SessionId}", session.Id);
+                    continue;
+                }
 
                 session.Status = SessionStatus.Closed;
                 session.CloseReason = SessionCloseReason.Timeout;
@@ -378,7 +435,13 @@ namespace Application.Services
             };
         }
 
-        public async Task CloseOfflineDeviceSessionsAsync()
+        /// <summary>
+        /// Offline (stale) qurilmalarning aktiv sessiyalarini YOPMAYDI — Paused qiladi.
+        /// Qurilma qayta ulansa avto-resume; ulanmasa idle-timeout yakunlab yopadi.
+        /// Jarayonlarni bu yerda majburan yakunlamaymiz — 60s stalled-watchdog (device qaytargan
+        /// real GivenAmount bilan) yakunlaydi, shunда capture taxminiy qiymatda bo'lmaydi.
+        /// </summary>
+        public async Task PauseOfflineDeviceSessionsAsync()
         {
             var threshold = DateTime.Now.Subtract(DeviceOfflineThreshold);
             var staleDevices = await _deviceRepo.GetStaleOnlineDevicesAsync(threshold);
@@ -388,49 +451,78 @@ namespace Application.Services
                 var activeSessions = await _sessionRepo.GetActiveSessionsForDeviceAsync(device.Id);
                 foreach (var session in activeSessions)
                 {
-                    var (totalDelivered, totalCost) = await FinalizeOpenProcessesAsync(
-                        session, ProcessEndReason.DeviceError, sendStopCommand: false);
+                    // Faqat jonli holatlarni pauza qilamiz (Paused/Settling/Closed'ga tegmaymiz).
+                    if (session.Status is not (SessionStatus.Connected or SessionStatus.InProcess))
+                        continue;
 
-                    session.Status = SessionStatus.Closed;
-                    session.CloseReason = SessionCloseReason.DeviceLost;
-                    session.ClosedAt = DateTime.Now;
-                    session.LastActivityAt = DateTime.Now;
+                    session.Status = SessionStatus.Paused;
+                    session.LastActivityAt = DateTime.Now; // idle-timer davom etadi — tashlab qo'yilgan pauza ham yopiladi
                     await _sessionRepo.UpdateAsync(session);
-
-                    // Qurilma offline (stale) — session.close yubormaymiz, baribir yetib bormaydi.
-                    // Qurilma qayta ulanganda o'zi idle holatga qaytadi.
 
                     await _notifier.NotifySessionUpdatedAsync(session.SessionToken, new
                     {
                         session_id = session.Id,
-                        status = SessionStatus.Closed.ToString(),
-                        reason = nameof(SessionCloseReason.DeviceLost),
-                        total_delivered = totalDelivered,
-                        total_cost = totalCost,
-                        closed_at = session.ClosedAt
+                        status = SessionStatus.Paused.ToString(),
+                        reason = nameof(SessionCloseReason.DeviceLost)
                     });
 
                     await _push.SendAsync(session.UserId, new PushNotification
                     {
                         Title = "Qurilma bilan aloqa uzildi",
-                        Body = $"Qurilma {device.SerialNumber} javob bermayapti. Sessiya yopildi. Jami: {totalCost:N2}",
+                        Body = $"Qurilma {device.SerialNumber} javob bermayapti. Sessiya pauza qilindi.",
                         DeepLink = $"botenergy://sessions/{session.Id}"
                     });
 
                     _logger.LogWarning(
-                        "Sessiya yopildi (device lost): sessionId={SessionId} serial={Serial} cost={Cost}",
-                        session.Id, device.SerialNumber, totalCost);
+                        "Sessiya pauza qilindi (device lost): sessionId={SessionId} serial={Serial}",
+                        session.Id, device.SerialNumber);
                 }
 
                 device.IsOnline = false;
                 await _deviceRepo.UpdateAsync(device);
 
-                // Offline edge — tracking qilayotgan barchaga (app session, admin) xabar.
-                // Aktiv sessiya bo'lsa "Lost", aks holda oddiy "Offline".
                 await _deviceStatus.NotifyOfflineAsync(
                     device.SerialNumber,
                     lost: activeSessions.Count > 0,
                     sessionId: activeSessions.FirstOrDefault()?.Id);
+            }
+        }
+
+        /// <summary>
+        /// Qurilma qayta online bo'lganda (DeviceStatusService.MarkSeenAsync edge) chaqiriladi —
+        /// Paused sessiyalarni avtomatik Resume qiladi.
+        /// </summary>
+        public async Task ResumePausedSessionsForDeviceAsync(long deviceId)
+        {
+            var sessions = await _sessionRepo.GetActiveSessionsForDeviceAsync(deviceId);
+            foreach (var session in sessions)
+            {
+                if (session.Status != SessionStatus.Paused)
+                    continue;
+
+                // Aktiv (tugamagan) jarayon bo'lsa InProcess, aks holda Connected.
+                var hasActive = await _processRepo.HasActiveProcessAsync(session.Id);
+                session.Status = hasActive ? SessionStatus.InProcess : SessionStatus.Connected;
+                session.LastActivityAt = DateTime.Now;
+                await _sessionRepo.UpdateAsync(session);
+
+                await _notifier.NotifySessionUpdatedAsync(session.SessionToken, new
+                {
+                    session_id = session.Id,
+                    status = session.Status.ToString(),
+                    resumed = true
+                });
+
+                await _push.SendAsync(session.UserId, new PushNotification
+                {
+                    Title = "Qurilma qayta ulandi",
+                    Body = "Sessiyangiz davom ettirildi.",
+                    DeepLink = $"botenergy://sessions/{session.Id}"
+                });
+
+                _logger.LogInformation(
+                    "Sessiya resume qilindi (device reconnect): sessionId={SessionId} deviceId={DeviceId}",
+                    session.Id, deviceId);
             }
         }
 
@@ -467,11 +559,11 @@ namespace Application.Services
                 process.EndReason = endReason;
                 process.EndedAt = DateTime.Now;
 
-                // Yakunlash + balans yechish — bitta tranzaksiya (crash-safe).
+                // Yakunlash + hisob-kitob (funding manbasiga qarab) — bitta tranzaksiya (crash-safe).
                 var deducted = await _tx.RunAsync(async () =>
                 {
                     await _processRepo.UpdateAsync(process);
-                    return await _billing.DeductForProcessAsync(process.Id);
+                    return await _settlement.SettleAsync(process.Id);
                 });
 
                 totalDelivered += process.GivenAmount;

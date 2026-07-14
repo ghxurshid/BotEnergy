@@ -109,7 +109,7 @@ namespace Application.Services
             await LogStepAsync(tx.Id, PaymentStepType.ReceiptCreateRequested, PaymentStepStatus.Info,
                 message: $"amount={amountTiyin} tiyin, order_id={providerOrderId}");
 
-            var createCall = await _payme.CreateReceiptAsync(amountTiyin, providerOrderId, ct);
+            var createCall = await _payme.CreateReceiptAsync(amountTiyin, providerOrderId, ct: ct);
 
             await LogStepAsync(tx.Id, PaymentStepType.ReceiptCreated,
                 createCall.IsSuccess ? PaymentStepStatus.Success : PaymentStepStatus.Error,
@@ -134,7 +134,7 @@ namespace Application.Services
             tx.Status = PaymentStatus.Paying;
             await _repo.UpdateAsync(tx);
 
-            var payCall = await _payme.PayReceiptAsync(tx.ProviderReceiptId, request.PaymeToken, ct);
+            var payCall = await _payme.PayReceiptAsync(tx.ProviderReceiptId, request.PaymeToken, ct: ct);
 
             await LogStepAsync(tx.Id, PaymentStepType.PayResponded,
                 payCall.IsSuccess ? PaymentStepStatus.Success : PaymentStepStatus.Error,

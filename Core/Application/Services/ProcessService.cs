@@ -2,6 +2,7 @@ using Domain.Dtos.Base;
 using Domain.Dtos.Process;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Helpers;
 using Domain.Interfaces;
 using Domain.Repositories;
 using Microsoft.Extensions.Logging;
@@ -20,6 +21,8 @@ namespace Application.Services
         private readonly IDeviceCommandPublisher _commandPublisher;
         private readonly IDeviceLockService _deviceLock;
         private readonly IBillingService _billing;
+        private readonly IProcessSettlementService _settlement;
+        private readonly IHoldSettlementService _holdSettlement;
         private readonly ISessionNotifier _notifier;
         private readonly ITransactionRunner _tx;
         private readonly ILogger<ProcessService> _logger;
@@ -37,6 +40,8 @@ namespace Application.Services
             IDeviceCommandPublisher commandPublisher,
             IDeviceLockService deviceLock,
             IBillingService billing,
+            IProcessSettlementService settlement,
+            IHoldSettlementService holdSettlement,
             ISessionNotifier notifier,
             ITransactionRunner tx,
             ILogger<ProcessService> logger)
@@ -47,6 +52,8 @@ namespace Application.Services
             _commandPublisher = commandPublisher;
             _deviceLock = deviceLock;
             _billing = billing;
+            _settlement = settlement;
+            _holdSettlement = holdSettlement;
             _notifier = notifier;
             _tx = tx;
             _logger = logger;
@@ -77,15 +84,32 @@ namespace Application.Services
             if (product.DeviceId != session.DeviceId)
                 return GenericDto<StartProcessResultDto>.Error(400, "Mahsulot ushbu qurilmaga tegishli emas.");
 
-            var availableBalance = await _billing.GetAvailableBalanceAsync(dto.UserId);
-            var maxAmount = product.Price > 0 ? availableBalance / product.Price : 0;
+            // Funding manbasini tanlaymiz: sessiyada hold balans bo'lsa undan, aks holda ichki balans.
+            var fundingSource = ProcessFundingSource.InternalBalance;
+            decimal availableForLimit;
+
+            var holdTiyin = await _holdSettlement.GetAvailableHoldTiyinAsync(session.Id);
+            if (holdTiyin > 0)
+            {
+                fundingSource = ProcessFundingSource.HoldBalance;
+                availableForLimit = Money.ToUzs(holdTiyin);
+            }
+            else
+            {
+                availableForLimit = await _billing.GetAvailableBalanceAsync(dto.UserId);
+            }
+
+            var maxAmount = product.Price > 0 ? availableForLimit / product.Price : 0;
 
             var limit = dto.RequestedAmount.HasValue
                 ? Math.Min(dto.RequestedAmount.Value, maxAmount)
                 : maxAmount;
 
             if (limit <= 0)
-                return GenericDto<StartProcessResultDto>.Error(400, "Balans yetarli emas.");
+                return GenericDto<StartProcessResultDto>.Error(400,
+                    fundingSource == ProcessFundingSource.HoldBalance
+                        ? "Hold balansi yetarli emas — yangi invoice yarating."
+                        : "Balans yetarli emas.");
 
             var lockTaken = await _deviceLock.TryLockDeviceAsync(session.Device.SerialNumber, dto.UserId);
             if (!lockTaken)
@@ -104,7 +128,8 @@ namespace Application.Services
                 Unit = product.Unit,
                 RequestedAmount = limit,
                 Status = ProcessStatus.Started,
-                StartedAt = DateTime.Now
+                StartedAt = DateTime.Now,
+                FundingSource = fundingSource
             };
 
             await _processRepo.CreateAsync(process);
@@ -291,7 +316,7 @@ namespace Application.Services
                     if (done == 0)
                         return (0, 0m);
 
-                    return (done, await _billing.DeductForProcessAsync(process.Id));
+                    return (done, await _settlement.SettleAsync(process.Id));
                 });
 
                 if (completed > 0)
@@ -366,7 +391,7 @@ namespace Application.Services
             var deducted = await _tx.RunAsync(async () =>
             {
                 await _processRepo.UpdateAsync(process);
-                return await _billing.DeductForProcessAsync(process.Id);
+                return await _settlement.SettleAsync(process.Id);
             });
 
             var serial = process.Session.Device?.SerialNumber;
@@ -465,7 +490,7 @@ namespace Application.Services
                     if (done == 0)
                         return (0, 0m);
 
-                    return (done, await _billing.DeductForProcessAsync(process.Id));
+                    return (done, await _settlement.SettleAsync(process.Id));
                 });
                 if (completed == 0)
                     continue;

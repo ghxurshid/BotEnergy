@@ -1,3 +1,4 @@
+using Domain.Attributes;
 using Domain.Entities.BaseEntity;
 
 namespace Domain.Entities
@@ -12,7 +13,18 @@ namespace Domain.Entities
 
         public required string CompanyName { get; set; }
 
-        public bool IsActive { get; set; } = true; 
+        public bool IsActive { get; set; } = true;
+
+        // ── Payme credential'lari (hold invoice'lar shu kassa nomidan yaratiladi) ──
+        // Admin API orqali write-only: GET'da faqat masked ko'rinadi.
+
+        public string? PaymeCashboxId { get; set; }
+
+        [NotSearchable]
+        public string? PaymeKey { get; set; }
+
+        /// <summary>False bo'lsa bu merchant qurilmalarida hold invoice yaratish rad etiladi.</summary>
+        public bool PaymeEnabled { get; set; }
 
         public ICollection<StationEntity>? Stations { get; set; }
 

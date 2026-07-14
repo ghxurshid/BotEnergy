@@ -39,6 +39,9 @@ namespace Persistence.Context
             ConfigureMerchant(modelBuilder);
             ConfigurePaymentTransaction(modelBuilder);
             ConfigurePaymentTransactionStep(modelBuilder);
+            ConfigurePaymentSession(modelBuilder);
+            ConfigureHoldInvoice(modelBuilder);
+            ConfigureHoldInvoiceStep(modelBuilder);
 
             ApplyGlobalSoftDeleteFilter(modelBuilder);
 
@@ -485,6 +488,9 @@ namespace Persistence.Context
                 b.Property(x => x.IsBalanceDeducted).HasColumnName("is_balance_deducted").HasDefaultValue(false);
                 b.Property(x => x.LastTelemetrySequence).HasColumnName("last_telemetry_sequence").HasDefaultValue(0L);
 
+                b.Property(x => x.FundingSource).HasColumnName("funding_source").HasConversion<int>().HasDefaultValue(Domain.Enums.ProcessFundingSource.InternalBalance);
+                b.Property(x => x.PaymentSessionId).HasColumnName("payment_session_id");
+
                 b.Property(x => x.RowVersion).HasColumnName("xmin")
                     .HasColumnType("xid")
                     .ValueGeneratedOnAddOrUpdate()
@@ -528,6 +534,11 @@ namespace Persistence.Context
                 b.Property(x => x.CompanyName).HasColumnName("company_name").IsRequired().HasMaxLength(256);
 
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+
+                b.Property(x => x.PaymeCashboxId).HasColumnName("payme_cashbox_id").HasMaxLength(64);
+                b.Property(x => x.PaymeKey).HasColumnName("payme_key").HasMaxLength(128);
+                b.Property(x => x.PaymeEnabled).HasColumnName("payme_enabled").HasDefaultValue(false);
+
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
@@ -630,6 +641,160 @@ namespace Persistence.Context
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasIndex(x => new { x.PaymentTransactionId, x.OccurredAt });
+            });
+        }
+
+        private static void ConfigurePaymentSession(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<PaymentSessionEntity>(b =>
+            {
+                b.ToTable("payment_sessions", AppSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.SessionId).HasColumnName("session_id").IsRequired();
+                b.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
+                b.Property(x => x.DeviceId).HasColumnName("device_id").IsRequired();
+                b.Property(x => x.MerchantId).HasColumnName("merchant_id").IsRequired();
+
+                b.Property(x => x.Status).HasColumnName("status").HasConversion<int>().IsRequired();
+
+                b.Property(x => x.HoldBalanceTiyin).HasColumnName("hold_balance_tiyin").HasDefaultValue(0L);
+                b.Property(x => x.ConsumedTiyin).HasColumnName("consumed_tiyin").HasDefaultValue(0L);
+
+                b.Property(x => x.CorrelationId).HasColumnName("correlation_id").IsRequired();
+                b.Property(x => x.SettledAt).HasColumnName("settled_at").HasColumnType(TimestampWithoutTimeZone);
+
+                b.Property(x => x.RowVersion).HasColumnName("xmin")
+                    .HasColumnType("xid")
+                    .ValueGeneratedOnAddOrUpdate()
+                    .IsConcurrencyToken();
+
+                b.Property(x => x.CreatedDate).HasColumnName("created_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+                b.HasOne(x => x.Session)
+                    .WithMany()
+                    .HasForeignKey(x => x.SessionId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasOne(x => x.Merchant)
+                    .WithMany()
+                    .HasForeignKey(x => x.MerchantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasIndex(x => x.SessionId).IsUnique();
+                b.HasIndex(x => x.Status);
+                b.HasIndex(x => x.MerchantId);
+                b.HasIndex(x => x.CorrelationId);
+            });
+        }
+
+        private static void ConfigureHoldInvoice(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<HoldInvoiceEntity>(b =>
+            {
+                b.ToTable("hold_invoices", AppSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.PaymentSessionId).HasColumnName("payment_session_id").IsRequired();
+                b.Property(x => x.SequenceNo).HasColumnName("sequence_no").IsRequired();
+
+                b.Property(x => x.AmountTiyin).HasColumnName("amount_tiyin").IsRequired();
+                b.Property(x => x.ConsumedTiyin).HasColumnName("consumed_tiyin").HasDefaultValue(0L);
+                b.Property(x => x.CaptureAmountTiyin).HasColumnName("capture_amount_tiyin");
+
+                b.Property(x => x.Status).HasColumnName("status").HasConversion<int>().IsRequired();
+
+                b.Property(x => x.ProviderReceiptId).HasColumnName("provider_receipt_id").HasMaxLength(64);
+                b.Property(x => x.ProviderOrderId).HasColumnName("provider_order_id").HasMaxLength(64).IsRequired();
+                b.Property(x => x.ProviderState).HasColumnName("provider_state");
+
+                b.Property(x => x.IdempotencyKey).HasColumnName("idempotency_key").HasMaxLength(128);
+                b.Property(x => x.CreatedByUserId).HasColumnName("created_by_user_id").IsRequired();
+                b.Property(x => x.FailureReason).HasColumnName("failure_reason");
+
+                b.Property(x => x.AttemptCount).HasColumnName("attempt_count").HasDefaultValue(0);
+                b.Property(x => x.NextAttemptAt).HasColumnName("next_attempt_at").HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.LockedBy).HasColumnName("locked_by").HasMaxLength(128);
+                b.Property(x => x.LeaseUntil).HasColumnName("lease_until").HasColumnType(TimestampWithoutTimeZone);
+
+                b.Property(x => x.HoldAt).HasColumnName("hold_at").HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.SettledAt).HasColumnName("settled_at").HasColumnType(TimestampWithoutTimeZone);
+
+                b.Property(x => x.RowVersion).HasColumnName("xmin")
+                    .HasColumnType("xid")
+                    .ValueGeneratedOnAddOrUpdate()
+                    .IsConcurrencyToken();
+
+                b.Property(x => x.CreatedDate).HasColumnName("created_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+                b.HasOne(x => x.PaymentSession)
+                    .WithMany(x => x.Invoices)
+                    .HasForeignKey(x => x.PaymentSessionId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasIndex(x => new { x.PaymentSessionId, x.SequenceNo }).IsUnique();
+                b.HasIndex(x => x.ProviderOrderId).IsUnique();
+                b.HasIndex(x => x.ProviderReceiptId);
+                // Watcher hot-path: navbatdagi invoice'larni topish.
+                b.HasIndex(x => new { x.Status, x.NextAttemptAt });
+                b.HasIndex(x => x.IdempotencyKey).IsUnique()
+                    .HasFilter("idempotency_key IS NOT NULL");
+            });
+        }
+
+        private static void ConfigureHoldInvoiceStep(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<HoldInvoiceStepEntity>(b =>
+            {
+                b.ToTable("hold_invoice_steps", AppSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.HoldInvoiceId).HasColumnName("hold_invoice_id").IsRequired();
+                b.Property(x => x.PaymentSessionId).HasColumnName("payment_session_id").IsRequired();
+                b.Property(x => x.SessionId).HasColumnName("session_id").IsRequired();
+                b.Property(x => x.MerchantId).HasColumnName("merchant_id").IsRequired();
+                b.Property(x => x.DeviceId).HasColumnName("device_id").IsRequired();
+                b.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
+
+                b.Property(x => x.StepType).HasColumnName("step_type").HasConversion<int>().IsRequired();
+                b.Property(x => x.Status).HasColumnName("status").HasConversion<int>().IsRequired();
+
+                b.Property(x => x.RequestPayload).HasColumnName("request_payload").HasColumnType("jsonb");
+                b.Property(x => x.ResponsePayload).HasColumnName("response_payload").HasColumnType("jsonb");
+                b.Property(x => x.Message).HasColumnName("message");
+                b.Property(x => x.CorrelationId).HasColumnName("correlation_id").IsRequired();
+
+                b.Property(x => x.OccurredAt).HasColumnName("occurred_at")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+
+                b.Property(x => x.CreatedDate).HasColumnName("created_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+                b.HasOne(x => x.HoldInvoice)
+                    .WithMany(x => x.Steps)
+                    .HasForeignKey(x => x.HoldInvoiceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasIndex(x => new { x.HoldInvoiceId, x.OccurredAt });
+                b.HasIndex(x => x.CorrelationId);
+                b.HasIndex(x => new { x.MerchantId, x.OccurredAt });
             });
         }
     }

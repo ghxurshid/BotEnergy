@@ -33,27 +33,67 @@ namespace CommonConfiguration.Payments.Payme
             _http.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
         }
 
-        public Task<PaymeApiCall<PaymeReceipt>> CreateReceiptAsync(long amountTiyin, string orderId, CancellationToken ct = default)
-            => InvokeAsync("receipts.create", new
-            {
-                amount = amountTiyin,
-                account = new { order_id = orderId }
-            }, ct);
+        public Task<PaymeApiCall<PaymeReceipt>> CreateReceiptAsync(long amountTiyin, string orderId, bool hold = false, string? description = null, PaymeCredentials? creds = null, CancellationToken ct = default)
+            => InvokeAsync("receipts.create", hold
+                ? new
+                {
+                    amount = amountTiyin,
+                    account = new { order_id = orderId },
+                    hold = true,
+                    description
+                }
+                : (object)new
+                {
+                    amount = amountTiyin,
+                    account = new { order_id = orderId },
+                    description
+                }, creds, ct);
 
-        public Task<PaymeApiCall<PaymeReceipt>> PayReceiptAsync(string receiptId, string token, CancellationToken ct = default)
+        public Task<PaymeApiCall<PaymeReceipt>> PayReceiptAsync(string receiptId, string token, PaymeCredentials? creds = null, CancellationToken ct = default)
             => InvokeAsync("receipts.pay", new
             {
                 id = receiptId,
                 token
-            }, ct);
+            }, creds, ct);
 
-        public Task<PaymeApiCall<PaymeReceipt>> GetReceiptAsync(string receiptId, CancellationToken ct = default)
+        public Task<PaymeApiCall<PaymeReceipt>> GetReceiptAsync(string receiptId, PaymeCredentials? creds = null, CancellationToken ct = default)
             => InvokeAsync("receipts.get", new
             {
                 id = receiptId
-            }, ct);
+            }, creds, ct);
 
-        private async Task<PaymeApiCall<PaymeReceipt>> InvokeAsync(string method, object @params, CancellationToken ct)
+        public Task<PaymeApiCall<PaymeReceipt>> SendReceiptAsync(string receiptId, string phone, PaymeCredentials? creds = null, CancellationToken ct = default)
+            => InvokeAsync("receipts.send", new
+            {
+                id = receiptId,
+                phone
+            }, creds, ct);
+
+        public Task<PaymeApiCall<PaymeReceipt>> CheckReceiptAsync(string receiptId, PaymeCredentials? creds = null, CancellationToken ct = default)
+            => InvokeAsync("receipts.check", new
+            {
+                id = receiptId
+            }, creds, ct);
+
+        public Task<PaymeApiCall<PaymeReceipt>> ConfirmHoldAsync(string receiptId, long? amountTiyin, PaymeCredentials? creds = null, CancellationToken ct = default)
+            => InvokeAsync("receipts.confirm_hold", amountTiyin.HasValue
+                ? new
+                {
+                    id = receiptId,
+                    amount = amountTiyin.Value
+                }
+                : (object)new
+                {
+                    id = receiptId
+                }, creds, ct);
+
+        public Task<PaymeApiCall<PaymeReceipt>> CancelReceiptAsync(string receiptId, PaymeCredentials? creds = null, CancellationToken ct = default)
+            => InvokeAsync("receipts.cancel", new
+            {
+                id = receiptId
+            }, creds, ct);
+
+        private async Task<PaymeApiCall<PaymeReceipt>> InvokeAsync(string method, object @params, PaymeCredentials? creds, CancellationToken ct)
         {
             var envelope = new
             {
@@ -80,7 +120,9 @@ namespace CommonConfiguration.Payments.Payme
             {
                 Content = new StringContent(requestBody, Encoding.UTF8, "application/json")
             };
-            request.Headers.TryAddWithoutValidation("X-Auth", $"{_options.MerchantId}:{_options.Key}");
+            var cashboxId = creds?.CashboxId ?? _options.MerchantId;
+            var key = creds?.Key ?? _options.Key;
+            request.Headers.TryAddWithoutValidation("X-Auth", $"{cashboxId}:{key}");
             request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
 
             HttpResponseMessage response;

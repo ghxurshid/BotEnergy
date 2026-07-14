@@ -58,12 +58,14 @@ namespace Persistence.Repositories
 
         public async Task<List<SessionEntity>> GetIdleSessionsAsync(DateTime idleBefore)
         {
+            // Settling — watcher yopadi, idle cleaner tegmasin (aks holda har 30s da qayta yopishga urinadi).
             return await _context.Sessions
                 .Include(s => s.Device)
                 .Include(s => s.User)
                 .Include(s => s.Processes)
                 .Where(s =>
                     s.Status != SessionStatus.Closed &&
+                    s.Status != SessionStatus.Settling &&
                     s.LastActivityAt < idleBefore)
                 .ToListAsync();
         }

@@ -51,7 +51,9 @@ namespace SessionApi.Mqtt.Handlers
 
             // 1. SessionToken → userId
             var session = await _sessionRepo.GetByTokenAsync(payload.SessionToken);
-            if (session is null || session.Status == SessionStatus.Closed)
+            // Settling — hisob-kitob ketmoqda, yangi to'lov qabul qilmaymiz. Paused'da (aloqa uzilgan)
+            // legacy balans top-up zararsiz — ruxsat beramiz.
+            if (session is null || session.Status is SessionStatus.Closed or SessionStatus.Settling)
             {
                 _logger.LogWarning(
                     "[payment.qr] Sessiya yo'q yoki yopilgan serial={Serial}", context.SerialNumber);

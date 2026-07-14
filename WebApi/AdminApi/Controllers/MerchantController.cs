@@ -180,5 +180,24 @@ namespace AdminApi.Controllers
             var result = await _service.DeleteAsync(id, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
+
+        /// <summary>
+        /// [EXPERT] Merchant Payme credential'larini o'rnatish (hold invoice'lar shu kassa nomidan yaratiladi).
+        /// </summary>
+        /// <remarks>
+        /// Kalit write-only saqlanadi — GET'da faqat masked (`••••1234`) qaytadi.
+        /// **Permission:** `MerchantAdmin.SetPaymeCredentials` (Manage-only).
+        /// </remarks>
+        [HttpPost("{id}")]
+        [RequirePermission(Permissions.MerchantAdminSetPaymeCredentials)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> SetPaymeCredentials(long id, [FromBody] SetPaymeCredentialsDto request)
+        {
+            var result = await _service.SetPaymeCredentialsAsync(id, request, User.GetScope());
+            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+        }
     }
 }

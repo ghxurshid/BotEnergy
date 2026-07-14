@@ -18,5 +18,11 @@ namespace Domain.Interfaces
         /// (process-level stop bilan emas, sessiya darajasida).
         /// </summary>
         Task PublishSessionClosedAsync(string serialNumber, long sessionId, string reason, CancellationToken ct = default);
+
+        /// <summary>
+        /// Sessiya hold balansi o'zgardi — qurilma displeyida ko'rsatish uchun.
+        /// SignalR SessionBalanceChanged bilan BIR XIL event modeli (MQTT type: balance.update).
+        /// </summary>
+        Task PublishBalanceUpdateAsync(string serialNumber, Domain.Dtos.PaymentSession.SessionBalanceChangedDto e, CancellationToken ct = default);
     }
 }

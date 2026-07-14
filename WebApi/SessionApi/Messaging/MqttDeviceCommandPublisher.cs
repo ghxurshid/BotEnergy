@@ -41,5 +41,20 @@ namespace SessionApi.Messaging
                 session_id = sessionId,
                 reason
             }, ct);
+
+        public Task PublishBalanceUpdateAsync(string serialNumber, Domain.Dtos.PaymentSession.SessionBalanceChangedDto e, CancellationToken ct = default)
+            => _publisher.PublishRequestAsync(serialNumber, MqttHandlerTypes.BalanceUpdate, new
+            {
+                session_id = e.SessionId,
+                payment_session_id = e.PaymentSessionId,
+                invoice_id = e.InvoiceId,
+                hold_balance_tiyin = e.HoldBalanceTiyin,
+                consumed_tiyin = e.ConsumedTiyin,
+                available_tiyin = e.AvailableTiyin,
+                available_uzs = e.AvailableUzs,
+                reason = e.Reason,
+                correlation_id = e.CorrelationId,
+                timestamp = e.Timestamp
+            }, ct);
     }
 }

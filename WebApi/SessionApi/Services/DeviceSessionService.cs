@@ -14,6 +14,7 @@ namespace SessionApi.Services
         private readonly ISessionRepository _sessionRepo;
         private readonly IPendingSessionStore _pendingStore;
         private readonly ISessionService _sessionService;
+        private readonly IPaymentSessionService _paymentSessionService;
         private readonly ILogger<DeviceSessionService> _logger;
 
         public DeviceSessionService(
@@ -21,12 +22,14 @@ namespace SessionApi.Services
             ISessionRepository sessionRepo,
             IPendingSessionStore pendingStore,
             ISessionService sessionService,
+            IPaymentSessionService paymentSessionService,
             ILogger<DeviceSessionService> logger)
         {
             _deviceRepo = deviceRepo;
             _sessionRepo = sessionRepo;
             _pendingStore = pendingStore;
             _sessionService = sessionService;
+            _paymentSessionService = paymentSessionService;
             _logger = logger;
         }
 
@@ -102,7 +105,9 @@ namespace SessionApi.Services
                     userId,
                     SessionStatus.Created,
                     SessionStatus.Connected,
-                    SessionStatus.InProcess);
+                    SessionStatus.InProcess,
+                    SessionStatus.Paused,
+                    SessionStatus.Settling);
 
                 if (hasActive)
                 {
@@ -131,6 +136,23 @@ namespace SessionApi.Services
                 _logger.LogInformation(
                     "[CONNECT] Step 5 — DB'da sessiya yaratildi sessionId={SessionId} userId={UserId} deviceId={DeviceId}",
                     session.Id, userId, device.Id);
+
+                // ── Step 5b: PaymentSession (hold invoice konteksti, balance=0) ──
+                // Xato kritik emas: birinchi invoice yaratishda lazy-create fallback bor.
+                if (device.Station is not null)
+                {
+                    try
+                    {
+                        await _paymentSessionService.CreateForSessionAsync(
+                            session.Id, device.Id, userId, device.Station.MerchantId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "[CONNECT] Step 5b — PaymentSession yaratilmadi sessionId={SessionId} (lazy-create'ga qoldirildi)",
+                            session.Id);
+                    }
+                }
 
                 // ── Step 6: SignalR push mobile'ga (RabbitMQ oraliq hop emas — to'g'ridan-to'g'ri) ──
                 var notifyResult = await _sessionService.NotifyDeviceConnectedAsync(sessionToken);

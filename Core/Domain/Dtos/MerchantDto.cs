@@ -24,6 +24,18 @@ namespace Domain.Dtos
         public string CompanyName { get; set; } = string.Empty;
         public bool IsActive { get; set; }
         public DateTime CreatedDate { get; set; }
+
+        // Payme — kalit hech qachon ochiq qaytarilmaydi (faqat masked).
+        public string? PaymeCashboxId { get; set; }
+        public string? PaymeKeyMasked { get; set; }
+        public bool PaymeEnabled { get; set; }
+    }
+
+    public class SetPaymeCredentialsDto
+    {
+        public required string CashboxId { get; set; }
+        public required string Key { get; set; }
+        public bool Enabled { get; set; } = true;
     }
 
     public class MerchantResultDto

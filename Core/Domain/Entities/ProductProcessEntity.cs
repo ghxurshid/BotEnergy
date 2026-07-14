@@ -33,8 +33,15 @@ namespace Domain.Entities
 
         /// <summary>
         /// Balans yechib bo'linganmi — double-deduction race holatining oldini olish uchun.
+        /// Ikkala funding yo'l (ichki balans / hold) uchun yagona claim bayrog'i.
         /// </summary>
         public bool IsBalanceDeducted { get; set; }
+
+        /// <summary>Start'da bir marta tanlanadi: hold balans bo'lsa HoldBalance, aks holda InternalBalance.</summary>
+        public ProcessFundingSource FundingSource { get; set; } = ProcessFundingSource.InternalBalance;
+
+        /// <summary>Hold funding bo'lsa — qaysi payment session hisobidan (hisobot uchun).</summary>
+        public long? PaymentSessionId { get; set; }
 
         /// <summary>
         /// Telemetry duplicate-ni aniqlash uchun ishlatiladi.

@@ -21,7 +21,12 @@ namespace Domain.Interfaces
 
         Task<GenericDto<CloseSessionResultDto>> CloseSessionByUserAsync(CloseSessionDto dto);
         Task CloseTimedOutSessionsAsync();
-        Task CloseOfflineDeviceSessionsAsync();
+
+        /// <summary>Offline qurilmalarning aktiv sessiyalarini Paused qiladi (yopmaydi).</summary>
+        Task PauseOfflineDeviceSessionsAsync();
+
+        /// <summary>Qurilma qayta ulanganda Paused sessiyalarni Resume qiladi.</summary>
+        Task ResumePausedSessionsForDeviceAsync(long deviceId);
 
         /// <summary>
         /// Foydalanuvchining hozirgi aktiv sessiyasini snapshot sifatida qaytaradi.

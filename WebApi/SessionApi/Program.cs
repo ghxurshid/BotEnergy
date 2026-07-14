@@ -38,6 +38,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
 builder.Services.RegisterSessionServices();
 builder.Services.AddPaymeClient(builder.Configuration);
+builder.Services.RegisterHoldInvoiceServices(builder.Configuration);
 
 // Redis
 builder.Services.AddRedisServices(builder.Configuration);

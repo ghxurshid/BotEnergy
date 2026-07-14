@@ -96,6 +96,23 @@ namespace Domain.Constants
         public const string PaymentAdminGetSteps = "PaymentAdmin.GetSteps";
         public const string PaymentAdminReverse = "PaymentAdmin.Reverse";
 
+        // ── SessionApi — Hold invoice (Payme pre-authorization, mobil) ──
+        public const string PaymentHoldCreate = "Payment.HoldCreate";
+        public const string PaymentHoldRead = "Payment.HoldRead";
+        public const string PaymentHoldCancel = "Payment.HoldCancel";
+
+        // ── AdminApi — Hold invoice operator boshqaruvi ──────────────
+        public const string HoldAdminGetAll = "HoldAdmin.GetAll";
+        public const string HoldAdminGetById = "HoldAdmin.GetById";
+        public const string HoldAdminGetSteps = "HoldAdmin.GetSteps";
+        public const string HoldAdminCapture = "HoldAdmin.Capture";
+        public const string HoldAdminRefund = "HoldAdmin.Refund";
+        public const string HoldAdminCancel = "HoldAdmin.Cancel";
+        public const string HoldAdminRetry = "HoldAdmin.Retry";
+
+        /// <summary>Merchant Payme credential'larini o'rnatish (write-only, Manage).</summary>
+        public const string MerchantAdminSetPaymeCredentials = "MerchantAdmin.SetPaymeCredentials";
+
         // ── UserApi — Sessiya boshqaruvi ─────────────────────────────
         public const string SessionCreate = "Session.Create";
         public const string SessionClose = "Session.Close";
@@ -160,7 +177,11 @@ namespace Domain.Constants
 
             // Merchant
             MerchantAdminRegister, MerchantAdminGetAll, MerchantAdminGetById,
-            MerchantAdminUpdate, MerchantAdminDelete,
+            MerchantAdminUpdate, MerchantAdminDelete, MerchantAdminSetPaymeCredentials,
+
+            // Hold invoice operator boshqaruvi
+            HoldAdminGetAll, HoldAdminGetById, HoldAdminGetSteps,
+            HoldAdminCapture, HoldAdminRefund, HoldAdminCancel, HoldAdminRetry,
 
             // Billing
             BalanceTopUp,
@@ -194,6 +215,9 @@ namespace Domain.Constants
             // Payment (self + organization)
             PaymentTopUpSelf, PaymentGetMyTransactions,
             PaymentTopUpOrganization, PaymentGetOrganizationTransactions,
+
+            // Hold invoice (Payme pre-authorization)
+            PaymentHoldCreate, PaymentHoldRead, PaymentHoldCancel,
 
             // Corporate sub-user management
             CustomerAdminCreate, CustomerAdminGetAll, CustomerAdminGetById,

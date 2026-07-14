@@ -46,6 +46,11 @@ namespace SessionApi.Hubs
         public Task NotifyUserAsync(long userId, string eventName, object payload)
             => _hubContext.Clients.Group(SessionHub.UserGroup(userId)).SendAsync(eventName, payload);
 
+        public Task NotifySessionBalanceChangedAsync(string sessionToken, long userId, Domain.Dtos.PaymentSession.SessionBalanceChangedDto e)
+            => Task.WhenAll(
+                _hubContext.Clients.Group(sessionToken).SendAsync("SessionBalanceChanged", e),
+                _hubContext.Clients.Group(SessionHub.UserGroup(userId)).SendAsync("SessionBalanceChanged", e));
+
         public Task NotifyDeviceStatusAsync(Domain.Dtos.Device.DeviceStatusChangedDto e)
             => Task.WhenAll(
                 _hubContext.Clients.Group(SessionHub.DeviceGroup(e.DeviceId)).SendAsync("DeviceStatusChanged", e),
