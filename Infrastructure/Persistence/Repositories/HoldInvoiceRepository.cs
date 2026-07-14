@@ -116,19 +116,24 @@ RETURNING h.consumed_tiyin - o.old_consumed AS ""Value""")
 
         public async Task<List<HoldInvoiceEntity>> ClaimDueAsync(string ownerId, DateTime leaseUntil, int batch)
         {
-            var now = DateTime.Now;
             var statuses = WatcherStatuses.Select(s => (int)s).ToArray();
+
+            // Raw SQL parametrida DateTime Kind=Local'ni Npgsql 'timestamptz' deb hisoblab rad etadi
+            // (mapped ustundan farqli — bu yerda ustun turi haqida ma'lumot yo'q). Mahalliy vaqt
+            // konvensiyamizga mos ravishda Unspecified qilamiz → 'timestamp without time zone'ga
+            // to'g'ri yoziladi. "Hozir" uchun esa server soatini (LOCALTIMESTAMP) ishlatamiz.
+            var lease = DateTime.SpecifyKind(leaseUntil, DateTimeKind.Unspecified);
 
             // SKIP LOCKED — parallel tick/instance'lar bir-birini kutmaydi va bir invoice'ni ikki marta olmaydi.
             var claimedIds = await _context.Database
                 .SqlQuery<long>($@"
 UPDATE app.hold_invoices
-SET locked_by = {ownerId}, lease_until = {leaseUntil}, updated_date = LOCALTIMESTAMP
+SET locked_by = {ownerId}, lease_until = {lease}, updated_date = LOCALTIMESTAMP
 WHERE id IN (
     SELECT id FROM app.hold_invoices
     WHERE status = ANY({statuses})
-      AND next_attempt_at IS NOT NULL AND next_attempt_at <= {now}
-      AND (lease_until IS NULL OR lease_until < {now})
+      AND next_attempt_at IS NOT NULL AND next_attempt_at <= LOCALTIMESTAMP
+      AND (lease_until IS NULL OR lease_until < LOCALTIMESTAMP)
       AND is_deleted = false
     ORDER BY next_attempt_at
     LIMIT {batch}
