@@ -3,6 +3,8 @@ using Domain.Enums;
 using Domain.Helpers;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using NpgsqlTypes;
 using Persistence.Context;
 
 namespace Persistence.Repositories
@@ -118,17 +120,20 @@ RETURNING h.consumed_tiyin - o.old_consumed AS ""Value""")
         {
             var statuses = WatcherStatuses.Select(s => (int)s).ToArray();
 
-            // Raw SQL parametrida DateTime Kind=Local'ni Npgsql 'timestamptz' deb hisoblab rad etadi
-            // (mapped ustundan farqli — bu yerda ustun turi haqida ma'lumot yo'q). Mahalliy vaqt
-            // konvensiyamizga mos ravishda Unspecified qilamiz → 'timestamp without time zone'ga
-            // to'g'ri yoziladi. "Hozir" uchun esa server soatini (LOCALTIMESTAMP) ishlatamiz.
-            var lease = DateTime.SpecifyKind(leaseUntil, DateTimeKind.Unspecified);
+            // Raw SQL da DateTime parametrining Npgsql standart PG turi 'timestamptz' — u faqat UTC
+            // qabul qiladi, shuning uchun mahalliy vaqt (Local/Unspecified) rad etiladi (mapped
+            // ustundan farqli — bu yerda ustun turi haqida ma'lumot yo'q). Turni oshkora
+            // 'timestamp without time zone' qilib beramiz. "Hozir" uchun server soati LOCALTIMESTAMP.
+            var leaseParam = new NpgsqlParameter("lease", NpgsqlDbType.Timestamp)
+            {
+                Value = DateTime.SpecifyKind(leaseUntil, DateTimeKind.Unspecified)
+            };
 
             // SKIP LOCKED — parallel tick/instance'lar bir-birini kutmaydi va bir invoice'ni ikki marta olmaydi.
             var claimedIds = await _context.Database
                 .SqlQuery<long>($@"
 UPDATE app.hold_invoices
-SET locked_by = {ownerId}, lease_until = {lease}, updated_date = LOCALTIMESTAMP
+SET locked_by = {ownerId}, lease_until = {leaseParam}, updated_date = LOCALTIMESTAMP
 WHERE id IN (
     SELECT id FROM app.hold_invoices
     WHERE status = ANY({statuses})
