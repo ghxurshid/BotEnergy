@@ -68,7 +68,9 @@ namespace Domain.Dtos.PaymentSession
         public long AvailableTiyin { get; set; }
         public decimal AvailableUzs { get; set; }
 
-        /// <summary>InvoiceHeld | Consumed | Captured | Refunded | Cancelled | Expired</summary>
+        /// <summary>InvoiceHeld | Consumed | Captured | Refunded | Cancelled | Expired.
+        /// Transition'ga 1:1 mos (InvoiceHeld↔Hold, Captured↔Captured, ...) — klient shu bo'yicha
+        /// UI'ni yangilaydi, so'ng /api/HoldInvoice/Balance bilan avtoritar holatni oladi.</summary>
         public string Reason { get; set; } = string.Empty;
 
         public Guid CorrelationId { get; set; }

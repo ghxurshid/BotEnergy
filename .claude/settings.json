@@ -2,6 +2,9 @@
   "permissions": {
     "additionalDirectories": [
       "D:\\WorkPath\\VSCode\\Simulators\\BotEnergy\\admin"
+    ],
+    "allow": [
+      "Read(//d/WorkPath/VSCode/Simulators/BotEnergy/app/**)"
     ]
   }
 }

@@ -20,7 +20,6 @@ namespace Application.Services
         private readonly IProductRepository _productRepo;
         private readonly IDeviceCommandPublisher _commandPublisher;
         private readonly IDeviceLockService _deviceLock;
-        private readonly IBillingService _billing;
         private readonly IProcessSettlementService _settlement;
         private readonly IHoldSettlementService _holdSettlement;
         private readonly ISessionNotifier _notifier;
@@ -39,7 +38,6 @@ namespace Application.Services
             IProductRepository productRepo,
             IDeviceCommandPublisher commandPublisher,
             IDeviceLockService deviceLock,
-            IBillingService billing,
             IProcessSettlementService settlement,
             IHoldSettlementService holdSettlement,
             ISessionNotifier notifier,
@@ -51,7 +49,6 @@ namespace Application.Services
             _productRepo = productRepo;
             _commandPublisher = commandPublisher;
             _deviceLock = deviceLock;
-            _billing = billing;
             _settlement = settlement;
             _holdSettlement = holdSettlement;
             _notifier = notifier;
@@ -84,20 +81,16 @@ namespace Application.Services
             if (product.DeviceId != session.DeviceId)
                 return GenericDto<StartProcessResultDto>.Error(400, "Mahsulot ushbu qurilmaga tegishli emas.");
 
-            // Funding manbasini tanlaymiz: sessiyada hold balans bo'lsa undan, aks holda ichki balans.
-            var fundingSource = ProcessFundingSource.InternalBalance;
-            decimal availableForLimit;
-
+            // Funding FAQAT tasdiqlangan Hold balansidan. Internal balance biznes mantig'ida
+            // ishlatilmaydi (faqat entity + GET). "No hold = no fuel": tasdiqlangan Hold bo'lmasa
+            // (holdTiyin == 0) jarayon boshlanmaydi — ichki balansga fallback yo'q.
             var holdTiyin = await _holdSettlement.GetAvailableHoldTiyinAsync(session.Id);
-            if (holdTiyin > 0)
-            {
-                fundingSource = ProcessFundingSource.HoldBalance;
-                availableForLimit = Money.ToUzs(holdTiyin);
-            }
-            else
-            {
-                availableForLimit = await _billing.GetAvailableBalanceAsync(dto.UserId);
-            }
+            if (holdTiyin <= 0)
+                return GenericDto<StartProcessResultDto>.Error(400,
+                    "Tasdiqlangan Hold mavjud emas — avval to'lovni bloklang (hold invoice yarating).");
+
+            var fundingSource = ProcessFundingSource.HoldBalance;
+            var availableForLimit = Money.ToUzs(holdTiyin);
 
             var maxAmount = product.Price > 0 ? availableForLimit / product.Price : 0;
 
@@ -107,9 +100,7 @@ namespace Application.Services
 
             if (limit <= 0)
                 return GenericDto<StartProcessResultDto>.Error(400,
-                    fundingSource == ProcessFundingSource.HoldBalance
-                        ? "Hold balansi yetarli emas — yangi invoice yarating."
-                        : "Balans yetarli emas.");
+                    "Hold balansi yetarli emas — yangi invoice yarating.");
 
             var lockTaken = await _deviceLock.TryLockDeviceAsync(session.Device.SerialNumber, dto.UserId);
             if (!lockTaken)

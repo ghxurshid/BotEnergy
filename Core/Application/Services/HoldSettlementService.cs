@@ -268,17 +268,26 @@ namespace Application.Services
         private async Task PollWaitingAsync(HoldInvoiceEntity invoice, PaymentSessionEntity ps, PaymeCredentials creds, CancellationToken ct)
         {
             var call = await _payme.CheckReceiptAsync(invoice.ProviderReceiptId!, creds, ct);
-            await LogStepAsync(invoice, ps, HoldInvoiceStepType.CheckPolled,
-                call.IsSuccess ? PaymentStepStatus.Info : PaymentStepStatus.Error,
-                requestPayload: call.RequestBody, responsePayload: call.ResponseBody, message: call.FailureMessage);
 
             if (!call.IsSuccess)
             {
+                // Transient tarmoq/provider xatosi — bu HOLAT o'zgarishi EMAS. Audit jadvaliga
+                // takroriy Error step yozmaymiz (5 soatlik pending'da minglab qator bo'lardi);
+                // faqat log + retry. ProviderState ham tegilmaydi (oxirgi ma'lum holat saqlanadi).
+                _logger.LogWarning("[HOLD-WATCH] check muvaffaqiyatsiz invoiceId={InvoiceId}: {Msg}",
+                    invoice.Id, call.FailureMessage);
                 await _invoiceRepo.SchedulePollAsync(invoice.Id, DateTime.Now.AddSeconds(_options.PollSeconds));
                 return;
             }
 
             var state = call.Result!.State;
+
+            // Audit qadamini FAQAT provider holati haqiqatan o'zgarganda yozamiz — bir xil
+            // "hali kutilmoqda" javobi har tick'da takror yozilmaydi (status-spam oldi olinadi).
+            if (state != invoice.ProviderState)
+                await LogStepAsync(invoice, ps, HoldInvoiceStepType.CheckPolled, PaymentStepStatus.Info,
+                    requestPayload: call.RequestBody, responsePayload: call.ResponseBody,
+                    message: $"state {invoice.ProviderState?.ToString() ?? "—"} → {state}");
 
             if (state == PaymeReceiptStates.Held || state == PaymeReceiptStates.Paid)
             {
