@@ -27,6 +27,7 @@ namespace Application.Services
         private readonly IPaymentSessionService _paymentSessionService;
         private readonly IPaymeClient _payme;
         private readonly IPaymeCredentialResolver _credResolver;
+        private readonly IHoldSettlementService _holdSettlement;
         private readonly HoldInvoiceOptions _options;
         private readonly ILogger<HoldInvoiceService> _logger;
 
@@ -38,6 +39,7 @@ namespace Application.Services
             IPaymentSessionService paymentSessionService,
             IPaymeClient payme,
             IPaymeCredentialResolver credResolver,
+            IHoldSettlementService holdSettlement,
             IOptions<HoldInvoiceOptions> options,
             ILogger<HoldInvoiceService> logger)
         {
@@ -48,6 +50,7 @@ namespace Application.Services
             _paymentSessionService = paymentSessionService;
             _payme = payme;
             _credResolver = credResolver;
+            _holdSettlement = holdSettlement;
             _options = options.Value;
             _logger = logger;
         }
@@ -174,6 +177,9 @@ namespace Application.Services
                 "[HOLD-INV] Yaratildi invoiceId={InvoiceId} seq={Seq} amount={Amount} tiyin receipt={ReceiptId}",
                 invoice.Id, invoice.SequenceNo, amountTiyin, invoice.ProviderReceiptId);
 
+            // Sessiyadagi boshqa qurilmalar (planshet/telefon) yangi invoice'ni real-time ko'rsin.
+            await _holdSettlement.PublishSessionHoldStateAsync(dto.SessionId, BalanceChangeReasons.InvoiceCreated, invoice.Id);
+
             return GenericDto<HoldInvoiceResultDto>.Success(MapResult(invoice,
                 "Invoice yaratildi — Payme ilovasida to'lovni tasdiqlang."));
         }
@@ -230,6 +236,10 @@ namespace Application.Services
                     return GenericDto<HoldInvoiceResultDto>.Error(409,
                         $"Invoice holati ({invoice.Status}) bekor qilishga ruxsat bermaydi.");
             }
+
+            // Status o'zgardi (Cancelled yoki RefundPending) — sessiya guruhiga real-time yuboramiz.
+            await _holdSettlement.PublishSessionHoldStateAsync(
+                paymentSession.SessionId, BalanceChangeReasons.Cancelled, invoiceId);
 
             invoice = await _invoiceRepo.GetByIdAsync(invoiceId);
             return GenericDto<HoldInvoiceResultDto>.Success(MapResult(invoice!, "Invoice bekor qilindi."));

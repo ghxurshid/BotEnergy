@@ -77,14 +77,18 @@ namespace Domain.Dtos.PaymentSession
         public DateTime Timestamp { get; set; } = DateTime.Now;
     }
 
-    /// <summary>SessionBalanceChangedDto.Reason qiymatlari.</summary>
+    /// <summary>SessionBalanceChangedDto.Reason qiymatlari. Ba'zilari balansni o'zgartirmaydi
+    /// (Cancelled/Expired/Failed/InvoiceCreated) — lekin invoice HOLATI o'zgargani uchun UI yangilanishi
+    /// kerak, shuning uchun ular ham event sifatida yuboriladi.</summary>
     public static class BalanceChangeReasons
     {
+        public const string InvoiceCreated = "InvoiceCreated";
         public const string InvoiceHeld = "InvoiceHeld";
         public const string Consumed = "Consumed";
         public const string Captured = "Captured";
         public const string Refunded = "Refunded";
         public const string Cancelled = "Cancelled";
         public const string Expired = "Expired";
+        public const string Failed = "Failed";
     }
 }

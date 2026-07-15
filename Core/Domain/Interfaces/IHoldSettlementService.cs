@@ -33,5 +33,12 @@ namespace Domain.Interfaces
 
         /// <summary>Watcher tick: barcha invoice'lari terminal bo'lgan Settling sessiyalarni yopadi.</summary>
         Task FinalizeSettledSessionsAsync(CancellationToken ct = default);
+
+        /// <summary>
+        /// Sessiyaning hold holati o'zgargani haqida yagona event yuboradi (SignalR SessionBalanceChanged
+        /// + MQTT balance.update). Balans o'zgarmagan status o'tishlarida ham (masalan user cancel,
+        /// invoice yaratildi) UI real-time yangilanishi uchun ishlatiladi.
+        /// </summary>
+        Task PublishSessionHoldStateAsync(long sessionId, string reason, long? invoiceId = null);
     }
 }

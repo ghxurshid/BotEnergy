@@ -306,6 +306,8 @@ namespace Application.Services
                 await _invoiceRepo.TryTransitionAsync(invoice.Id, HoldInvoiceStatus.Cancelled);
                 await LogStepAsync(invoice, ps, HoldInvoiceStepType.Cancelled, PaymentStepStatus.Info,
                     message: "Payme tomonda bekor qilingan.");
+                // Balans o'zgarmaydi, lekin status o'zgardi — UI real-time yangilanishi uchun event.
+                await PublishBalanceAsync(ps, BalanceChangeReasons.Cancelled, invoice.Id);
                 return;
             }
 
@@ -320,6 +322,7 @@ namespace Application.Services
                     requestPayload: cancelCall.RequestBody, responsePayload: cancelCall.ResponseBody,
                     message: $"TTL ({_options.InvoiceTtlMinutes}min) tugadi — bekor qilindi.");
                 await _invoiceRepo.TryTransitionAsync(invoice.Id, HoldInvoiceStatus.Expired);
+                await PublishBalanceAsync(ps, BalanceChangeReasons.Expired, invoice.Id);
                 return;
             }
 
@@ -359,12 +362,13 @@ namespace Application.Services
                     await PublishBalanceAsync(ps, BalanceChangeReasons.Captured, invoice.Id);
                     break;
                 case PaymeCallOutcome.Transient:
-                    await BackoffOrFailAsync(invoice, $"Capture: {call.FailureMessage}");
+                    await BackoffOrFailAsync(invoice, ps, $"Capture: {call.FailureMessage}");
                     break;
                 default:
                     await _invoiceRepo.TryTransitionAsync(invoice.Id, HoldInvoiceStatus.Failed,
                         failureReason: $"Capture (permanent): {call.FailureMessage}");
                     _logger.LogError("[HOLD-WATCH] Capture Failed invoiceId={InvoiceId}: {Msg}", invoice.Id, call.FailureMessage);
+                    await PublishBalanceAsync(ps, BalanceChangeReasons.Failed, invoice.Id);
                     break;
             }
         }
@@ -391,12 +395,13 @@ namespace Application.Services
                     await PublishBalanceAsync(ps, BalanceChangeReasons.Refunded, invoice.Id);
                     break;
                 case PaymeCallOutcome.Transient:
-                    await BackoffOrFailAsync(invoice, $"Refund: {call.FailureMessage}");
+                    await BackoffOrFailAsync(invoice, ps, $"Refund: {call.FailureMessage}");
                     break;
                 default:
                     await _invoiceRepo.TryTransitionAsync(invoice.Id, HoldInvoiceStatus.Failed,
                         failureReason: $"Refund (permanent): {call.FailureMessage}");
                     _logger.LogError("[HOLD-WATCH] Refund Failed invoiceId={InvoiceId}: {Msg}", invoice.Id, call.FailureMessage);
+                    await PublishBalanceAsync(ps, BalanceChangeReasons.Failed, invoice.Id);
                     break;
             }
         }
@@ -413,13 +418,14 @@ namespace Application.Services
             return PaymeCallOutcome.Transient;
         }
 
-        private async Task BackoffOrFailAsync(HoldInvoiceEntity invoice, string reason)
+        private async Task BackoffOrFailAsync(HoldInvoiceEntity invoice, PaymentSessionEntity ps, string reason)
         {
             if (invoice.AttemptCount + 1 >= _options.MaxAttempts)
             {
                 await _invoiceRepo.TryTransitionAsync(invoice.Id, HoldInvoiceStatus.Failed,
                     failureReason: $"Retry limiti tugadi: {reason}");
                 _logger.LogError("[HOLD-WATCH] invoiceId={InvoiceId} retry limiti tugadi — Failed", invoice.Id);
+                await PublishBalanceAsync(ps, BalanceChangeReasons.Failed, invoice.Id);
             }
             else
             {
@@ -486,6 +492,14 @@ namespace Application.Services
             });
 
             _logger.LogInformation("[HOLD-SETTLE] Settling sessiya yopildi sessionId={SessionId}", session.Id);
+        }
+
+        // ── Sessiya bo'yicha hold holat eventi (tashqi chaqiruv uchun: user cancel / invoice yaratildi) ──
+        public async Task PublishSessionHoldStateAsync(long sessionId, string reason, long? invoiceId = null)
+        {
+            var ps = await _paymentSessionRepo.GetBySessionIdAsync(sessionId);
+            if (ps is not null)
+                await PublishBalanceAsync(ps, reason, invoiceId);
         }
 
         // ── Yagona balans event: SignalR + MQTT ─────────────────────
