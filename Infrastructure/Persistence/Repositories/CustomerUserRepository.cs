@@ -1,5 +1,6 @@
 using Domain.Dtos.Base;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Context;
@@ -40,6 +41,14 @@ namespace Persistence.Repositories
                 .Include(u => u.Role)
                 .Include(u => u.Organization)
                 .Where(u => u.OrganizationId == organizationId)
+                .ApplyListQuery(param)
+                .ToPagedResultAsync(param);
+
+        public Task<PagedResult<CustomerUserEntity>> GetNaturalAsync(PaginationParams param)
+            => _context.CustomerUsers
+                .AsNoTracking()
+                .Include(u => u.Role)
+                .Where(u => u.Type == CustomerUserType.Natural)
                 .ApplyListQuery(param)
                 .ToPagedResultAsync(param);
 

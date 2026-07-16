@@ -35,6 +35,9 @@ namespace Domain.Constants
             Permissions.HoldAdminRefund,
             Permissions.HoldAdminRetry,
             Permissions.MerchantAdminSetPaymeCredentials,
+
+            // Natural (jismoniy) foydalanuvchilarning global ro'yxati — faqat Manage.
+            Permissions.CustomerAdminGetNatural,
         };
 
         /// <summary>

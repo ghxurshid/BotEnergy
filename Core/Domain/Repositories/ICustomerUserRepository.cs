@@ -11,6 +11,8 @@ namespace Domain.Repositories
         Task<PagedResult<CustomerUserEntity>> GetAllAsync(PaginationParams param);
         /// <summary>Berilgan tashkilotning corporate userlari (paged).</summary>
         Task<PagedResult<CustomerUserEntity>> GetByOrganizationAsync(long organizationId, PaginationParams param);
+        /// <summary>Barcha Natural (jismoniy) foydalanuvchilar (paged, sort/search).</summary>
+        Task<PagedResult<CustomerUserEntity>> GetNaturalAsync(PaginationParams param);
         Task<CustomerUserEntity> CreateAsync(CustomerUserEntity user);
         Task<CustomerUserEntity> UpdateAsync(CustomerUserEntity user);
         Task DeleteAsync(long userId);

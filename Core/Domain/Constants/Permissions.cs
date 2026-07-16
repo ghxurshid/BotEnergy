@@ -73,6 +73,8 @@ namespace Domain.Constants
 
         // ── Corporate foydalanuvchi boshqaruvi (Customer guruhi) ─────
         // Corporate bosh admini o'z tashkilotidagi qo'l-osti userlarni boshqaradi.
+        /// <summary>Platform (Manage) uchun: barcha Natural (jismoniy) foydalanuvchilar ro'yxati.</summary>
+        public const string CustomerAdminGetNatural = "CustomerAdmin.GetNatural";
         public const string CustomerAdminCreate = "CustomerAdmin.Create";
         public const string CustomerAdminGetAll = "CustomerAdmin.GetAll";
         public const string CustomerAdminGetById = "CustomerAdmin.GetById";
@@ -192,6 +194,9 @@ namespace Domain.Constants
 
             // Reports
             MerchantReportSales, MerchantReportSalesExport,
+
+            // Natural (jismoniy) foydalanuvchilar ro'yxati — platforma admin ko'rinishi
+            CustomerAdminGetNatural,
         };
 
         /// <summary>

@@ -12,6 +12,8 @@ namespace Domain.Interfaces
     {
         Task<GenericDto<UserAdminResultDto>> CreateAsync(CreateCorporateUserDto dto, AccessScope scope);
         Task<GenericDto<PagedResult<CustomerUserItemDto>>> GetByOrganizationAsync(long organizationId, PaginationParams param, AccessScope scope);
+        /// <summary>Barcha Natural (jismoniy) foydalanuvchilar — faqat Platform/Manage.</summary>
+        Task<GenericDto<PagedResult<CustomerUserItemDto>>> GetNaturalAsync(PaginationParams param, AccessScope scope);
         Task<GenericDto<CustomerUserItemDto>> GetByIdAsync(long userId, AccessScope scope);
         Task<GenericDto<UserAdminResultDto>> SetPasswordAsync(SetPasswordAdminDto dto, AccessScope scope);
         Task<GenericDto<UserAdminResultDto>> BlockAsync(long userId, AccessScope scope);

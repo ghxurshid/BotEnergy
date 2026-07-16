@@ -76,6 +76,15 @@ namespace Application.Services
             return GenericDto<PagedResult<CustomerUserItemDto>>.Success(page.Map(ToItem));
         }
 
+        public async Task<GenericDto<PagedResult<CustomerUserItemDto>>> GetNaturalAsync(PaginationParams param, AccessScope scope)
+        {
+            if (!scope.IsManage)
+                return GenericDto<PagedResult<CustomerUserItemDto>>.Error(403, "Jismoniy shaxslar ro'yxatini faqat Manage ko'ra oladi.");
+
+            var page = await _userRepo.GetNaturalAsync(param);
+            return GenericDto<PagedResult<CustomerUserItemDto>>.Success(page.Map(ToItem));
+        }
+
         public async Task<GenericDto<CustomerUserItemDto>> GetByIdAsync(long userId, AccessScope scope)
         {
             var user = await _userRepo.GetByIdAsync(userId);
@@ -152,8 +161,11 @@ namespace Application.Services
             });
         }
 
+        /// <summary>Corporate → tashkilot scope'i; Natural (OrganizationId=null) → faqat Manage.</summary>
         private static bool CanManage(CustomerUserEntity user, AccessScope scope)
-            => user.OrganizationId.HasValue && scope.CanAccessOrganization(user.OrganizationId.Value);
+            => user.OrganizationId.HasValue
+                ? scope.CanAccessOrganization(user.OrganizationId.Value)
+                : scope.IsManage;
 
         private static CustomerUserItemDto ToItem(CustomerUserEntity u) => new()
         {
