@@ -157,14 +157,16 @@ namespace AdminApi.Extensions
             => new SetPasswordAdminDto
             {
                 UserId = userId,
-                Password = request.Password
+                Password = request.Password,
+                CurrentPassword = request.CurrentPassword
             };
 
         public static ResetPasswordAdminDto ToDto(this ResetPasswordRequest request, long userId)
             => new ResetPasswordAdminDto
             {
                 UserId = userId,
-                NewPassword = request.NewPassword
+                NewPassword = request.NewPassword,
+                CurrentPassword = request.CurrentPassword
             };
 
         public static TopUpBalanceDto ToDto(this TopUpBalanceRequest request)

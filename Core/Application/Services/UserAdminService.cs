@@ -228,6 +228,25 @@ namespace Application.Services
             });
         }
 
+        /// <summary>
+        /// Amalni bajarayotgan admin (caller)ning o'z joriy parolini tekshiradi.
+        /// Muvaffaqiyatli bo'lsa <c>null</c>, aks holda mos xato DTO qaytaradi.
+        /// </summary>
+        private async Task<GenericDto<UserAdminResultDto>?> VerifyActorPasswordAsync(AccessScope scope, string? currentPassword)
+        {
+            if (string.IsNullOrWhiteSpace(currentPassword))
+                return GenericDto<UserAdminResultDto>.Error(400, "Amalni tasdiqlash uchun o'z joriy parolingizni kiriting.");
+
+            var actor = await _userRepo.GetByIdAsync(scope.UserId);
+            if (actor?.PasswordHash is null || actor.PasswordSalt is null)
+                return GenericDto<UserAdminResultDto>.Error(403, "Joriy foydalanuvchi parolini tekshirib bo'lmadi.");
+
+            if (!PasswordHelper.Verify(currentPassword, actor.PasswordHash, actor.PasswordSalt))
+                return GenericDto<UserAdminResultDto>.Error(403, "Joriy parolingiz noto'g'ri.");
+
+            return null;
+        }
+
         /// <summary>Manage → har doim; Merchant operator → faqat o'z merchanti operatorlari.</summary>
         private static bool CanManage(PlatformUserEntity target, AccessScope scope)
         {

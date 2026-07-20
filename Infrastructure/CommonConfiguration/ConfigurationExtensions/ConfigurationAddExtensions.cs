@@ -281,6 +281,7 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<ICustomerUserRepository, CustomerUserRepository>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IUserAdminService, UserAdminService>();
+            services.AddScoped<IPlatformProfileService, PlatformProfileService>();
             services.AddScoped<ICustomerAdminService, CustomerAdminService>();
 
             // Role repos + permission katalog

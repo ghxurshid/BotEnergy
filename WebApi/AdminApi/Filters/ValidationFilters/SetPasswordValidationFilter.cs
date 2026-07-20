@@ -16,6 +16,9 @@ namespace AdminApi.Filters.ValidationFilters
 
             if (request.Password.Length < 6)
             { context.Result = new BadRequestObjectResult(new { message = "Parol kamida 6 ta belgidan iborat bo'lishi kerak." }); return; }
+
+            if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+            { context.Result = new BadRequestObjectResult(new { message = "Amalni tasdiqlash uchun o'z joriy parolingizni kiriting." }); return; }
         }
 
         public void OnActionExecuted(ActionExecutedContext context) { }
