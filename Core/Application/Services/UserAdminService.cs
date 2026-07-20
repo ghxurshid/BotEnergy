@@ -97,15 +97,16 @@ namespace Application.Services
 
         public async Task<GenericDto<PagedResult<UserAdminItemDto>>> GetAllAsync(PaginationParams param, AccessScope scope)
         {
+            // Caller o'zini ro'yxatda ko'rmaydi — o'z profilini alohida (/api/Profile) boshqaradi.
             if (scope.IsManage)
             {
-                var all = await _userRepo.GetAllAsync(param);
+                var all = await _userRepo.GetAllAsync(param, excludeUserId: scope.UserId);
                 return GenericDto<PagedResult<UserAdminItemDto>>.Success(all.Map(ToItem));
             }
 
             if (scope.IsMerchant && scope.MerchantId.HasValue)
             {
-                var page = await _userRepo.GetByMerchantAsync(scope.MerchantId.Value, param);
+                var page = await _userRepo.GetByMerchantAsync(scope.MerchantId.Value, param, excludeUserId: scope.UserId);
                 return GenericDto<PagedResult<UserAdminItemDto>>.Success(page.Map(ToItem));
             }
 
@@ -130,6 +131,11 @@ namespace Application.Services
                 return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
             if (!CanManage(user, scope))
                 return GenericDto<UserAdminResultDto>.Error(403, "Ruxsat yo'q.");
+
+            // Boshqa userga parol o'rnatishdan oldin admin o'z joriy parolini tasdiqlaydi.
+            var actorCheck = await VerifyActorPasswordAsync(scope, dto.CurrentPassword);
+            if (actorCheck is not null)
+                return actorCheck;
 
             if (user.IsVerified)
                 return GenericDto<UserAdminResultDto>.Error(400, "Parol allaqachon o'rnatilgan.");
@@ -156,6 +162,12 @@ namespace Application.Services
                 return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
             if (!CanManage(user, scope))
                 return GenericDto<UserAdminResultDto>.Error(403, "Ruxsat yo'q.");
+
+            // Boshqa userning parolini reset qilishdan oldin admin o'z joriy parolini tasdiqlaydi.
+            var actorCheck = await VerifyActorPasswordAsync(scope, dto.CurrentPassword);
+            if (actorCheck is not null)
+                return actorCheck;
+
             if (!user.IsVerified)
                 return GenericDto<UserAdminResultDto>.Error(400, "Foydalanuvchi hali ro'yxatdan to'liq o'tmagan.");
 

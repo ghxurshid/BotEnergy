@@ -31,12 +31,40 @@ namespace Domain.Dtos
     {
         public long UserId { get; set; }
         public required string Password { get; set; }
+
+        /// <summary>
+        /// Amalni bajarayotgan admin (caller)ning JORIY paroli. Platform userlariga parol
+        /// o'rnatishda majburiy — backend caller'ning o'z parolini tekshiradi.
+        /// </summary>
+        public string? CurrentPassword { get; set; }
     }
 
     public class ResetPasswordAdminDto
     {
         public long UserId { get; set; }
         public required string NewPassword { get; set; }
+
+        /// <summary>
+        /// Amalni bajarayotgan admin (caller)ning JORIY paroli. Platform userlarining parolini
+        /// reset qilishda majburiy — backend caller'ning o'z parolini tekshiradi.
+        /// </summary>
+        public string? CurrentPassword { get; set; }
+    }
+
+    /// <summary>Joriy (login qilgan) platform userning o'z profili.</summary>
+    public class MyProfileDto
+    {
+        public long Id { get; set; }
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string Mail { get; set; } = string.Empty;
+        public string SubType { get; set; } = string.Empty;
+        public long? MerchantId { get; set; }
+        public long? RoleId { get; set; }
+        public string? RoleName { get; set; }
+        public bool IsVerified { get; set; }
+        public bool IsBlocked { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime LastLoginDate { get; set; }
     }
 
     /// <summary>Platform foydalanuvchi ro'yxat elementi.</summary>

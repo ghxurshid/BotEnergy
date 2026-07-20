@@ -26,20 +26,31 @@ namespace Persistence.Repositories
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
 
-        public Task<PagedResult<PlatformUserEntity>> GetAllAsync(PaginationParams param)
-            => _context.PlatformUsers
+        public Task<PagedResult<PlatformUserEntity>> GetAllAsync(PaginationParams param, long? excludeUserId = null)
+        {
+            var query = _context.PlatformUsers
                 .Include(u => u.Role)
                 .Include(u => u.Merchant)
-                .ApplyListQuery(param)
-                .ToPagedResultAsync(param);
+                .AsQueryable();
 
-        public Task<PagedResult<PlatformUserEntity>> GetByMerchantAsync(long merchantId, PaginationParams param)
-            => _context.PlatformUsers
+            if (excludeUserId.HasValue)
+                query = query.Where(u => u.Id != excludeUserId.Value);
+
+            return query.ApplyListQuery(param).ToPagedResultAsync(param);
+        }
+
+        public Task<PagedResult<PlatformUserEntity>> GetByMerchantAsync(long merchantId, PaginationParams param, long? excludeUserId = null)
+        {
+            var query = _context.PlatformUsers
                 .Include(u => u.Role)
                 .Include(u => u.Merchant)
-                .Where(u => u.MerchantId == merchantId)
-                .ApplyListQuery(param)
-                .ToPagedResultAsync(param);
+                .Where(u => u.MerchantId == merchantId);
+
+            if (excludeUserId.HasValue)
+                query = query.Where(u => u.Id != excludeUserId.Value);
+
+            return query.ApplyListQuery(param).ToPagedResultAsync(param);
+        }
 
         public async Task<PlatformUserEntity> CreateAsync(PlatformUserEntity user)
         {
