@@ -79,6 +79,7 @@ namespace Domain.Constants
         public const string CustomerAdminGetAll = "CustomerAdmin.GetAll";
         public const string CustomerAdminGetById = "CustomerAdmin.GetById";
         public const string CustomerAdminSetPassword = "CustomerAdmin.SetPassword";
+        public const string CustomerAdminResetPassword = "CustomerAdmin.ResetPassword";
         public const string CustomerAdminBlock = "CustomerAdmin.Block";
         public const string CustomerAdminUnblock = "CustomerAdmin.Unblock";
         public const string CustomerAdminDelete = "CustomerAdmin.Delete";
@@ -226,7 +227,8 @@ namespace Domain.Constants
 
             // Corporate sub-user management
             CustomerAdminCreate, CustomerAdminGetAll, CustomerAdminGetById,
-            CustomerAdminSetPassword, CustomerAdminBlock, CustomerAdminUnblock,
+            CustomerAdminSetPassword, CustomerAdminResetPassword,
+            CustomerAdminBlock, CustomerAdminUnblock,
             CustomerAdminDelete,
         };
 

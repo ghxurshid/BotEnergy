@@ -51,9 +51,18 @@ namespace AdminApi.Controllers
 
         [HttpPut("{id}")]
         [RequirePermission(Permissions.CustomerAdminSetPassword)]
+        [TypeFilter(typeof(SetPasswordValidationFilter))]
         public async Task<IActionResult> SetPassword(long id, [FromBody] SetPasswordRequest request)
         {
             var result = await _service.SetPasswordAsync(request.ToDto(id), User.GetScope());
+            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+        }
+
+        [HttpPut("{id}")]
+        [RequirePermission(Permissions.CustomerAdminResetPassword)]
+        public async Task<IActionResult> ResetPassword(long id, [FromBody] ResetPasswordRequest request)
+        {
+            var result = await _service.ResetPasswordAsync(request.ToDto(id), User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
         }
 

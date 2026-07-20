@@ -16,6 +16,7 @@ namespace Domain.Interfaces
         Task<GenericDto<PagedResult<CustomerUserItemDto>>> GetNaturalAsync(PaginationParams param, AccessScope scope);
         Task<GenericDto<CustomerUserItemDto>> GetByIdAsync(long userId, AccessScope scope);
         Task<GenericDto<UserAdminResultDto>> SetPasswordAsync(SetPasswordAdminDto dto, AccessScope scope);
+        Task<GenericDto<UserAdminResultDto>> ResetPasswordAsync(ResetPasswordAdminDto dto, AccessScope scope);
         Task<GenericDto<UserAdminResultDto>> BlockAsync(long userId, AccessScope scope);
         Task<GenericDto<UserAdminResultDto>> UnblockAsync(long userId, AccessScope scope);
         Task<GenericDto<UserAdminResultDto>> DeleteAsync(long userId, AccessScope scope);

@@ -35,14 +35,19 @@ namespace Persistence.Repositories
                 .ApplyListQuery(param)
                 .ToPagedResultAsync(param);
 
-        public Task<PagedResult<CustomerUserEntity>> GetByOrganizationAsync(long organizationId, PaginationParams param)
-            => _context.CustomerUsers
+        public Task<PagedResult<CustomerUserEntity>> GetByOrganizationAsync(long organizationId, PaginationParams param, long? excludeUserId = null)
+        {
+            var query = _context.CustomerUsers
                 .AsNoTracking()
                 .Include(u => u.Role)
                 .Include(u => u.Organization)
-                .Where(u => u.OrganizationId == organizationId)
-                .ApplyListQuery(param)
-                .ToPagedResultAsync(param);
+                .Where(u => u.OrganizationId == organizationId);
+
+            if (excludeUserId.HasValue)
+                query = query.Where(u => u.Id != excludeUserId.Value);
+
+            return query.ApplyListQuery(param).ToPagedResultAsync(param);
+        }
 
         public Task<PagedResult<CustomerUserEntity>> GetNaturalAsync(PaginationParams param)
             => _context.CustomerUsers

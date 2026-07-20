@@ -9,8 +9,8 @@ namespace Domain.Repositories
         Task<CustomerUserEntity?> GetByIdAsync(long userId);
         Task<CustomerUserEntity?> GetByPhoneNumberAsync(string phoneNumber);
         Task<PagedResult<CustomerUserEntity>> GetAllAsync(PaginationParams param);
-        /// <summary>Berilgan tashkilotning corporate userlari (paged).</summary>
-        Task<PagedResult<CustomerUserEntity>> GetByOrganizationAsync(long organizationId, PaginationParams param);
+        /// <summary>Berilgan tashkilotning corporate userlari (paged). <paramref name="excludeUserId"/> berilsa (masalan, caller'ning o'zi) ro'yxatdan chiqariladi.</summary>
+        Task<PagedResult<CustomerUserEntity>> GetByOrganizationAsync(long organizationId, PaginationParams param, long? excludeUserId = null);
         /// <summary>Barcha Natural (jismoniy) foydalanuvchilar (paged, sort/search).</summary>
         Task<PagedResult<CustomerUserEntity>> GetNaturalAsync(PaginationParams param);
         Task<CustomerUserEntity> CreateAsync(CustomerUserEntity user);

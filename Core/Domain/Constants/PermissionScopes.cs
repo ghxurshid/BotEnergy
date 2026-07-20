@@ -77,6 +77,7 @@ namespace Domain.Constants
 
                 Permissions.CustomerAdminCreate, Permissions.CustomerAdminGetAll,
                 Permissions.CustomerAdminGetById, Permissions.CustomerAdminSetPassword,
+                Permissions.CustomerAdminResetPassword,
                 Permissions.CustomerAdminBlock, Permissions.CustomerAdminUnblock,
                 Permissions.CustomerAdminDelete,
             })
