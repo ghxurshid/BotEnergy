@@ -1,10 +1,11 @@
 {
   "permissions": {
+    "allow": [
+      "Read(//d/WorkPath/VSCode/Simulators/BotEnergy/app/**)",
+      "Bash(f=\"/d/WorkPath/VSCode/Simulators/BotEnergy/app/index.html\"; echo \"=== NAV / TAB / SCREEN markup ===\"; grep -nEi \"nav|tab|screen|data-view|menu|<button\" \"$f\" | head -40; echo; echo \"=== token/permission/subtype/user parsing ===\"; grep -nEi \"permission|SubType|UserGroup|Corporate|Organization|parseJwt|atob|decode|state.user|\\\\.user\" \"$f\" | head -40)"
+    ],
     "additionalDirectories": [
       "D:\\WorkPath\\VSCode\\Simulators\\BotEnergy\\admin"
-    ],
-    "allow": [
-      "Read(//d/WorkPath/VSCode/Simulators/BotEnergy/app/**)"
     ]
   }
 }
