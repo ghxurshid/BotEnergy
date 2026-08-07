@@ -247,5 +247,58 @@ namespace AdminApi.Controllers
             await idStore.ResetAsync(device.Result!.SerialNumber);
             return Ok(new { message = $"MQTT counter'lar 0'ga tushirildi: {device.Result.SerialNumber}" });
         }
+
+        /// <summary>
+        /// Qurilmaning MQTT broker credential'larini qaytaradi (provisioning uchun).
+        /// </summary>
+        /// <remarks>
+        /// Firmware'ga yoziladigan qiymatlar:
+        /// - `username` va `clientId` — qurilmaning serial raqami (broker ikkalasi teng bo'lishini talab qiladi);
+        /// - `password` — `SecretKey` dan bir tomonlama hosil qilingan broker paroli;
+        /// - `secretKey` — envelope HMAC imzosi uchun (broker uni HECH QACHON ko'rmaydi).
+        ///
+        /// Parol alohida ustunda saqlanmaydi — u har safar `SecretKey` dan qayta hisoblanadi.
+        /// Shu sababli broker authn hook'i parolni bilsa ham `SecretKey` ni tiklay olmaydi:
+        /// HMAC qatlami mustaqil himoya bo'lib qoladi.
+        ///
+        /// **Permission:** `DeviceAdmin.MqttCredentials` — faqat Manage (provisioning) rollarga biriktiriladi.
+        /// </remarks>
+        /// <param name="id">Qurilma ID si.</param>
+        /// <param name="deviceRepository">Qurilma repositoriysi (DI) — SecretKey DTO'da qaytarilmaydi.</param>
+        /// <response code="200">Credential'lar qaytarildi.</response>
+        /// <response code="403">Permission yetarli emas.</response>
+        /// <response code="404">Berilgan ID bo'yicha qurilma topilmadi.</response>
+        [HttpGet("{id}")]
+        [RequirePermission(Permissions.DeviceAdminMqttCredentials)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> MqttCredentials(
+            long id,
+            [FromServices] Domain.Repositories.IDeviceRepository deviceRepository)
+        {
+            // Scope tekshiruvi servis orqali — merchant o'zgalarning qurilmasini ko'ra olmasin.
+            var device = await _service.GetByIdAsync(id, User.GetScope());
+            if (!device.IsSuccess)
+                return StatusCode(device.ErrorObj!.Code, new { message = device.ErrorObj.ErrorMessage });
+
+            var entity = await deviceRepository.GetBySerialNumberAsync(device.Result!.SerialNumber);
+            if (entity is null)
+                return NotFound(new { message = "Qurilma topilmadi." });
+
+            return Ok(new
+            {
+                serialNumber = entity.SerialNumber,
+                clientId = entity.SerialNumber,
+                username = entity.SerialNumber,
+                password = Domain.Helpers.DeviceMqttCredentials.DerivePassword(entity.SecretKey),
+                secretKey = entity.SecretKey,
+                topics = new
+                {
+                    publish = $"device/{entity.SerialNumber}/{{request|response|event|telemetry|state}}",
+                    subscribe = $"server/{entity.SerialNumber}/{{request|response}}"
+                }
+            });
+        }
     }
 }

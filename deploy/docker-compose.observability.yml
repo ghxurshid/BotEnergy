@@ -1,0 +1,156 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Observability stack — LGTM (Loki, Grafana, Tempo, Metrics/Prometheus).
+#
+# Asosiy compose bilan birga ishga tushiriladi:
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#
+# Hech bir UI porti tashqariga chiqarilmaydi — hammasi 127.0.0.1 ga bind qilingan.
+# Kirish: ssh -L 3000:localhost:3000 ubuntu@server → http://localhost:3000
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: botenergy
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "2"
+
+volumes:
+  promdata:
+  lokidata:
+  tempodata:
+  grafanadata:
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: botenergy-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - promdata:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks: [be-app, be-data, be-edge]
+    logging: *default-logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: botenergy-alertmanager
+    restart: unless-stopped
+    env_file: /etc/botenergy/botenergy.env
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+    # be-edge ham kerak: be-app `internal: true` va u yerdan api.telegram.org ga
+    # chiqib bo'lmaydi — alert yuborilmay qolardi.
+    networks: [be-app, be-edge]
+    logging: *default-logging
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: botenergy-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki.yml
+    volumes:
+      - ./loki/loki.yml:/etc/loki/loki.yml:ro
+      - lokidata:/loki
+    networks: [be-app]
+    logging: *default-logging
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: botenergy-promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./loki/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/log/nginx:/var/log/nginx:ro
+    networks: [be-app]
+    logging: *default-logging
+    depends_on: [loki]
+
+  tempo:
+    image: grafana/tempo:2.6.0
+    container_name: botenergy-tempo
+    restart: unless-stopped
+    command: -config.file=/etc/tempo/tempo.yml
+    volumes:
+      - ./tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempodata:/var/tempo
+    networks: [be-app]
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: botenergy-grafana
+    restart: unless-stopped
+    env_file: /etc/botenergy/botenergy.env
+    environment:
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: "http://localhost:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [be-app]
+    logging: *default-logging
+    depends_on: [prometheus, loki, tempo]
+
+  # ── Exporterlar ───────────────────────────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: botenergy-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks: [be-app]
+    logging: *default-logging
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: botenergy-postgres-exporter
+    restart: unless-stopped
+    env_file: /etc/botenergy/botenergy.env
+    networks: [be-app, be-data]
+    logging: *default-logging
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: botenergy-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    networks: [be-app, be-data]
+    logging: *default-logging
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.3.0
+    container_name: botenergy-nginx-exporter
+    restart: unless-stopped
+    command:
+      - --nginx.scrape-uri=http://nginx:8080/stub_status
+    networks: [be-app, be-edge]
+    logging: *default-logging
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: botenergy-blackbox
+    restart: unless-stopped
+    networks: [be-app, be-edge]
+    logging: *default-logging

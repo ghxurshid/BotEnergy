@@ -5,7 +5,10 @@
     "DefaultConnection": "Host=51.38.127.221;Port=5432;Database=botenergy_db;Username=botenergy_user;Password=WsfR5sDcVfABT2F1"
   },
   "Jwt": {
-    "Secret": ""
+    "Secret": "",
+    "Issuer": "http://localhost",
+    "ValidateIssuer": false,
+    "ClockSkewSeconds": 30
   },
   "Seed": {
     "AdminPassword": ""
@@ -16,21 +19,38 @@
     "MaxAttempts": 5
   },
   "RateLimit": {
-    "PermitPerMinute": 100
+    "PermitPerMinute": 100,
+    "GlobalPerMinute": 1000,
+    "AuthPerMinute": 100,
+    "PerUserBurst": 500,
+    "PerUserPerMinute": 300
   },
   "Cors": {
     "AllowedOrigins": []
+  },
+  "Swagger": {
+    "Enabled": true
+  },
+  "Migrate": {
+    "AutoApply": true
+  },
+  "Observability": {
+    "ConsoleJsonLogs": false,
+    "OtlpEndpoint": "",
+    "EnableTracing": false,
+    "EnableMetrics": true
   },
   "Mqtt": {
     "BrokerHost": "localhost",
     "BrokerPort": 1883,
     "Username": "",
     "Password": "",
-    "ClientId": "botenergy-device-api-dev",
+    "ClientId": "botenergy-session-api-dev",
     "UseTls": false,
     "AllowUntrustedCertificates": false,
     "ClientCertificatePath": null,
-    "ClientCertificatePassword": null
+    "ClientCertificatePassword": null,
+    "SharedSubscriptionGroup": ""
   },
   "Redis": {
     "ConnectionString": "localhost:6379"

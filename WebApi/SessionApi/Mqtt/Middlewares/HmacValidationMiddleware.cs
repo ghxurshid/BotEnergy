@@ -1,3 +1,4 @@
+using CommonConfiguration.Observability;
 using Microsoft.Extensions.Logging;
 using SessionApi.Mqtt.Abstractions;
 
@@ -27,6 +28,7 @@ namespace SessionApi.Mqtt.Middlewares
                 _logger.LogWarning(
                     "[MQTT-IN] HMAC mos kelmadi id={Id} type={Type} serial={Serial}",
                     context.Envelope.Id, context.Envelope.Type, context.SerialNumber);
+                BotEnergyMetrics.RecordRejected("hmac", context.TopicKind.ToString());
                 return Task.CompletedTask;
             }
 

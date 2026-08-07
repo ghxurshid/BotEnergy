@@ -1,10 +1,12 @@
 ﻿using CommonConfiguration.Middlewares;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.OpenApi.Models;
 using Persistence.Context;
 using Persistence.Seed;
 using Microsoft.AspNetCore.Cors.Infrastructure;
@@ -21,6 +23,17 @@ namespace CommonConfiguration.ConfigurationExtensions
 
         public static async Task ApplyMigrationsAsync(this WebApplication app)
         {
+            // Production'da migratsiya alohida Migrator konteyneri orqali bir marta qo'llanadi
+            // (deploy pipeline'ida servislardan OLDIN) — 7 API'ning parallel MigrateAsync
+            // poygasi va noto'g'ri migratsiyaning jimgina prodga chiqishi shu bilan yo'qoladi.
+            // Migrate:AutoApply=false bo'lsa bu metod hech narsa qilmaydi.
+            if (!app.Configuration.GetValue("Migrate:AutoApply", true))
+            {
+                app.Services.GetRequiredService<ILogger<AppDbContext>>()
+                    .LogInformation("Migrate:AutoApply=false — migratsiya bu jarayonda qo'llanmaydi (Migrator mas'ul).");
+                return;
+            }
+
             using var scope = app.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var logger = scope.ServiceProvider.GetRequiredService<ILogger<AppDbContext>>();
@@ -130,6 +143,60 @@ namespace CommonConfiguration.ConfigurationExtensions
         {
             if (app.Configuration.GetValue<bool>("Hosting:UseHttps"))
                 app.UseHttpsRedirection();
+            return app;
+        }
+
+        /// <summary>
+        /// Liveness va readiness'ni ajratib map qiladi:
+        /// <list type="bullet">
+        /// <item><c>/health/live</c> — hech qanday check ishlatmaydi. "Jarayon javob beryaptimi".
+        /// Docker healthcheck / systemd watchdog shu endpoint'ni so'raydi.</item>
+        /// <item><c>/health/ready</c> — "ready" tegli check'lar (DB, Redis). YARP active health
+        /// check shu endpoint'ga qaraydi: bog'liqlik yiqilsa trafik boshqa replikaga o'tadi,
+        /// lekin konteyner restart qilinmaydi.</item>
+        /// <item><c>/health</c> — orqaga moslik uchun, /health/ready bilan bir xil.</item>
+        /// </list>
+        /// </summary>
+        public static WebApplication MapBotEnergyHealthChecks(this WebApplication app)
+        {
+            app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+            app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+            app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+            return app;
+        }
+
+        /// <summary>
+        /// Swagger'ni faqat <c>Swagger:Enabled</c> true bo'lsa yoqadi (Production'da default false).
+        /// Reverse proxy ortida ishlaganda <c>servers</c> URL'i gateway prefiksiga moslanadi —
+        /// aks holda Swagger UI'dagi "Try it out" 404 qaytaradi.
+        /// </summary>
+        public static WebApplication UseSwaggerIfEnabled(this WebApplication app)
+        {
+            if (!app.Configuration.GetValue("Swagger:Enabled", true))
+                return app;
+
+            app.UseSwagger(options =>
+            {
+                options.PreSerializeFilters.Add((document, request) =>
+                {
+                    // Gateway YARP transform orqali yuboradi: X-Forwarded-Prefix: /api/auth
+                    var prefix = request.Headers["X-Forwarded-Prefix"].FirstOrDefault();
+                    if (!string.IsNullOrWhiteSpace(prefix))
+                        document.Servers = new List<OpenApiServer> { new() { Url = prefix } };
+                });
+            });
+            app.UseSwaggerUI();
+            return app;
+        }
+
+        /// <summary>
+        /// Nginx/YARP ortida haqiqiy klient IP va sxemani tiklaydi.
+        /// Busiz <c>RemoteIpAddress</c> proxy IP'si bo'lib qoladi va IP bo'yicha rate limiting
+        /// butunlay buziladi — barcha foydalanuvchilar bitta partition'ga tushadi.
+        /// </summary>
+        public static WebApplication UseProxyForwardedHeaders(this WebApplication app)
+        {
+            app.UseForwardedHeaders();
             return app;
         }
 

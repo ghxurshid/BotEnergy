@@ -9,6 +9,7 @@ using Domain.Interfaces.Payme;
 using Domain.Repositories;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -151,16 +152,29 @@ namespace CommonConfiguration.ConfigurationExtensions
                 ? acceptedAudiences
                 : Domain.Auth.JwtAudiences.All;
 
+            // Issuer tekshiruvi: Jwt:ValidateIssuer true bo'lsa Jwt:Issuer majburiy.
+            // Boshqa tizim bir xil secret bilan token yasab yuborishining oldini oladi.
+            var validateIssuer = config.GetValue("Jwt:ValidateIssuer", false);
+            var issuer = config["Jwt:Issuer"];
+            if (validateIssuer && string.IsNullOrWhiteSpace(issuer))
+                throw new InvalidOperationException(
+                    "Jwt:ValidateIssuer true, lekin Jwt:Issuer berilmagan. Konfiguratsiyaga Jwt:Issuer qo'shing.");
+
+            var clockSkewSeconds = config.GetValue("Jwt:ClockSkewSeconds", 30);
+
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
-                        ValidateIssuer = false,
+                        ValidateIssuer = validateIssuer,
+                        ValidIssuer = issuer,
                         ValidateAudience = true,
                         ValidAudiences = audiences,
                         ValidateLifetime = true,
                         ValidateIssuerSigningKey = true,
+                        // Default 5 daqiqa juda keng — muddati tugagan token shuncha vaqt qabul qilinadi.
+                        ClockSkew = TimeSpan.FromSeconds(clockSkewSeconds),
                         IssuerSigningKey = new SymmetricSecurityKey(
                             Encoding.UTF8.GetBytes(GetJwtSecret(config)))
                     };
@@ -216,6 +230,24 @@ namespace CommonConfiguration.ConfigurationExtensions
             return services;
         }
 
+        /// <summary>
+        /// Nginx/YARP ortida ishlash uchun X-Forwarded-* header'larini qabul qiladi.
+        /// KnownNetworks/KnownProxies tozalanadi, chunki proxy Docker tarmog'ida turadi va
+        /// IP'si oldindan ma'lum emas — tashqi dunyo bu header'larni bevosita yubora olmaydi,
+        /// zanjirdagi yagona kirish nuqtasi Nginx.
+        /// </summary>
+        public static IServiceCollection AddProxyForwardedHeaders(this IServiceCollection services)
+        {
+            services.Configure<ForwardedHeadersOptions>(options =>
+            {
+                options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+                options.ForwardLimit = 2; // Nginx → YARP
+                options.KnownNetworks.Clear();
+                options.KnownProxies.Clear();
+            });
+            return services;
+        }
+
         public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
         {
             var connectionString = config.GetConnectionString("DefaultConnection");
@@ -231,10 +263,13 @@ namespace CommonConfiguration.ConfigurationExtensions
                 .ConfigureWarnings(w =>
                     w.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
-            // /health endpoint uchun (Program.cs'da app.MapHealthChecks("/health") kerak).
+            // Health check'lar "ready" tegi bilan — Program.cs'da app.MapBotEnergyHealthChecks()
+            // ularni /health/ready ga bog'laydi. /health/live esa hech qanday check'ni
+            // ishlatmaydi: u faqat "jarayon javob beryaptimi" degan savolga javob beradi,
+            // shuning uchun DB sekinlashganda konteyner restart loop'iga tushmaydi.
             services.AddHealthChecks()
-                .AddCheck<HealthChecks.DbHealthCheck>("database")
-                .AddCheck<HealthChecks.RedisHealthCheck>("redis");
+                .AddCheck<HealthChecks.DbHealthCheck>("database", tags: new[] { "ready" })
+                .AddCheck<HealthChecks.RedisHealthCheck>("redis", tags: new[] { "ready" });
 
             return services;
         }
@@ -341,7 +376,13 @@ namespace CommonConfiguration.ConfigurationExtensions
         public static IServiceCollection RegisterAuthServices(this IServiceCollection services, IConfiguration config)
         {
             // Imzolash tekshirish bilan bir xil secret'dan foydalanadi (GetJwtSecret — yagona manba).
-            services.AddSingleton(new Domain.Auth.JwtSettings { Secret = GetJwtSecret(config) });
+            services.AddSingleton(new Domain.Auth.JwtSettings
+            {
+                Secret = GetJwtSecret(config),
+                // Issuer faqat ValidateIssuer yoqilganda yoziladi — aks holda eski
+                // tekshiruvchilar (issuer kutmaydiganlar) bilan mos qoladi.
+                Issuer = config.GetValue("Jwt:ValidateIssuer", false) ? config["Jwt:Issuer"] : null
+            });
 
             // OTP: test kodi (123456) faqat config ruxsat bersa (Development) ishlaydi.
             services.AddSingleton(new Domain.Auth.OtpSettings
@@ -354,7 +395,13 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IPlatformAuthService, PlatformAuthService>();
             services.AddScoped<ITokenService, TokenService>();
-            services.AddSingleton<IOtpService, OtpService>();
+
+            // OTP holati Redis'da — AuthApi bir nechta replikaga chiqqanda 1-instansiyada
+            // yaratilgan kod 2-instansiyada topilishi uchun. Redis yiqilsa in-memory fallback.
+            // AddRedisServices() AuthApi'da baribir chaqirilgan (IRefreshTokenStore uchun).
+            services.AddSingleton<OtpService>();
+            services.AddSingleton<Redis.RedisOtpService>();
+            services.AddSingleton<IOtpService, Redis.ResilientOtpService>();
 
             // Auth servislar repository larga bog'liq (CommonConfiguration AuthApi'da
             // RegisterServices chaqirmasligi mumkin, shuning uchun shu yerda ham ro'yxatga olamiz).

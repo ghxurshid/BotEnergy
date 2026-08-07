@@ -61,6 +61,7 @@ namespace Application.Services
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
+                issuer: string.IsNullOrWhiteSpace(_settings.Issuer) ? null : _settings.Issuer,
                 audience: audience,
                 expires: DateTime.Now.AddMinutes(_settings.AccessTokenMinutes),
                 claims: claims,

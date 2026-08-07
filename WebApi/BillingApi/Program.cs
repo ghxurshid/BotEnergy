@@ -1,6 +1,7 @@
 using CommonConfiguration.ConfigurationExtensions;
 using CommonConfiguration.ConfigurationServices;
 using CommonConfiguration.Filters;
+using CommonConfiguration.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddBotEnergyLogging("BillingApi");
@@ -25,15 +26,18 @@ builder.Services.AddRedisServices(builder.Configuration);
 builder.Services.AddJwtAuthentication(builder.Configuration, acceptedAudiences: Domain.Auth.JwtAudiences.Platform);
 
 builder.Services.AddSimulatorCors(builder.Configuration);
+builder.Services.AddProxyForwardedHeaders();
+builder.Services.AddBotEnergyObservability(builder.Configuration, "BillingApi");
 
 var app = builder.Build();
 
 await app.ApplyMigrationsAsync();
 
+app.UseProxyForwardedHeaders();
+
 app.UseCustomExceptionMiddleware();
 
-app.UseSwagger();
-app.UseSwaggerUI();
+app.UseSwaggerIfEnabled();
 
 app.UseHttpsIfEnabled();
 
@@ -42,7 +46,8 @@ app.UseSimulatorCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHealthChecks("/health");
+app.MapBotEnergyHealthChecks();
+app.MapBotEnergyMetrics();
 app.MapControllers();
 
 app.RunApi("BillingApi", 5003);

@@ -1,36 +1,34 @@
 #!/bin/bash
-set -e
+# ─────────────────────────────────────────────────────────────────────────────
+# ESKIRGAN — bu skript endi ishlatilmaydi.
+#
+# Ilgari nima qilardi: prod mashinada `dotnet publish`, so'ng 7 ta servis
+# katalogini `rm -rf` qilib qayta nusxalash va systemd unit'larni restart qilish.
+#
+# Nega olib tashlandi:
+#   • Build prod mashinada bajarilardi — deploy paytida CPU/RAM cho'qqisi va
+#     prodda .NET SDK talab qilinardi.
+#   • Har push'da 7 ta servis ham qayta quriladi va restart qilinardi.
+#   • `rm -rf` dan keyin nusxalashgacha bo'lgan oynada fayllar yo'q edi;
+#     ROLLBACK IMKONI YO'Q edi.
+#   • Health tekshiruvi yo'q — servis ko'tarilmasa ham "✅ muvaffaqiyatli" deyilardi.
+#
+# Yangi oqim: .github/workflows/deploy.yml
+#   build (CI runner) → GHCR → migration (bir marta) → rolling update
+#   → health gate → smoke test → kerak bo'lsa avtomatik rollback
+#
+# Qo'lda deploy qilish kerak bo'lsa (serverda):
+#   cd /opt/botenergy
+#   echo "TAG=<git-sha>" > .env
+#   docker compose pull && docker compose up -d --wait
+#
+# To'liq tavsif: docs/PRODUCTION_ARCHITECTURE.md §13
+# ─────────────────────────────────────────────────────────────────────────────
 
-echo "🚀 BotEnergy avtomatik deploy boshlandi – Hammasi bir joyda!"
-
-# Mikroservicelar
-SERVICES=("AdminApi" "AuthApi" "BillingApi" "DeviceApi" "PaymentApi" "UserApi" "SessionApi")
-
-for SERVICE in "${SERVICES[@]}"; do
-  echo "🔨 $SERVICE ni build qilmoqda va /home/ubuntu/botenergy/$SERVICE ga joylashtirmoqda..."
-
-  # WebApi ichiga kirish
-  cd "WebApi/$SERVICE" || { echo "❌ WebApi/$SERVICE topilmadi!"; exit 1; }
-
-  # 1. NuGet paketlarni yuklash (eng muhim qadam!)
-  echo "📦 NuGet restore qilmoqda..."
-  dotnet restore
-
-  # 2. Publish (Release rejimida)
-  dotnet publish -c Release -o /tmp/$SERVICE
-
-  # Eski versiyani tozalash va yangisini joylashtirish
-  sudo rm -rf /home/ubuntu/botenergy/$SERVICE
-  sudo mkdir -p /home/ubuntu/botenergy/$SERVICE
-  sudo cp -r /tmp/$SERVICE/* /home/ubuntu/botenergy/$SERVICE/
-  sudo chown -R ubuntu:ubuntu /home/ubuntu/botenergy/$SERVICE
-
-  # Systemd xizmatini qayta ishga tushirish
-  sudo systemctl restart "botenergy-$SERVICE" || echo "⚠️  Xizmat topilmadi (birinchi marta bo‘lsa systemd unit yarating)"
-
-  echo "✅ $SERVICE muvaffaqiyatli deploy qilindi!"
-
-  cd ../..   # Solution ildiziga qaytish
-done
-
-echo "🎉 Deploy to‘liq yakunlandi! BotEnergy stansiyasi yangi versiyada – mijozlar uchun hammasi bir joyda va tez!"
+echo "❌ deploy.sh eskirgan va o'chirilgan."
+echo ""
+echo "   Deploy endi GitHub Actions orqali: .github/workflows/deploy.yml"
+echo "   Qo'lda: cd /opt/botenergy && docker compose pull && docker compose up -d --wait"
+echo ""
+echo "   Batafsil: docs/PRODUCTION_ARCHITECTURE.md §13, docs/MANUAL_TASKS.md"
+exit 1

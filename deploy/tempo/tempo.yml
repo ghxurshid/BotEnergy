@@ -1,0 +1,48 @@
+# Tempo — distributed tracing backend, bitta node, lokal disk.
+# Servislar OTLP/gRPC (4317) orqali yuboradi: Observability:OtlpEndpoint=http://tempo:4317
+
+server:
+  http_listen_port: 3200
+  log_level: warn
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    # Trace'lar 7 kun saqlanadi — incident tekshiruvi uchun yetarli,
+    # metrikalar (30 kun) va loglar (30 kun) uzoqroq turadi.
+    block_retention: 168h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal
+
+# Service graph va span metrikalarini Prometheus'ga yozish.
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics]

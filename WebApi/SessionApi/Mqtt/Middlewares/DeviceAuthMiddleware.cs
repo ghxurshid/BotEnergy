@@ -1,4 +1,5 @@
 using Domain.Repositories;
+using CommonConfiguration.Observability;
 using Microsoft.Extensions.Logging;
 using SessionApi.Mqtt.Abstractions;
 
@@ -27,6 +28,7 @@ namespace SessionApi.Mqtt.Middlewares
                 _logger.LogWarning(
                     "[MQTT-IN] Device topilmadi serial={Serial} topic={Topic}",
                     context.SerialNumber, context.Topic);
+                BotEnergyMetrics.RecordRejected("device_not_found", context.TopicKind.ToString());
                 return;
             }
 

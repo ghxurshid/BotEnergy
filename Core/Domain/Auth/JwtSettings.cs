@@ -10,5 +10,12 @@ namespace Domain.Auth
     {
         public required string Secret { get; init; }
         public int AccessTokenMinutes { get; init; } = 15;
+
+        /// <summary>
+        /// Token'ga yoziladigan <c>iss</c> claim'i (config: Jwt:Issuer). Bo'sh bo'lsa yozilmaydi.
+        /// Tekshirish tomoni (AddJwtAuthentication) Jwt:ValidateIssuer true bo'lsa aynan shu
+        /// qiymatni kutadi — ikkalasi bitta konfiguratsiyadan oziqlanadi.
+        /// </summary>
+        public string? Issuer { get; init; }
     }
 }

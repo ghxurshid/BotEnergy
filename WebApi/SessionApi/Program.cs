@@ -1,6 +1,7 @@
 using CommonConfiguration.ConfigurationExtensions;
 using CommonConfiguration.ConfigurationServices;
 using CommonConfiguration.Filters;
+using CommonConfiguration.Observability;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using SessionApi.Hubs;
@@ -29,7 +30,22 @@ builder.Services.AddControllers(options =>
     options.Filters.AddService<IdempotencyFilter>();
 });
 
-builder.Services.AddSignalR();
+// SignalR + Redis backplane. Backplane'siz ikkinchi SessionApi replikasi JIMGINA noto'g'ri
+// ishlaydi: MQTT telemetriyasi 1-instansiyaga keladi, mobil klient esa 2-instansiyaga ulangan
+// bo'lishi mumkin — xabar yetib bormaydi va hech qanday xato ham chiqmaydi.
+// Redis:ConnectionString bo'sh bo'lsa (yoki Redis yo'q bo'lsa) backplane'siz ishlaydi.
+var signalR = builder.Services.AddSignalR();
+var redisConnectionString = builder.Configuration["Redis:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    signalR.AddStackExchangeRedis(redisConnectionString, options =>
+    {
+        options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("botenergy-signalr");
+        // Redis yiqilsa app ko'tarilishi kerak — bitta instansiyada backplane'siz ham ishlaydi.
+        options.Configuration.AbortOnConnectFail = false;
+    });
+}
+
 builder.Services.AddSwaggerWithJwtAuth(
     "Session API", "v1",
     "Sessiya/process/payment boshqaruvi, MQTT bridge, SignalR real-time");
@@ -58,6 +74,8 @@ builder.Services.AddMqttPipeline(typeof(Program).Assembly);
 builder.Services.AddJwtAuthentication(builder.Configuration, signalRHubPath: "/hubs", acceptedAudiences: Domain.Auth.JwtAudiences.Customer);
 
 builder.Services.AddSimulatorCors(builder.Configuration);
+builder.Services.AddProxyForwardedHeaders();
+builder.Services.AddBotEnergyObservability(builder.Configuration, "SessionApi");
 
 var app = builder.Build();
 
@@ -65,10 +83,11 @@ app.Urls.Clear();
 
 await app.ApplyMigrationsAsync();
 
+app.UseProxyForwardedHeaders();
+
 app.UseCustomExceptionMiddleware();
 
-app.UseSwagger();
-app.UseSwaggerUI();
+app.UseSwaggerIfEnabled();
 
 app.UseHttpsIfEnabled();
 
@@ -77,7 +96,8 @@ app.UseSimulatorCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHealthChecks("/health");
+app.MapBotEnergyHealthChecks();
+app.MapBotEnergyMetrics();
 app.MapControllers();
 app.MapHub<SessionHub>("/hubs/session");
 

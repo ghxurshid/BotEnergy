@@ -1,8 +1,11 @@
+using System.Diagnostics;
 using System.Text;
+using CommonConfiguration.Observability;
 using Domain.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MQTTnet.Client;
 using MQTTnet.Protocol;
 using SessionApi.Mqtt.Abstractions;
@@ -20,17 +23,20 @@ namespace SessionApi.Mqtt.Transport
         private readonly MqttConnection _connection;
         private readonly MqttPipeline _pipeline;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly MqttOptions _options;
         private readonly ILogger<MqttHost> _logger;
 
         public MqttHost(
             MqttConnection connection,
             MqttPipeline pipeline,
             IServiceScopeFactory scopeFactory,
+            IOptions<MqttOptions> options,
             ILogger<MqttHost> logger)
         {
             _connection = connection;
             _pipeline = pipeline;
             _scopeFactory = scopeFactory;
+            _options = options.Value;
             _logger = logger;
         }
 
@@ -64,11 +70,22 @@ namespace SessionApi.Mqtt.Transport
 
         private async Task SubscribeAllAsync(CancellationToken ct)
         {
-            await _connection.SubscribeAsync(MqttTopics.DeviceRequestSub, MqttQualityOfServiceLevel.AtLeastOnce, ct);
-            await _connection.SubscribeAsync(MqttTopics.DeviceResponseSub, MqttQualityOfServiceLevel.AtLeastOnce, ct);
-            await _connection.SubscribeAsync(MqttTopics.DeviceEventSub, MqttQualityOfServiceLevel.AtLeastOnce, ct);
-            await _connection.SubscribeAsync(MqttTopics.DeviceTelemetrySub, MqttQualityOfServiceLevel.AtMostOnce, ct);
-            await _connection.SubscribeAsync(MqttTopics.DeviceStateSub, MqttQualityOfServiceLevel.AtLeastOnce, ct);
+            // Shared subscription (Mqtt:SharedSubscriptionGroup) yoqilgan bo'lsa har bir xabarni
+            // guruhdagi FAQAT BITTA instansiya oladi — SessionApi'ni horizontal masshtablash
+            // shunga tayanadi. Guruh bo'sh bo'lsa (dev, Mosquitto) oddiy obuna ishlatiladi.
+            await _connection.SubscribeAsync(
+                _options.SubscriptionTopic(MqttTopics.DeviceRequestSub), MqttQualityOfServiceLevel.AtLeastOnce, ct);
+            await _connection.SubscribeAsync(
+                _options.SubscriptionTopic(MqttTopics.DeviceResponseSub), MqttQualityOfServiceLevel.AtLeastOnce, ct);
+            await _connection.SubscribeAsync(
+                _options.SubscriptionTopic(MqttTopics.DeviceEventSub), MqttQualityOfServiceLevel.AtLeastOnce, ct);
+            await _connection.SubscribeAsync(
+                _options.SubscriptionTopic(MqttTopics.DeviceTelemetrySub), MqttQualityOfServiceLevel.AtMostOnce, ct);
+
+            // state — retained snapshot. Har bir instansiya joriy holatni bilishi kerak,
+            // shuning uchun bu obuna HECH QACHON shared qilinmaydi.
+            await _connection.SubscribeAsync(
+                MqttTopics.DeviceStateSub, MqttQualityOfServiceLevel.AtLeastOnce, ct);
         }
 
         private async Task OnMessageAsync(MqttApplicationMessageReceivedEventArgs args)
@@ -80,8 +97,21 @@ namespace SessionApi.Mqtt.Transport
             if (parsed is null)
             {
                 _logger.LogWarning("[MQTT-IN] Topic noto'g'ri formatda: {Topic}", topic);
+                BotEnergyMetrics.RecordRejected("topic", "unknown");
                 return;
             }
+
+            var topicKind = parsed.Kind.ToString();
+            BotEnergyMetrics.RecordReceived(topicKind);
+
+            // Trace: qurilma yuborgan envelope'dagi traceparent bilan bog'lanadi (agar bor bo'lsa),
+            // shunda "mobil buyruq berdi → qurilma javob qaytardi" zanjiri bitta trace'da ko'rinadi.
+            using var activity = ObservabilityExtensions.ActivitySource.StartActivity(
+                $"mqtt receive {topicKind}", ActivityKind.Consumer);
+            activity?.SetTag("device.serial", parsed.SerialNumber);
+            activity?.SetTag("mqtt.topic", topic);
+
+            var stopwatch = Stopwatch.StartNew();
 
             using var scope = _scopeFactory.CreateScope();
 
@@ -104,6 +134,14 @@ namespace SessionApi.Mqtt.Transport
                     // LastSeenAt yangilash + offline→online edge bo'lsa DeviceStatusChanged{Online} chiqarish.
                     var deviceStatus = scope.ServiceProvider.GetRequiredService<IDeviceStatusService>();
                     await deviceStatus.MarkSeenAsync(parsed.SerialNumber);
+
+                    BotEnergyMetrics.RecordHandled(context.Envelope?.Type ?? topicKind);
+                }
+                else
+                {
+                    // Pipeline device'ni topa olmadi yoki middleware zanjiri to'xtatdi —
+                    // aniq sababni tegishli middleware o'zi yozadi.
+                    activity?.SetStatus(ActivityStatusCode.Error, "pipeline stopped");
                 }
             }
             catch (Exception ex)
@@ -111,6 +149,15 @@ namespace SessionApi.Mqtt.Transport
                 _logger.LogError(ex,
                     "[MQTT-IN] Pipeline ishlatishda kutilmagan xato topic={Topic}",
                     topic);
+                BotEnergyMetrics.RecordRejected("exception", topicKind);
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            }
+            finally
+            {
+                stopwatch.Stop();
+                BotEnergyMetrics.MqttPipelineDuration.Record(
+                    stopwatch.Elapsed.TotalMilliseconds,
+                    new KeyValuePair<string, object?>("kind", topicKind));
             }
         }
     }

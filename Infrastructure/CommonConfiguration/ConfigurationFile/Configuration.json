@@ -2,6 +2,7 @@
   "Hosting": {
     "UseHttps": false,
     "Ports": {
+      "Gateway": 8080,
       "AdminApi": 5001,
       "AuthApi": 5002,
       "BillingApi": 5003,
@@ -9,6 +10,266 @@
       "PaymentApi": 5005,
       "UserApi": 5006,
       "SessionApi": 5007
+    }
+  },
+
+  "Jwt": {
+    "Issuer": "https://company.uz",
+    "ValidateIssuer": false,
+    "ClockSkewSeconds": 30
+  },
+
+  "Swagger": {
+    "Enabled": true
+  },
+
+  "Migrate": {
+    "AutoApply": true
+  },
+
+  "RateLimit": {
+    "PermitPerMinute": 30,
+    "GlobalPerMinute": 300,
+    "AuthPerMinute": 10,
+    "PerUserBurst": 120,
+    "PerUserPerMinute": 60
+  },
+
+  "Observability": {
+    "ConsoleJsonLogs": false,
+    "OtlpEndpoint": "",
+    "EnableTracing": false,
+    "EnableMetrics": true
+  },
+
+  "Mqtt": {
+    "SharedSubscriptionGroup": "botenergy"
+  },
+
+  "ReverseProxy": {
+    "Routes": {
+      "auth": {
+        "ClusterId": "auth",
+        "Match": { "Path": "/api/auth/{**catch-all}" },
+        "RateLimiterPolicy": "auth-strict",
+        "Transforms": [
+          { "PathRemovePrefix": "/api/auth" },
+          { "PathPrefix": "/api" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/auth" }
+        ]
+      },
+      "user": {
+        "ClusterId": "user",
+        "Match": { "Path": "/api/user/{**catch-all}" },
+        "AuthorizationPolicy": "authenticated",
+        "RateLimiterPolicy": "per-user",
+        "Transforms": [
+          { "PathRemovePrefix": "/api/user" },
+          { "PathPrefix": "/api" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/user" }
+        ]
+      },
+      "admin": {
+        "ClusterId": "admin",
+        "Match": { "Path": "/api/admin/{**catch-all}" },
+        "AuthorizationPolicy": "authenticated",
+        "RateLimiterPolicy": "per-user",
+        "Transforms": [
+          { "PathRemovePrefix": "/api/admin" },
+          { "PathPrefix": "/api" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/admin" }
+        ]
+      },
+      "session": {
+        "ClusterId": "session",
+        "Match": { "Path": "/api/session/{**catch-all}" },
+        "AuthorizationPolicy": "authenticated",
+        "RateLimiterPolicy": "per-user",
+        "Transforms": [
+          { "PathRemovePrefix": "/api/session" },
+          { "PathPrefix": "/api" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/session" }
+        ]
+      },
+      "billing": {
+        "ClusterId": "billing",
+        "Match": { "Path": "/api/billing/{**catch-all}" },
+        "AuthorizationPolicy": "authenticated",
+        "RateLimiterPolicy": "per-user",
+        "Transforms": [
+          { "PathRemovePrefix": "/api/billing" },
+          { "PathPrefix": "/api" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/billing" }
+        ]
+      },
+      "payment": {
+        "ClusterId": "payment",
+        "Match": { "Path": "/api/payment/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/api/payment" },
+          { "PathPrefix": "/api" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/payment" }
+        ]
+      },
+      "device": {
+        "ClusterId": "device",
+        "Match": { "Path": "/api/device/{**catch-all}" },
+        "AuthorizationPolicy": "authenticated",
+        "RateLimiterPolicy": "per-user",
+        "Transforms": [
+          { "PathRemovePrefix": "/api/device" },
+          { "PathPrefix": "/api" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/device" }
+        ]
+      },
+      "hubs": {
+        "ClusterId": "session",
+        "Match": { "Path": "/hubs/{**catch-all}" }
+      },
+
+      // Swagger route'lari: Order=-1 bilan asosiy route'lardan OLDIN tekshiriladi va
+      // AuthorizationPolicy'siz — Swagger UI hujjatni tokensiz o'qiy olishi uchun.
+      // Production'da Swagger:Enabled=false, shuning uchun downstream baribir 404 qaytaradi.
+      "auth-swagger": {
+        "ClusterId": "auth",
+        "Order": -1,
+        "Match": { "Path": "/api/auth/swagger/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/api/auth" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/auth" }
+        ]
+      },
+      "user-swagger": {
+        "ClusterId": "user",
+        "Order": -1,
+        "Match": { "Path": "/api/user/swagger/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/api/user" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/user" }
+        ]
+      },
+      "admin-swagger": {
+        "ClusterId": "admin",
+        "Order": -1,
+        "Match": { "Path": "/api/admin/swagger/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/api/admin" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/admin" }
+        ]
+      },
+      "session-swagger": {
+        "ClusterId": "session",
+        "Order": -1,
+        "Match": { "Path": "/api/session/swagger/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/api/session" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/session" }
+        ]
+      },
+      "billing-swagger": {
+        "ClusterId": "billing",
+        "Order": -1,
+        "Match": { "Path": "/api/billing/swagger/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/api/billing" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/billing" }
+        ]
+      },
+      "payment-swagger": {
+        "ClusterId": "payment",
+        "Order": -1,
+        "Match": { "Path": "/api/payment/swagger/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/api/payment" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/payment" }
+        ]
+      },
+      "device-swagger": {
+        "ClusterId": "device",
+        "Order": -1,
+        "Match": { "Path": "/api/device/swagger/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/api/device" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/device" }
+        ]
+      }
+    },
+
+    "Clusters": {
+      "auth": {
+        "LoadBalancingPolicy": "PowerOfTwoChoices",
+        "HealthCheck": {
+          "Active": {
+            "Enabled": true,
+            "Interval": "00:00:10",
+            "Timeout": "00:00:05",
+            "Policy": "ConsecutiveFailures",
+            "Path": "/health/ready"
+          },
+          "Passive": { "Enabled": true, "Policy": "TransportFailureRate", "ReactivationPeriod": "00:00:30" }
+        },
+        "Destinations": { "auth-1": { "Address": "http://localhost:5002/" } }
+      },
+      "user": {
+        "LoadBalancingPolicy": "PowerOfTwoChoices",
+        "HealthCheck": {
+          "Active": { "Enabled": true, "Interval": "00:00:10", "Timeout": "00:00:05", "Policy": "ConsecutiveFailures", "Path": "/health/ready" },
+          "Passive": { "Enabled": true, "Policy": "TransportFailureRate", "ReactivationPeriod": "00:00:30" }
+        },
+        "Destinations": { "user-1": { "Address": "http://localhost:5006/" } }
+      },
+      "admin": {
+        "LoadBalancingPolicy": "PowerOfTwoChoices",
+        "HealthCheck": {
+          "Active": { "Enabled": true, "Interval": "00:00:10", "Timeout": "00:00:05", "Policy": "ConsecutiveFailures", "Path": "/health/ready" },
+          "Passive": { "Enabled": true, "Policy": "TransportFailureRate", "ReactivationPeriod": "00:00:30" }
+        },
+        "Destinations": { "admin-1": { "Address": "http://localhost:5001/" } }
+      },
+      "billing": {
+        "LoadBalancingPolicy": "PowerOfTwoChoices",
+        "HealthCheck": {
+          "Active": { "Enabled": true, "Interval": "00:00:10", "Timeout": "00:00:05", "Policy": "ConsecutiveFailures", "Path": "/health/ready" },
+          "Passive": { "Enabled": true, "Policy": "TransportFailureRate", "ReactivationPeriod": "00:00:30" }
+        },
+        "Destinations": { "billing-1": { "Address": "http://localhost:5003/" } }
+      },
+      "payment": {
+        "LoadBalancingPolicy": "PowerOfTwoChoices",
+        "HealthCheck": {
+          "Active": { "Enabled": true, "Interval": "00:00:10", "Timeout": "00:00:05", "Policy": "ConsecutiveFailures", "Path": "/health/ready" },
+          "Passive": { "Enabled": true, "Policy": "TransportFailureRate", "ReactivationPeriod": "00:00:30" }
+        },
+        "Destinations": { "payment-1": { "Address": "http://localhost:5005/" } }
+      },
+      "device": {
+        "LoadBalancingPolicy": "PowerOfTwoChoices",
+        "HealthCheck": {
+          "Active": { "Enabled": true, "Interval": "00:00:10", "Timeout": "00:00:05", "Policy": "ConsecutiveFailures", "Path": "/health/ready" },
+          "Passive": { "Enabled": true, "Policy": "TransportFailureRate", "ReactivationPeriod": "00:00:30" }
+        },
+        "Destinations": { "device-1": { "Address": "http://localhost:5004/" } }
+      },
+      "session": {
+        "LoadBalancingPolicy": "PowerOfTwoChoices",
+        "SessionAffinity": {
+          "Enabled": true,
+          "Policy": "Cookie",
+          "AffinityKeyName": ".BotEnergy.Affinity",
+          "FailurePolicy": "Redistribute",
+          "Cookie": { "SameSite": "None", "SecurePolicy": "Always", "HttpOnly": true }
+        },
+        "HttpRequest": {
+          "ActivityTimeout": "00:05:00",
+          "Version": "1.1",
+          "VersionPolicy": "RequestVersionOrLower"
+        },
+        "HealthCheck": {
+          "Active": { "Enabled": true, "Interval": "00:00:10", "Timeout": "00:00:05", "Policy": "ConsecutiveFailures", "Path": "/health/ready" },
+          "Passive": { "Enabled": true, "Policy": "TransportFailureRate", "ReactivationPeriod": "00:00:30" }
+        },
+        "Destinations": { "session-1": { "Address": "http://localhost:5007/" } }
+      }
     }
   }
 }

@@ -1,3 +1,4 @@
+using CommonConfiguration.Observability;
 using Microsoft.Extensions.Logging;
 using SessionApi.Mqtt.Abstractions;
 
@@ -20,6 +21,7 @@ namespace SessionApi.Mqtt.Middlewares
                 _logger.LogWarning(
                     "[MQTT-IN] Envelope parse rad etildi reason={Reason} serial={Serial}",
                     error, context.SerialNumber);
+                BotEnergyMetrics.RecordRejected("deserialize", context.TopicKind.ToString());
                 return Task.CompletedTask; // pipeline to'xtaydi — next() chaqirilmaydi
             }
 

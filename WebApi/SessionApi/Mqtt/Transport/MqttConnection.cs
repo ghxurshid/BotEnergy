@@ -39,9 +39,12 @@ namespace SessionApi.Mqtt.Transport
 
         public async Task ConnectAsync(CancellationToken ct)
         {
+            // ClientId har instansiyada unikal (EffectiveClientId) — aks holda ikkinchi
+            // SessionApi replikasi birinchisini brokerdan uzib tashlaydi va ikkalasi
+            // cheksiz reconnect tsikliga tushadi.
             var opts = new MqttClientOptionsBuilder()
                 .WithTcpServer(_options.BrokerHost, _options.BrokerPort)
-                .WithClientId(_options.ClientId)
+                .WithClientId(_options.EffectiveClientId)
                 .WithCleanSession(false);
 
             if (!string.IsNullOrEmpty(_options.Username))
@@ -53,8 +56,8 @@ namespace SessionApi.Mqtt.Transport
             await _client.ConnectAsync(opts.Build(), ct);
 
             _logger.LogInformation(
-                "MQTT brokerga ulandi: {Host}:{Port} (TLS={Tls})",
-                _options.BrokerHost, _options.BrokerPort, _options.UseTls);
+                "MQTT brokerga ulandi: {Host}:{Port} (TLS={Tls}, clientId={ClientId})",
+                _options.BrokerHost, _options.BrokerPort, _options.UseTls, _options.EffectiveClientId);
         }
 
         public async Task SubscribeAsync(string topic, MqttQualityOfServiceLevel qos, CancellationToken ct)

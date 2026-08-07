@@ -1,4 +1,5 @@
 using Domain.Interfaces;
+using CommonConfiguration.Observability;
 using Microsoft.Extensions.Logging;
 using SessionApi.Mqtt.Abstractions;
 
@@ -40,6 +41,7 @@ namespace SessionApi.Mqtt.Middlewares
                 _logger.LogWarning(
                     "[MQTT-IN] Replay rad etildi id={Id} type={Type} serial={Serial}",
                     context.Envelope.Id, context.Envelope.Type, context.SerialNumber);
+                BotEnergyMetrics.RecordRejected("replay", context.TopicKind.ToString());
                 return;
             }
 

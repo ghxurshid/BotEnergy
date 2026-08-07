@@ -1,6 +1,7 @@
 using CommonConfiguration.ConfigurationExtensions;
 using CommonConfiguration.ConfigurationServices;
 using CommonConfiguration.Filters;
+using CommonConfiguration.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddBotEnergyLogging("AuthApi");
@@ -28,16 +29,21 @@ builder.Services.AddRedisServices(builder.Configuration);
 builder.Services.AddIpRateLimiting(builder.Configuration);
 
 builder.Services.AddSimulatorCors(builder.Configuration);
+builder.Services.AddProxyForwardedHeaders();
+builder.Services.AddBotEnergyObservability(builder.Configuration, "AuthApi");
 
 var app = builder.Build();
 
 await app.ApplyMigrationsAsync();
 
+// Rate limiting IP bo'yicha ishlaydi — forwarded header'lar limiterdan OLDIN qo'llanishi shart,
+// aks holda barcha so'rovlar gateway IP'siga tushib bitta partition'ni to'ldiradi.
+app.UseProxyForwardedHeaders();
+
 app.UseCustomExceptionMiddleware();
 
 // Configure the HTTP request pipeline.
-app.UseSwagger();
-app.UseSwaggerUI();
+app.UseSwaggerIfEnabled();
 
 app.UseHttpsIfEnabled();
 
@@ -47,7 +53,8 @@ app.UseRateLimiter();
 
 app.UseAuthorization();
 
-app.MapHealthChecks("/health");
+app.MapBotEnergyHealthChecks();
+app.MapBotEnergyMetrics();
 app.MapControllers();
 
 app.RunApi("AuthApi", 5002);

@@ -1,6 +1,7 @@
 using CommonConfiguration.ConfigurationExtensions;
 using CommonConfiguration.ConfigurationServices;
 using CommonConfiguration.Filters;
+using CommonConfiguration.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddBotEnergyLogging("PaymentApi");
@@ -25,15 +26,19 @@ builder.Services.AddRedisServices(builder.Configuration);
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
 builder.Services.AddSimulatorCors(builder.Configuration);
+builder.Services.AddProxyForwardedHeaders();
+builder.Services.AddBotEnergyObservability(builder.Configuration, "PaymentApi");
 
 var app = builder.Build();
 
 await app.ApplyMigrationsAsync();
 
+// Payme callback'ida so'rov manbasini to'g'ri ko'rish uchun ham kerak.
+app.UseProxyForwardedHeaders();
+
 app.UseCustomExceptionMiddleware();
 
-app.UseSwagger();
-app.UseSwaggerUI();
+app.UseSwaggerIfEnabled();
 
 app.UseHttpsIfEnabled();
 
@@ -42,7 +47,8 @@ app.UseSimulatorCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHealthChecks("/health");
+app.MapBotEnergyHealthChecks();
+app.MapBotEnergyMetrics();
 app.MapControllers();
 
 app.RunApi("PaymentApi", 5005);

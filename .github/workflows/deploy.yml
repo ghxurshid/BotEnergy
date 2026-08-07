@@ -1,20 +1,168 @@
-name: BotEnergy Auto Deploy
+name: BotEnergy Deploy
+
+# Eski oqim prod mashinada `dotnet publish` qilar, 7 servisni har push'da restart qilar,
+# health tekshirmas va rollback imkoni yo'q edi. Yangi oqim:
+#   build (CI runner) → GHCR → migration (bitta marta) → rolling update → smoke test → kerak bo'lsa rollback
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Rollback uchun image tegi (bo'sh bo'lsa joriy commit)"
+        required: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/botenergy
 
 jobs:
-  deploy:
+  # ── 1. Build: prod mashinada EMAS, CI runnerda ────────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        service:
+          - Gateway
+          - Migrator
+          - AuthApi
+          - UserApi
+          - AdminApi
+          - SessionApi
+          - BillingApi
+          - PaymentApi
+          - DeviceApi
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Servis nomini kichik harfga (GHCR faqat lowercase qabul qiladi)
+        id: name
+        run: echo "lower=$(echo '${{ matrix.service }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Build va push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          build-args: |
+            SERVICE=${{ matrix.service }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ steps.name.outputs.lower }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ steps.name.outputs.lower }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # ── 2. Migratsiya: BITTA marta, servislardan OLDIN ────────────────────────
+  migrate:
+    needs: build
     runs-on: self-hosted
     steps:
-      - name: Hammasi bir joyda – kodni yuklab olish
-        uses: actions/checkout@v4
-
-      - name: Deploy skriptini ishga tushirish
+      - name: Kutilayotgan migratsiyalarni ko'rsatish
         run: |
-          chmod +x deploy.sh
-          ./deploy.sh
+          docker run --rm \
+            --network botenergy_be-data \
+            --env-file /etc/botenergy/botenergy.env \
+            "ghcr.io/${{ env.IMAGE_PREFIX }}-migrator:${{ github.sha }}" --list
 
-      - name: Muvaffaqiyatli deploy – xizmatlarni qayta ishga tushirish
-        run: echo "✅ BotEnergy mikro xizmatlari yangilandi! Hammasi bir joyda ishlamoqda."
+      - name: Migratsiya + seed
+        run: |
+          docker run --rm \
+            --network botenergy_be-data \
+            --env-file /etc/botenergy/botenergy.env \
+            "ghcr.io/${{ env.IMAGE_PREFIX }}-migrator:${{ github.sha }}"
+
+  # ── 3. Deploy: rolling update + health gate + rollback ────────────────────
+  deploy:
+    needs: migrate
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy konfiguratsiyasini sinxronlash
+        run: |
+          sudo rsync -a --delete deploy/nginx/      /opt/botenergy/nginx/
+          sudo rsync -a --delete deploy/emqx/       /opt/botenergy/emqx/
+          sudo rsync -a --delete deploy/prometheus/ /opt/botenergy/prometheus/
+          sudo rsync -a --delete deploy/loki/       /opt/botenergy/loki/
+          sudo rsync -a --delete deploy/tempo/      /opt/botenergy/tempo/
+          sudo rsync -a --delete deploy/grafana/    /opt/botenergy/grafana/
+          sudo rsync -a --delete deploy/rabbitmq/   /opt/botenergy/rabbitmq/
+          sudo cp deploy/docker-compose.yml               /opt/botenergy/
+          sudo cp deploy/docker-compose.observability.yml /opt/botenergy/
+
+      - name: Oldingi TAG ni saqlash (rollback uchun)
+        run: |
+          cd /opt/botenergy
+          [ -f .env ] && cp .env .env.prev || true
+
+      - name: Yangi TAG
+        run: |
+          cd /opt/botenergy
+          {
+            echo "TAG=${{ github.event.inputs.tag || github.sha }}"
+            echo "IMAGE_PREFIX=${{ env.IMAGE_PREFIX }}"
+          } > .env
+
+      - name: Image'larni tortish
+        run: |
+          cd /opt/botenergy
+          docker compose pull
+
+      - name: Rolling update — servislar birma-bir
+        run: |
+          cd /opt/botenergy
+          for svc in authapi userapi adminapi billingapi paymentapi deviceapi sessionapi gateway; do
+            echo "▶ $svc yangilanmoqda..."
+            docker compose up -d --no-deps --wait --wait-timeout 120 "$svc"
+          done
+          docker compose up -d --no-deps nginx
+
+      - name: Smoke test
+        run: |
+          set -e
+          echo "▶ Edge health..."
+          curl -fsS --max-time 10 https://company.uz/health
+          echo "▶ Gateway route (401 kutiladi — endpoint tirik, token yo'q)..."
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://company.uz/api/user/User/Profile)
+          if [ "$code" != "401" ] && [ "$code" != "403" ]; then
+            echo "❌ Kutilmagan status: $code"; exit 1
+          fi
+          echo "▶ Barcha konteynerlar healthy?"
+          cd /opt/botenergy
+          unhealthy=$(docker compose ps --format '{{.Name}} {{.Health}}' | grep -v healthy | grep -v '^$' || true)
+          if [ -n "$unhealthy" ]; then echo "❌ Sog'lom bo'lmagan konteynerlar:"; echo "$unhealthy"; exit 1; fi
+          echo "✅ Smoke test o'tdi"
+
+      - name: Muvaffaqiyatsiz bo'lsa — oldingi tegga rollback
+        if: failure()
+        run: |
+          cd /opt/botenergy
+          if [ -f .env.prev ]; then
+            echo "⟲ Rollback boshlandi"
+            cp .env.prev .env
+            docker compose pull
+            docker compose up -d --wait --wait-timeout 180
+            echo "⟲ Rollback yakunlandi. DIQQAT: migratsiya QAYTARILMAYDI —"
+            echo "   agar bu deploy'da sxema o'zgargan bo'lsa, qo'lda ko'rib chiqing."
+          else
+            echo "⚠ .env.prev yo'q — avtomatik rollback imkonsiz."
+          fi
+          exit 1
+
+      - name: Eski image'larni tozalash
+        if: success()
+        run: docker image prune -af --filter "until=168h"

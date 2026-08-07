@@ -1,3 +1,4 @@
+using CommonConfiguration.Observability;
 using Microsoft.Extensions.Logging;
 using SessionApi.Mqtt.Abstractions;
 
@@ -29,6 +30,7 @@ namespace SessionApi.Mqtt.Middlewares
                 _logger.LogWarning(
                     "[MQTT-IN] Timestamp juda eski age={Age}s id={Id} serial={Serial}",
                     age, context.Envelope.Id, context.SerialNumber);
+                BotEnergyMetrics.RecordRejected("timestamp_old", context.TopicKind.ToString());
                 return Task.CompletedTask;
             }
 
@@ -37,6 +39,7 @@ namespace SessionApi.Mqtt.Middlewares
                 _logger.LogWarning(
                     "[MQTT-IN] Timestamp kelajakdan skew={Skew}s id={Id} serial={Serial}",
                     -age, context.Envelope.Id, context.SerialNumber);
+                BotEnergyMetrics.RecordRejected("timestamp_future", context.TopicKind.ToString());
                 return Task.CompletedTask;
             }
 
