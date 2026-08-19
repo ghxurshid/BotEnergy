@@ -111,7 +111,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo rsync -a --delete deploy/nginx/      "$COMPOSE_DIR/nginx/"
-          sudo rsync -a --delete deploy/emqx/       "$COMPOSE_DIR/emqx/"
+          sudo rsync -a --delete --exclude 'certs/' deploy/emqx/ "$COMPOSE_DIR/emqx/"
           sudo rsync -a --delete deploy/prometheus/ "$COMPOSE_DIR/prometheus/"
           sudo rsync -a --delete deploy/loki/       "$COMPOSE_DIR/loki/"
           sudo rsync -a --delete deploy/tempo/      "$COMPOSE_DIR/tempo/"
