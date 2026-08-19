@@ -52,7 +52,6 @@ INTERNAL_SECRET="$(rand 48)"
 EMQX_COOKIE="$(rand 32)"
 EMQX_DASH_PASS="$(rand 24)"
 GRAFANA_PASS="$(rand 24)"
-RABBIT_PASS="$(rand 32)"
 
 # Katalog ham guruhga ochiq bo'lishi kerak: 0700 bo'lsa fayl huquqi to'g'ri
 # bo'lgan holda ham ichiga kirib bo'lmaydi (traverse huquqi yo'q).
@@ -120,14 +119,6 @@ GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASS}
 # ── Telegram alert — TODO: xohlasangiz to'ldiring ───────────────────────────
 ALERT_TELEGRAM_BOT_TOKEN=TODO
 ALERT_TELEGRAM_CHAT_ID=TODO
-
-# ── RabbitMQ (--profile messaging bilan; hozir ishlatilmaydi) ───────────────
-RABBITMQ_DEFAULT_USER=botenergy
-RABBITMQ_DEFAULT_PASS=${RABBIT_PASS}
-RABBITMQ_DEFAULT_VHOST=/botenergy
-RabbitMq__Host=rabbitmq
-RabbitMq__Username=botenergy
-RabbitMq__Password=${RABBIT_PASS}
 
 # ── Migratsiya / Swagger ────────────────────────────────────────────────────
 Migrate__AutoApply=false

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
 using CommonConfiguration.Observability;
 using Domain.Interfaces;
@@ -16,7 +16,7 @@ namespace SessionApi.Mqtt.Transport
 {
     /// <summary>
     /// MQTT broker bilan connection lifecycle'ni yuritadi va inbound xabarlarni pipeline'ga uzatadi.
-    /// Eski <c>MqttBridge</c> ning yagona vazifasini pipeline + handler arxitekturasiga bo'lib oladi.
+    /// Kiruvchi xabarlar pipeline + handler arxitekturasi orqali qayta ishlanadi.
     /// </summary>
     public sealed class MqttHost : BackgroundService
     {

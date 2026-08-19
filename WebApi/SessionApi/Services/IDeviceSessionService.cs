@@ -1,10 +1,10 @@
-namespace SessionApi.Services
+﻿namespace SessionApi.Services
 {
     /// <summary>
     /// Qurilma reader QR kodni o'qib MQTT orqali userId+sessionToken yuborganda chaqiriladi.
     /// Token <see cref="Domain.Interfaces.IPendingSessionStore"/> dan olinadi, solishtiriladi,
-    /// mos kelsa DB'da sessiya yaratiladi va RabbitMQ orqali "connected" event chiqariladi
-    /// (DeviceEventConsumer tomonidan iste'mol qilinadi, SignalR orqali mobilga uzatiladi).
+    /// mos kelsa DB'da sessiya yaratiladi va shu process'dan SignalR orqali
+    /// mobilga "connected" xabari uzatiladi.
     /// </summary>
     public interface IDeviceSessionService
     {

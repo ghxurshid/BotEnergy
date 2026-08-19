@@ -1,4 +1,4 @@
-using Domain.Dtos.Process;
+﻿using Domain.Dtos.Process;
 using Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 using SessionApi.Mqtt.Abstractions;
@@ -7,8 +7,8 @@ namespace SessionApi.Mqtt.Handlers
 {
     /// <summary>
     /// <c>device/{serial}/telemetry</c>, <c>type=process.telemetry</c>.
-    /// Eski <c>MqttBridge.HandleTelemetryAsync</c> ning to'g'ridan-to'g'ri ekvivalenti — RabbitMQ orqali emas,
-    /// shu process ichida <see cref="IProcessService.ReportTelemetryAsync"/> chaqiriladi (real-time SignalR push).
+    /// Shu process ichida <see cref="IProcessService.ReportTelemetryAsync"/> chaqiriladi
+    /// (real-time SignalR push).
     /// </summary>
     [MqttHandler(MqttHandlerTypes.ProcessTelemetry, MqttTopicKind.Telemetry)]
     public sealed class ProcessTelemetryHandler : MqttEventHandler<ProcessTelemetryHandler.Payload>

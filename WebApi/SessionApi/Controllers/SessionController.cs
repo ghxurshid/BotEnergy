@@ -1,4 +1,4 @@
-using CommonConfiguration.Attributes;
+﻿using CommonConfiguration.Attributes;
 using Domain.Dtos.Base;
 using Domain.Dtos.Session;
 using Domain.Interfaces;
@@ -19,8 +19,8 @@ namespace SessionApi.Controllers
     ///    Response: <c>{ userId, sessionToken }</c> → QR kod sifatida ko'rsatiladi.
     /// 2. Qurilma reader QR ni o'qib MQTT orqali SessionApi'ga (MqttBridge) yuboradi.
     /// 3. SessionApi pending store'dan tokenni oladi, solishtiradi, mos kelsa DB'da sessiyani
-    ///    Connected statusda yaratadi va RabbitMQ orqali "connected" event chiqaradi.
-    /// 4. DeviceEventConsumer (SessionApi'ning o'zida) event'ni qabul qilib SignalR <c>DeviceConnected</c> event'ini mobile'ga yuboradi.
+    ///    Connected statusda yaratadi.
+    /// 4. Shu process'ning o'zida SignalR <c>DeviceConnected</c> event'i mobile'ga yuboriladi.
     /// 5. <c>POST /api/Process/Start</c> — foydalanuvchi mahsulot tanlaydi, qurilmaga start yuboriladi.
     /// 6. SignalR orqali real-time <c>ProcessUpdated</c> eventlar.
     /// 7. Sessiya yopilishi: <c>POST /api/Session/Close</c> — barcha aktiv jarayonlar to'xtatiladi.

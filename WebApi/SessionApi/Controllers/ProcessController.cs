@@ -1,4 +1,4 @@
-using CommonConfiguration.Attributes;
+﻿using CommonConfiguration.Attributes;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -29,7 +29,7 @@ namespace SessionApi.Controllers
         /// <summary>
         /// Yangi mahsulot berish jarayonini boshlash.
         /// Sessiya `Connected` yoki `InProcess` holatida bo'lishi shart, balans tekshiriladi,
-        /// qurilmaga RabbitMQ → DeviceApi → MQTT orqali start buyrug'i yuboriladi.
+        /// qurilmaga MQTT orqali start buyrug'i yuboriladi.
         /// </summary>
         /// <response code="200">Jarayon boshlandi</response>
         /// <response code="400">Sessiya yoki mahsulot mos kelmaydi, balans yetarli emas</response>

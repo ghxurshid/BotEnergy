@@ -1,4 +1,4 @@
-using Domain.Dtos.Base;
+﻿using Domain.Dtos.Base;
 using Domain.Dtos.Session;
 
 namespace Domain.Interfaces
@@ -14,8 +14,8 @@ namespace Domain.Interfaces
         Task<GenericDto<CreateSessionResultDto>> CreateSessionAsync(CreateSessionDto dto);
 
         /// <summary>
-        /// DeviceApi DB'da sessiya yaratganidan keyin RabbitMQ orqali kelgan "connected" event'ni
-        /// SignalR'ga uzatadi. Bu metod DB'ni o'zgartirmaydi — sessiya allaqachon Connected statusda.
+        /// Qurilma ulanib sessiya DB'da Connected bo'lgandan keyin SignalR'ga xabar uzatadi.
+        /// Bu metod DB'ni o'zgartirmaydi — sessiya allaqachon Connected statusda.
         /// </summary>
         Task<GenericDto<DeviceConnectedResultDto>> NotifyDeviceConnectedAsync(string sessionToken);
 

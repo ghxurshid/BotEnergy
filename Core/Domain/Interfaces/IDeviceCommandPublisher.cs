@@ -1,9 +1,9 @@
-namespace Domain.Interfaces
+﻿namespace Domain.Interfaces
 {
     /// <summary>
     /// Service qatlamidan qurilmaga buyruq yuborish abstraksiyasi.
-    /// Implementatsiya MQTT publisher orqali to'g'ridan-to'g'ri broker'ga publish qiladi
-    /// (oraliq RabbitMQ queue yo'q — Mobile→SessionApi va SessionApi→Qurilma bir process'da).
+    /// Implementatsiya MQTT publisher orqali to'g'ridan-to'g'ri broker'ga publish qiladi —
+    /// oraliq queue yo'q, Mobile→SessionApi va SessionApi→Qurilma bir process'da.
     /// </summary>
     public interface IDeviceCommandPublisher
     {

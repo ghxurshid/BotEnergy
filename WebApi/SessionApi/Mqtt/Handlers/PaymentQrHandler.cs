@@ -1,4 +1,4 @@
-using Domain.Dtos.Payment;
+﻿using Domain.Dtos.Payment;
 using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
@@ -12,7 +12,7 @@ namespace SessionApi.Mqtt.Handlers
     /// Qurilma Payme QR ni o'qib serverga to'lov so'rovi yuboradi.
     /// Handler ichida <see cref="IPaymentService.ProcessQrTopUpAsync"/> chaqiriladi,
     /// natija MQTT response sifatida qurilmaga + SignalR orqali mobilega push qilinadi
-    /// (oraliq RabbitMQ queue yo'q — idempotency <c>ClientRef</c> bilan ta'minlanadi).
+    /// (oraliq queue yo'q — idempotency <c>ClientRef</c> bilan ta'minlanadi).
     /// </summary>
     [MqttHandler(MqttHandlerTypes.PaymentQr, MqttTopicKind.Event)]
     public sealed class PaymentQrHandler : MqttEventHandler<PaymentQrHandler.Payload>

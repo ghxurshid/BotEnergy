@@ -2325,7 +2325,7 @@ BotEnergy/
 │   └── adr/                      ★ YANGI  # 0001-yarp-gateway.md, 0002-emqx.md, ...
 │
 ├── .github/workflows/deploy.yml
-├── CLAUDE.md   README.md   PROMTS.md   functional_specification.md
+├── CLAUDE.md   README.md   PROMTS.md
 ```
 
 `★` — yangi qo'shiladi, `☆` — kelajakda.

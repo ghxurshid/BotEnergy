@@ -13,7 +13,7 @@
 # Tarmoq segmentatsiyasi:
 #   be-edge — nginx + emqx (tashqi dunyo bilan gaplashadigan yagona segment)
 #   be-app  — gateway + API'lar (internal: true, host'ga chiqmaydi)
-#   be-data — postgres/redis/rabbitmq (internal: true)
+#   be-data — postgres/redis (internal: true)
 #
 # DIQQAT: hech qaysi API'ga `ports:` berilmagan. `docker -p` ufw qoidalarini aylanib
 # o'tadi — port berilsa servis butun internetga ochilib qolardi.
@@ -53,7 +53,6 @@ volumes:
   pgdata:
   redisdata:
   emqxdata:
-  rabbitdata:
 
 services:
   # ── EDGE ──────────────────────────────────────────────────────────────────
@@ -253,22 +252,3 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-
-  rabbitmq:
-    image: rabbitmq:3.13-management-alpine
-    container_name: botenergy-rabbitmq
-    restart: unless-stopped
-    profiles: ["messaging"]   # docker compose --profile messaging up
-    env_file: /etc/botenergy/botenergy.env
-    volumes:
-      - rabbitdata:/var/lib/rabbitmq
-      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
-      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/10-botenergy.conf:ro
-    networks: [be-data]
-    logging: *default-logging
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s

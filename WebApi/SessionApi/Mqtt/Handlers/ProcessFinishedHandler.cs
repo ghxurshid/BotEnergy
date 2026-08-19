@@ -1,4 +1,4 @@
-using Domain.Dtos.Process;
+﻿using Domain.Dtos.Process;
 using Domain.Enums;
 using Domain.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -9,7 +9,7 @@ namespace SessionApi.Mqtt.Handlers
     /// <summary>
     /// <c>device/{serial}/event</c>, <c>type=process.finished</c> — jarayon yakunlanishi
     /// (stopped/error/out_of_resource/completed). <see cref="IProcessService.ReportDeviceFinishedAsync"/>
-    /// to'g'ridan-to'g'ri chaqiriladi — oraliq RabbitMQ hop yo'q.
+    /// to'g'ridan-to'g'ri chaqiriladi — oraliq hop yo'q.
     /// </summary>
     [MqttHandler(MqttHandlerTypes.ProcessFinished, MqttTopicKind.Event)]
     public sealed class ProcessFinishedHandler : MqttEventHandler<ProcessFinishedHandler.Payload>

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using Domain.Entities;
 using Domain.Enums;
@@ -154,7 +154,7 @@ namespace SessionApi.Services
                     }
                 }
 
-                // ── Step 6: SignalR push mobile'ga (RabbitMQ oraliq hop emas — to'g'ridan-to'g'ri) ──
+                // ── Step 6: SignalR push mobile'ga (to'g'ridan-to'g'ri, oraliq hop yo'q) ──
                 var notifyResult = await _sessionService.NotifyDeviceConnectedAsync(sessionToken);
                 if (!notifyResult.IsSuccess)
                 {

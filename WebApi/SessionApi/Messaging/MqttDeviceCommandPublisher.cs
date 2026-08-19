@@ -1,4 +1,4 @@
-using Domain.Interfaces;
+﻿using Domain.Interfaces;
 using SessionApi.Mqtt.Abstractions;
 using SessionApi.Mqtt.Handlers;
 
@@ -6,8 +6,8 @@ namespace SessionApi.Messaging
 {
     /// <summary>
     /// <see cref="IDeviceCommandPublisher"/> ning to'g'ridan-to'g'ri MQTT impl'i.
-    /// Eski RabbitMQ → DeviceCommandConsumer → MQTT zanjirini almashtiradi
-    /// (publisher va consumer bir process'da edi, oraliq queue qiymat bermasdi).
+    /// Buyruq to'g'ridan-to'g'ri broker'ga publish qilinadi — oraliq queue yo'q,
+    /// chunki publisher va consumer bir process'da.
     /// </summary>
     public sealed class MqttDeviceCommandPublisher : IDeviceCommandPublisher
     {

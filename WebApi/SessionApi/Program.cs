@@ -1,4 +1,4 @@
-using CommonConfiguration.ConfigurationExtensions;
+﻿using CommonConfiguration.ConfigurationExtensions;
 using CommonConfiguration.ConfigurationServices;
 using CommonConfiguration.Filters;
 using CommonConfiguration.Observability;
@@ -61,7 +61,7 @@ builder.Services.AddRedisServices(builder.Configuration);
 
 // SignalR Session Notifier
 builder.Services.AddScoped<ISessionNotifier, SignalRSessionNotifier>();
-// Service qatlamidan qurilmaga buyruq — to'g'ridan-to'g'ri MQTT (RabbitMQ oraliq hop yo'q)
+// Service qatlamidan qurilmaga buyruq — to'g'ridan-to'g'ri MQTT (oraliq hop yo'q)
 builder.Services.AddScoped<IDeviceCommandPublisher, MqttDeviceCommandPublisher>();
 
 // MQTT connect oqimini boshqaruvchi servis (SessionConnectHandler tomonidan chaqiriladi)

@@ -116,7 +116,6 @@ jobs:
           sudo rsync -a --delete deploy/loki/       "$COMPOSE_DIR/loki/"
           sudo rsync -a --delete deploy/tempo/      "$COMPOSE_DIR/tempo/"
           sudo rsync -a --delete deploy/grafana/    "$COMPOSE_DIR/grafana/"
-          sudo rsync -a --delete deploy/rabbitmq/   "$COMPOSE_DIR/rabbitmq/"
           sudo rsync -a          deploy/scripts/    "$COMPOSE_DIR/scripts/"
           sudo cp deploy/docker-compose.yml               "$COMPOSE_DIR/"
           sudo cp deploy/docker-compose.observability.yml "$COMPOSE_DIR/"
