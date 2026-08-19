@@ -1,11 +1,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # BotEnergy — production compose.
 #
+# Image'lar VPS'ning O'ZIDA quriladi — registry (GHCR) ishlatilmaydi.
+# Shuning uchun `docker compose pull` YO'Q: `image:` nomlari lokal teglar.
+#
 # Ishga tushirish (serverda /opt/botenergy dan):
 #   echo "TAG=<git-sha>" > .env
-#   docker compose pull && docker compose up -d --wait
+#   docker compose up -d --wait
 #
-# Sirlar bu faylda YO'Q — hammasi /etc/botenergy/botenergy.env dan keladi (chmod 0600).
+# Sirlar bu faylda YO'Q — hammasi /etc/botenergy/botenergy.env dan keladi (0640 root:docker).
 #
 # Tarmoq segmentatsiyasi:
 #   be-edge — nginx + emqx (tashqi dunyo bilan gaplashadigan yagona segment)
@@ -70,6 +73,15 @@ services:
     networks: [be-edge, be-app]
     logging: *default-logging
     depends_on: [gateway]
+    # 8080 — stub_status server bloki (127.0.0.1 ga ruxsat berilgan).
+    # Healthcheck bo'lmasa deploy'ning "hammasi healthy?" tekshiruvi nginx'ni
+    # holati noma'lum deb hisoblardi.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/stub_status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   emqx:
     image: emqx/emqx:5.8.0
@@ -99,7 +111,7 @@ services:
   # ── GATEWAY ───────────────────────────────────────────────────────────────
   gateway:
     <<: *api-common
-    image: ghcr.io/${IMAGE_PREFIX}-gateway:${TAG}
+    image: botenergy-gateway:${TAG}
     container_name: botenergy-gateway
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health/live"]
@@ -111,7 +123,7 @@ services:
   # ── API'lar ───────────────────────────────────────────────────────────────
   authapi:
     <<: *api-common
-    image: ghcr.io/${IMAGE_PREFIX}-authapi:${TAG}
+    image: botenergy-authapi:${TAG}
     container_name: botenergy-authapi
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5002/health/live"]
@@ -122,7 +134,7 @@ services:
 
   userapi:
     <<: *api-common
-    image: ghcr.io/${IMAGE_PREFIX}-userapi:${TAG}
+    image: botenergy-userapi:${TAG}
     container_name: botenergy-userapi
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5006/health/live"]
@@ -133,7 +145,7 @@ services:
 
   adminapi:
     <<: *api-common
-    image: ghcr.io/${IMAGE_PREFIX}-adminapi:${TAG}
+    image: botenergy-adminapi:${TAG}
     container_name: botenergy-adminapi
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5001/health/live"]
@@ -144,7 +156,7 @@ services:
 
   billingapi:
     <<: *api-common
-    image: ghcr.io/${IMAGE_PREFIX}-billingapi:${TAG}
+    image: botenergy-billingapi:${TAG}
     container_name: botenergy-billingapi
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5003/health/live"]
@@ -155,7 +167,7 @@ services:
 
   paymentapi:
     <<: *api-common
-    image: ghcr.io/${IMAGE_PREFIX}-paymentapi:${TAG}
+    image: botenergy-paymentapi:${TAG}
     container_name: botenergy-paymentapi
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5005/health/live"]
@@ -166,7 +178,7 @@ services:
 
   deviceapi:
     <<: *api-common
-    image: ghcr.io/${IMAGE_PREFIX}-deviceapi:${TAG}
+    image: botenergy-deviceapi:${TAG}
     container_name: botenergy-deviceapi
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5004/health/live"]
@@ -177,7 +189,7 @@ services:
 
   sessionapi:
     <<: *api-common
-    image: ghcr.io/${IMAGE_PREFIX}-sessionapi:${TAG}
+    image: botenergy-sessionapi:${TAG}
     container_name: botenergy-sessionapi
     # MQTT brokeriga ulanadi — emqx be-app tarmog'ida ham bor.
     depends_on:

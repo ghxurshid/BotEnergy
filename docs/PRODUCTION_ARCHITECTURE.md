@@ -1823,6 +1823,13 @@ K8s'ga o'tish **trigger'lari**: (a) 3+ node kerak bo'ldi, (b) trafik kunlik 5×+
 
 ### 12.2 `deploy/docker-compose.yml`
 
+> ⚠️ **Eskirgan namuna.** Quyidagi misollarda GHCR (`ghcr.io/...`) ishlatilgan —
+> loyiha undan voz kechdi. Image'lar VPS'ning o'zida quriladi va lokal teglar bilan
+> ishlatiladi (`botenergy-<servis>:<tag>`). Amaldagi haqiqiy fayllar:
+> `deploy/docker-compose.yml`, `deploy/Dockerfile`, `.github/workflows/deploy.yml`.
+> Ishga tushirish bo'yicha qadamlar: `docs/SERVER_SETUP.md`.
+
+
 ```yaml
 name: botenergy
 
@@ -1932,6 +1939,13 @@ services:
 ---
 
 ## 13. Deployment
+
+> ⚠️ **Eskirgan namuna.** Quyidagi misollarda GHCR (`ghcr.io/...`) ishlatilgan —
+> loyiha undan voz kechdi. Image'lar VPS'ning o'zida quriladi va lokal teglar bilan
+> ishlatiladi (`botenergy-<servis>:<tag>`). Amaldagi haqiqiy fayllar:
+> `deploy/docker-compose.yml`, `deploy/Dockerfile`, `.github/workflows/deploy.yml`.
+> Ishga tushirish bo'yicha qadamlar: `docs/SERVER_SETUP.md`.
+
 
 ### 13.1 Hozirgi deploy jarayonining muammolari
 

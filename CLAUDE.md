@@ -31,7 +31,7 @@ dotnet ef database update --project Infrastructure/Persistence --startup-project
 
 There are no tests in the repo. Don't claim test coverage when reporting completion.
 
-Production deploy is a self-hosted GitHub Actions runner that executes `deploy.sh` on push to `main`/`master` — builds each API in Release, copies to `/home/ubuntu/botenergy/<Service>`, restarts `botenergy-<Service>` systemd unit.
+Production deploy is a self-hosted GitHub Actions runner **on the VPS itself** (`.github/workflows/deploy.yml`, push to `main`/`master`). Everything runs there — no registry: it builds 9 Docker images locally (`botenergy-<service>:<sha>`), runs the `Migrator` container once, does a rolling `docker compose up -d --wait` per service, smoke-tests, and rolls back to `.env.prev` on failure. `deploy.sh` is dead (exits 1). Secrets live only in `/etc/botenergy/botenergy.env` (`root:docker 0640` so the runner's `docker run --env-file` can read it) and never pass through CI. Server setup steps: `docs/SERVER_SETUP.md`.
 
 ## API layout
 

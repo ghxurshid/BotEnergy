@@ -14,13 +14,13 @@
 #   • Health tekshiruvi yo'q — servis ko'tarilmasa ham "✅ muvaffaqiyatli" deyilardi.
 #
 # Yangi oqim: .github/workflows/deploy.yml
-#   build (CI runner) → GHCR → migration (bir marta) → rolling update
+#   build (VPS'da, registry'siz) → migration (bir marta) → rolling update
 #   → health gate → smoke test → kerak bo'lsa avtomatik rollback
 #
 # Qo'lda deploy qilish kerak bo'lsa (serverda):
 #   cd /opt/botenergy
 #   echo "TAG=<git-sha>" > .env
-#   docker compose pull && docker compose up -d --wait
+#   docker compose up -d --wait
 #
 # To'liq tavsif: docs/PRODUCTION_ARCHITECTURE.md §13
 # ─────────────────────────────────────────────────────────────────────────────

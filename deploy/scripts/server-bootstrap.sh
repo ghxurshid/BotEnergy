@@ -24,7 +24,19 @@ apt-get update -qq
 apt-get install -y -qq ca-certificates curl gnupg rsync ufw fail2ban unattended-upgrades
 
 echo "═══ 2/6  Docker ═══"
-if ! command -v docker >/dev/null; then
+# Snap docker strict confinement ostida ishlaydi: /etc/botenergy/ va /opt/botenergy/
+# ni o'qiy olmaydi — env_file va bind mount'lar ishlamaydi. Rasmiy apt paketi shart.
+# `command -v docker` yetarli emas: snap versiyasi ham PATH'da turadi.
+if snap list docker >/dev/null 2>&1; then
+  echo "❌ Docker snap orqali o'rnatilgan — bu setup bilan ishlamaydi."
+  echo "   Konteyner/volume borligini tekshiring, so'ng qo'lda olib tashlang:"
+  echo "     docker ps -a && docker volume ls"
+  echo "     sudo snap remove --purge docker && hash -r"
+  echo "   So'ng shu skriptni qayta ishga tushiring."
+  exit 1
+fi
+
+if ! dpkg -s docker-ce >/dev/null 2>&1; then
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
   chmod a+r /etc/apt/keyrings/docker.asc
