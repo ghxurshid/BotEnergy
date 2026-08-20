@@ -1,5 +1,5 @@
 {
-  "_note": "Production sirlar SHU FAYLDA SAQLANMAYDI. Barcha 'Env_*' qiymatlar placeholder — ResolveSecret ularni 'berilmagan' deb biladi va servis fail-fast qiladi. Haqiqiy qiymatlarni server env var sifatida beradi (/etc/botenergy/botenergy.env): ConnectionStrings__DefaultConnection, Jwt__Secret, Mqtt__Password, InternalApi__SharedSecret, Seed__AdminPassword, Payme__MerchantId, Payme__Key. Env var json'dagi qiymatni override qiladi.",
+  "_note": "Production sirlar SHU FAYLDA SAQLANMAYDI. Barcha 'Env_*' qiymatlar placeholder — ResolveSecret ularni 'berilmagan' deb biladi va servis fail-fast qiladi. Haqiqiy qiymatlarni systemd EnvironmentFile beradi (/etc/botenergy/botenergy.env): ConnectionStrings__DefaultConnection, Jwt__Secret, Mqtt__Password, InternalApi__SharedSecret, Seed__AdminPassword, Payme__MerchantId, Payme__Key. Env var json'dagi qiymatni override qiladi.",
 
   "ConnectionStrings": {
     "DefaultConnection": "Env_ConnectionStrings__DefaultConnection"
@@ -36,7 +36,7 @@
     "AutoApply": false
   },
   "Mqtt": {
-    "BrokerHost": "emqx",
+    "BrokerHost": "localhost",
     "BrokerPort": 8883,
     "Username": "botenergy-backend",
     "Password": "Env_Mqtt__Password",
@@ -48,18 +48,10 @@
     "SharedSubscriptionGroup": "botenergy"
   },
   "Redis": {
-    "ConnectionString": "redis:6379"
+    "ConnectionString": "localhost:6379"
   },
   "InternalApi": {
     "SharedSecret": "Env_InternalApi__SharedSecret"
-  },
-  "Kestrel": {
-    "Certificates": {
-      "Default": {
-        "Path": "/etc/botenergy/certs/botenergy.pfx",
-        "Password": "Env_Kestrel__Certificates__Default__Password"
-      }
-    }
   },
   "Payme": {
     "BaseUrl": "https://checkout.paycom.uz/api",
@@ -81,19 +73,8 @@
   },
   "Observability": {
     "ConsoleJsonLogs": true,
-    "OtlpEndpoint": "http://tempo:4317",
-    "EnableTracing": true,
+    "OtlpEndpoint": "",
+    "EnableTracing": false,
     "EnableMetrics": true
-  },
-  "ReverseProxy": {
-    "Clusters": {
-      "auth": { "Destinations": { "auth-1": { "Address": "http://authapi:5002/" } } },
-      "user": { "Destinations": { "user-1": { "Address": "http://userapi:5006/" } } },
-      "admin": { "Destinations": { "admin-1": { "Address": "http://adminapi:5001/" } } },
-      "session": { "Destinations": { "session-1": { "Address": "http://sessionapi:5007/" } } },
-      "billing": { "Destinations": { "billing-1": { "Address": "http://billingapi:5003/" } } },
-      "payment": { "Destinations": { "payment-1": { "Address": "http://paymentapi:5005/" } } },
-      "device": { "Destinations": { "device-1": { "Address": "http://deviceapi:5004/" } } }
-    }
   }
 }

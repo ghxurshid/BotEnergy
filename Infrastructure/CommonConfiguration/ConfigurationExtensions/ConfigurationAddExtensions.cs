@@ -232,9 +232,9 @@ namespace CommonConfiguration.ConfigurationExtensions
 
         /// <summary>
         /// Nginx/YARP ortida ishlash uchun X-Forwarded-* header'larini qabul qiladi.
-        /// KnownNetworks/KnownProxies tozalanadi, chunki proxy Docker tarmog'ida turadi va
-        /// IP'si oldindan ma'lum emas — tashqi dunyo bu header'larni bevosita yubora olmaydi,
-        /// zanjirdagi yagona kirish nuqtasi Nginx.
+        /// KnownNetworks/KnownProxies tozalanadi: Nginx ham, YARP ham 127.0.0.1 da turadi
+        /// va servis portlari firewall bilan tashqaridan yopilgan — tashqi dunyo bu
+        /// header'larni bevosita yubora olmaydi, zanjirdagi yagona kirish nuqtasi Nginx.
         /// </summary>
         public static IServiceCollection AddProxyForwardedHeaders(this IServiceCollection services)
         {

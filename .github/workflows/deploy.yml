@@ -1,24 +1,19 @@
 name: BotEnergy Deploy
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Hamma ish VPS'ning O'ZIDA bajariladi: build ham, deploy ham.
-# Registry (GHCR) ishlatilmaydi — image'lar lokal docker storage'da qoladi.
+# Hamma ish VPS'ning O'ZIDA bajariladi: build ham, deploy ham (self-hosted runner).
 #
-#   checkout → 9 ta image build → migratsiya → rolling update → smoke test
-#            → muvaffaqiyatsiz bo'lsa avtomatik rollback
+#   checkout → deploy.sh → publish → migratsiya → rolling restart + health gate
+#            → muvaffaqiyatsiz bo'lsa avtomatik rollback (oldingi release'ga)
 #
-# Nega shunday: self-hosted runner daqiqalari bepul va registry saqlash joyi
-# talab qilmaydi. Evaziga build jonli serverda ketadi (~10-15 daqiqa).
+# Servislar systemd unit'lari sifatida ishlaydi (botenergy@<Servis>).
+# Server tayyorlash: deploy/README.md
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
   push:
     branches: [main, master]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Rollback uchun mavjud image tegi (bo'sh bo'lsa joriy commit quriladi)"
-        required: false
 
 # DIQQAT: bu workflow'ga HECH QACHON `pull_request` trigger qo'shmang.
 # Repo public va runner sizning serveringizda — fork'dan kelgan PR VPS'da
@@ -28,176 +23,18 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false      # deploy yarmida uzilmasin
 
-env:
-  COMPOSE_DIR: /opt/botenergy
-  ENV_FILE: /etc/botenergy/botenergy.env
-  SERVICES: "Gateway Migrator AuthApi UserApi AdminApi SessionApi BillingApi PaymentApi DeviceApi"
-
 jobs:
   deploy:
     runs-on: self-hosted
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
-      # ── 0. Old shartlar ──────────────────────────────────────────────────
-      - name: Sirlar fayli bormi
+      - name: Deploy
         run: |
-          if [ ! -r "$ENV_FILE" ]; then
-            echo "❌ $ENV_FILE o'qilmadi."
-            echo "   Yaratish: sudo BOTENERGY_DOMAIN=<domen> bash deploy/scripts/generate-env.sh"
-            echo "   Runner o'qishi uchun: 0640 root:docker (docs/SERVER_SETUP.md 4-qadam)"
-            exit 1
-          fi
-          if grep -q 'CHANGE_ME' "$ENV_FILE"; then
-            echo "❌ $ENV_FILE ichida to'ldirilmagan CHANGE_ME bor."
-            exit 1
-          fi
-          echo "✅ Sirlar fayli joyida"
-
-      - name: TAG ni aniqlash
-        id: meta
-        run: |
-          TAG="${{ github.event.inputs.tag }}"
-          if [ -z "$TAG" ]; then
-            TAG="${{ github.sha }}"
-            echo "build=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "build=false" >> "$GITHUB_OUTPUT"
-            echo "⟲ Rollback rejimi: mavjud '$TAG' tegi ishlatiladi, build qilinmaydi."
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      # ── 1. Build — VPS'da ────────────────────────────────────────────────
-      # Birinchi image butun kodni kompilyatsiya qiladi; qolgan 8 tasi
-      # Dockerfile'ning `build` bosqichini keshdan oladi (u SERVICE'ga bog'liq emas).
-      - name: 9 ta image qurish
-        if: steps.meta.outputs.build == 'true'
-        env:
-          DOCKER_BUILDKIT: "1"
-          TAG: ${{ steps.meta.outputs.tag }}
-        run: |
-          set -euo pipefail
-          for svc in $SERVICES; do
-            lower="$(echo "$svc" | tr '[:upper:]' '[:lower:]')"
-            echo "▶ botenergy-$lower:$TAG"
-            docker build \
-              --file deploy/Dockerfile \
-              --build-arg SERVICE="$svc" \
-              --tag "botenergy-$lower:$TAG" \
-              --tag "botenergy-$lower:latest" \
-              .
-          done
-          echo "✅ 9 ta image tayyor"
-
-      - name: Rollback tegi mavjudligini tekshirish
-        if: steps.meta.outputs.build == 'false'
-        env:
-          TAG: ${{ steps.meta.outputs.tag }}
-        run: |
-          set -euo pipefail
-          for svc in $SERVICES; do
-            lower="$(echo "$svc" | tr '[:upper:]' '[:lower:]')"
-            if ! docker image inspect "botenergy-$lower:$TAG" >/dev/null 2>&1; then
-              echo "❌ botenergy-$lower:$TAG lokal storage'da yo'q."
-              exit 1
-            fi
-          done
-          echo "✅ Barcha image mavjud"
-
-      # ── 2. Konfiguratsiyani sinxronlash ──────────────────────────────────
-      - name: Deploy konfiguratsiyasini ko'chirish
-        run: |
-          set -euo pipefail
-          sudo rsync -a --delete deploy/nginx/      "$COMPOSE_DIR/nginx/"
-          sudo rsync -a --delete --exclude 'certs/' deploy/emqx/ "$COMPOSE_DIR/emqx/"
-          sudo rsync -a --delete deploy/prometheus/ "$COMPOSE_DIR/prometheus/"
-          sudo rsync -a --delete deploy/loki/       "$COMPOSE_DIR/loki/"
-          sudo rsync -a --delete deploy/tempo/      "$COMPOSE_DIR/tempo/"
-          sudo rsync -a --delete deploy/grafana/    "$COMPOSE_DIR/grafana/"
-          sudo rsync -a          deploy/scripts/    "$COMPOSE_DIR/scripts/"
-          sudo cp deploy/docker-compose.yml               "$COMPOSE_DIR/"
-          sudo cp deploy/docker-compose.observability.yml "$COMPOSE_DIR/"
-
-      - name: Oldingi TAG ni saqlash (rollback uchun)
-        run: |
-          cd "$COMPOSE_DIR"
-          if [ -f .env ]; then sudo cp .env .env.prev; fi
-
-      - name: Yangi TAG ni yozish
-        run: |
-          cd "$COMPOSE_DIR"
-          echo "TAG=${{ steps.meta.outputs.tag }}" | sudo tee .env >/dev/null
-
-      # ── 3. Ma'lumot qatlami — migratsiyadan OLDIN ────────────────────────
-      # Birinchi deploy'da `botenergy_be-data` tarmog'i hali mavjud emas va
-      # quyidagi `docker run --network ...` xato berardi. Bu qadam tarmoqni
-      # yaratadi va postgres healthy bo'lishini kutadi. Keyingi deploy'larda
-      # hech narsa o'zgarmaydi (idempotent).
-      - name: Postgres / Redis / EMQX ni ko'tarish
-        run: |
-          set -euo pipefail
-          cd "$COMPOSE_DIR"
-          docker compose up -d --wait --wait-timeout 180 postgres redis emqx
-
-      # ── 4. Migratsiya — servislardan OLDIN, bitta marta ──────────────────
-      - name: Kutilayotgan migratsiyalar ro'yxati
-        env:
-          TAG: ${{ steps.meta.outputs.tag }}
-        run: |
-          docker run --rm \
-            --network botenergy_be-data \
-            --env-file "$ENV_FILE" \
-            "botenergy-migrator:$TAG" --list
-
-      - name: Migratsiya + seed
-        env:
-          TAG: ${{ steps.meta.outputs.tag }}
-        run: |
-          docker run --rm \
-            --network botenergy_be-data \
-            --env-file "$ENV_FILE" \
-            "botenergy-migrator:$TAG"
-
-      # ── 5. Rolling update ────────────────────────────────────────────────
-      - name: Servislarni birma-bir yangilash
-        run: |
-          set -euo pipefail
-          cd "$COMPOSE_DIR"
-          for svc in authapi userapi adminapi billingapi paymentapi deviceapi sessionapi gateway; do
-            echo "▶ $svc"
-            docker compose up -d --no-deps --wait --wait-timeout 120 "$svc"
-          done
-          docker compose up -d --no-deps nginx
-
-      # ── 6. Smoke test ────────────────────────────────────────────────────
-      - name: Smoke test
-        run: |
-          set -euo pipefail
-          cd "$COMPOSE_DIR"
-
-          echo "▶ Gateway tirikmi (konteyner ichidan)..."
-          docker exec botenergy-gateway curl -fsS --max-time 10 http://localhost:8080/health/live > /dev/null
-
-          echo "▶ Gateway marshruti — 401/403 kutiladi (endpoint bor, token yo'q)..."
-          code="$(docker exec botenergy-gateway curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:8080/api/user/User/Profile)"
-          case "$code" in
-            401|403) echo "   ✓ $code" ;;
-            *) echo "   ❌ Kutilmagan status: $code"; exit 1 ;;
-          esac
-
-          echo "▶ Barcha konteynerlar healthy?"
-          # awk NF==2: healthcheck'i bo'lmagan konteynerda {{.Health}} bo'sh chiqadi
-          # va qator bitta maydondan iborat bo'ladi — uni "unhealthy" deb hisoblamaymiz.
-          unhealthy="$(docker compose ps --format '{{.Name}} {{.Health}}' | awk 'NF==2 && $2!="healthy"')"
-          if [ -n "$unhealthy" ]; then
-            echo "   ❌ Sog'lom bo'lmaganlar:"
-            echo "$unhealthy"
-            exit 1
-          fi
-
-          echo "✅ Smoke test o'tdi"
+          chmod +x deploy.sh
+          ./deploy.sh
 
       - name: Tashqi edge tekshiruvi (PUBLIC_DOMAIN sozlangan bo'lsa)
         if: vars.PUBLIC_DOMAIN != ''
@@ -205,28 +42,3 @@ jobs:
           echo "▶ https://${{ vars.PUBLIC_DOMAIN }}/health"
           curl -fsS --max-time 10 "https://${{ vars.PUBLIC_DOMAIN }}/health" > /dev/null
           echo "✅ Tashqi edge javob berdi"
-
-      # ── 7. Muvaffaqiyatsizlikda rollback ─────────────────────────────────
-      - name: Rollback
-        if: failure()
-        run: |
-          cd "$COMPOSE_DIR"
-          if [ -f .env.prev ]; then
-            echo "⟲ Oldingi tegga qaytarilmoqda"
-            sudo cp .env.prev .env
-            docker compose up -d --wait --wait-timeout 180 || true
-            echo "⟲ Rollback yakunlandi."
-            echo "   DIQQAT: migratsiya QAYTARILMAYDI — bu deploy'da sxema"
-            echo "   o'zgargan bo'lsa qo'lda ko'rib chiqing."
-          else
-            echo "⚠ .env.prev yo'q — avtomatik rollback imkonsiz (birinchi deploy?)."
-          fi
-          exit 1
-
-      # ── 8. Tozalash ──────────────────────────────────────────────────────
-      # 168h = 1 hafta. Rollback nishonlari shu muddat ichida saqlanadi.
-      - name: Eski image va build keshini tozalash
-        if: success()
-        run: |
-          docker image prune -af --filter "until=168h"
-          docker builder prune -f --filter "until=168h"

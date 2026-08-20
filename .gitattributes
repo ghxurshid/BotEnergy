@@ -4,6 +4,15 @@
 * text=auto
 
 ###############################################################################
+# Linux serverda bajariladigan fayllar HAR DOIM LF bo'lsin.
+# CRLF bilan checkout bo'lsa bash "bad interpreter: /bin/bash^M" deb yiqiladi,
+# systemd esa unit faylni o'qiy olmaydi. Repo Windows'da tahrirlanadi —
+# text=auto o'zi yetarli kafolat bermaydi.
+###############################################################################
+*.sh       text eol=lf
+*.service  text eol=lf
+
+###############################################################################
 # Set default behavior for command prompt diff.
 #
 # This is need for earlier builds of msysgit that does not have it on by

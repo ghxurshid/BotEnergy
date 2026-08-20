@@ -13,9 +13,9 @@ namespace CommonConfiguration.Filters
     /// bilan himoyalaydi. JWT o'rniga ishlatiladi, chunki chaqiruvchi foydalanuvchi emas —
     /// masalan EMQX brokerning authn/authz hook'i.
     ///
-    /// Ikki qatlam: (1) endpoint umuman public tarmoqda ko'rinmaydi (Docker internal network,
-    /// gateway bu yo'llarni route qilmaydi), (2) shu filter. Birinchi qatlam yiqilsa
-    /// (masalan, noto'g'ri firewall qoidasi) ikkinchisi ushlab qoladi.
+    /// Ikki qatlam: (1) endpoint umuman public tarmoqda ko'rinmaydi (servis porti firewall
+    /// bilan yopiq, gateway bu yo'llarni route qilmaydi), (2) shu filter. Birinchi qatlam
+    /// yiqilsa (masalan, noto'g'ri firewall qoidasi) ikkinchisi ushlab qoladi.
     ///
     /// Secret <c>InternalApi:SharedSecret</c> dan olinadi. Production'da u
     /// <c>Env_*</c> placeholder bo'lsa — filter <b>hamma so'rovni rad etadi</b>:

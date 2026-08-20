@@ -15,13 +15,13 @@ namespace CommonConfiguration.ConfigurationExtensions
     /// Ikki rejim (<c>Observability:ConsoleJsonLogs</c> bilan tanlanadi):
     /// <list type="bullet">
     /// <item><b>false</b> (Development) — o'qishga qulay console + kunlik fayl sink.</item>
-    /// <item><b>true</b> (Production/Docker) — faqat stdout'ga compact JSON. Konteynerda
-    /// fayl sink ma'nosiz: konteyner o'chganda loglar yo'qoladi. Promtail stdout'ni yig'ib
-    /// Loki'ga uzatadi.</item>
+    /// <item><b>true</b> (Production) — faqat stdout'ga compact JSON. systemd unit'i ostida
+    /// stdout'ni journald yig'adi (<c>journalctl -u botenergy@&lt;Servis&gt;</c>), shuning uchun
+    /// alohida fayl sink ortiqcha va release katalogi almashganda chalkashlik tug'diradi.</item>
     /// </list>
     ///
-    /// Har yozuvda <c>Service</c>, <c>TraceId</c> va <c>SpanId</c> bo'ladi — Loki'dagi logdan
-    /// Tempo'dagi trace'ga bir bosishda o'tish shu maydonlarga tayanadi.
+    /// Har yozuvda <c>Service</c>, <c>TraceId</c> va <c>SpanId</c> bo'ladi — bitta so'rovni
+    /// servislar bo'ylab kuzatish shu maydonlarga tayanadi.
     /// </summary>
     public static class LoggingExtensions
     {

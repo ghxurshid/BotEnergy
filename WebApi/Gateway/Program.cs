@@ -14,7 +14,7 @@ builder.Configuration.AddCommonConfiguration();
 
 // Gateway REST (HTTP/1.1) va SignalR/WebSocket'ni bitta plain portda multiplekslaydi.
 // TLS'ni oldindagi Nginx terminate qiladi — bu yerda hech qanday sertifikat kerak emas.
-var gatewayPort = builder.Configuration.GetValue("Hosting:Ports:Gateway", 8080);
+var gatewayPort = builder.Configuration.GetValue("Hosting:Ports:Gateway", 5008);
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenAnyIP(gatewayPort, listenOptions =>

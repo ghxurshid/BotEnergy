@@ -2,7 +2,7 @@
   "Hosting": {
     "UseHttps": false,
     "Ports": {
-      "Gateway": 8080,
+      "Gateway": 5008,
       "AdminApi": 5001,
       "AuthApi": 5002,
       "BillingApi": 5003,

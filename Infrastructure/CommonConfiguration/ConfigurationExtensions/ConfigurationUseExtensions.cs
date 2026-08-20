@@ -150,10 +150,10 @@ namespace CommonConfiguration.ConfigurationExtensions
         /// Liveness va readiness'ni ajratib map qiladi:
         /// <list type="bullet">
         /// <item><c>/health/live</c> — hech qanday check ishlatmaydi. "Jarayon javob beryaptimi".
-        /// Docker healthcheck / systemd watchdog shu endpoint'ni so'raydi.</item>
+        /// deploy.sh restartdan keyin shu endpoint'ni kutadi (health gate).</item>
         /// <item><c>/health/ready</c> — "ready" tegli check'lar (DB, Redis). YARP active health
         /// check shu endpoint'ga qaraydi: bog'liqlik yiqilsa trafik boshqa replikaga o'tadi,
-        /// lekin konteyner restart qilinmaydi.</item>
+        /// lekin servis restart qilinmaydi.</item>
         /// <item><c>/health</c> — orqaga moslik uchun, /health/ready bilan bir xil.</item>
         /// </list>
         /// </summary>
