@@ -6,8 +6,8 @@ name: BotEnergy Deploy
 #   checkout → deploy.sh → publish → migratsiya → rolling restart + health gate
 #            → muvaffaqiyatsiz bo'lsa avtomatik rollback (oldingi release'ga)
 #
-# Servislar systemd unit'lari sifatida ishlaydi (botenergy@<Servis>).
-# Server tayyorlash: deploy/README.md
+# Servislar systemd unit'lari sifatida ishlaydi (botenergy-<Servis>.service).
+# Sirlar namunasi: deploy/botenergy.env.example
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:

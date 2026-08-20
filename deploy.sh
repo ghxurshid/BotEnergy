@@ -34,11 +34,10 @@ HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-60}"
 STAGING="$ROOT/.staging"
 BACKUP="$ROOT/.prev"
 
-# Serverda mavjud 7 ta unit. Gateway'ni ishlatmoqchi bo'lsangiz:
-#   1) botenergy-Gateway.service yarating (mavjud unit'dan nusxa, port 5008)
-#   2) shu ro'yxatga "Gateway" qo'shing
-#   3) nginx'ni 127.0.0.1:5008 ga qarating
-SERVICES="AuthApi UserApi AdminApi BillingApi PaymentApi DeviceApi SessionApi"
+# Serverdagi unit'lar: har biri uchun botenergy-<Servis>.service bo'lishi shart.
+# Yangi servis qo'shganda: unit yarating + port_of() ga port qo'shing + shu ro'yxatga
+# nom qo'shing. Gateway ro'yxat OXIRIDA — backend'lar ko'tarilgach almashtiriladi.
+SERVICES="AuthApi UserApi AdminApi BillingApi PaymentApi DeviceApi SessionApi Gateway"
 
 port_of() {
   case "$1" in
@@ -98,6 +97,14 @@ for svc in $SERVICES; do
   systemctl cat "botenergy-$svc.service" >/dev/null 2>&1 \
     || fail "botenergy-$svc.service topilmadi. SERVICES ro'yxatini serverdagi unit nomlariga moslang."
 done
+# `enable` qilinmagan unit deploy'da restart bo'ladi, lekin serverni qayta
+# yuklaganda ko'tarilmaydi — deploy'ni to'xtatmaymiz, faqat ogohlantiramiz.
+not_enabled=""
+for svc in $SERVICES; do
+  systemctl is-enabled --quiet "botenergy-$svc.service" 2>/dev/null \
+    || not_enabled="$not_enabled $svc"
+done
+[ -n "$not_enabled" ] && echo "  ⚠ auto-start yoqilmagan:$not_enabled → sudo systemctl enable$(printf ' botenergy-%s' $not_enabled)"
 # Unit'lar sirlarni ko'ryaptimi? `systemctl show` YUKLANGAN holatni beradi — drop-in
 # yaratilib `daemon-reload` qilinmagan holat ham shu yerda ushlanadi. Bu tekshiruvsiz
 # servis ishga tushadi va Configuration.Production.json'dagi "Env_*" placeholder bilan
@@ -172,6 +179,8 @@ for svc in $SERVICES; do
 
   # mv — bir xil fayl tizimida bir zumda. `rm -rf` dagi "fayl yo'q" oynasi yo'q.
   rm -rf "${BACKUP:?}/$svc"
+  # Birinchi deploy'da $ROOT/$svc hali yo'q — `[ -d ]` false bo'lsa mv o'tkazib
+  # yuboriladi (backup ham bo'lmaydi, rollback'da tiklaydigan narsa yo'q).
   [ -d "$ROOT/$svc" ] && mv "$ROOT/$svc" "$BACKUP/$svc"
   mv "$STAGING/$svc" "$ROOT/$svc"
   SWAPPED="$SWAPPED $svc"
