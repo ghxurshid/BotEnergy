@@ -47,6 +47,15 @@
   },
 
   "ReverseProxy": {
+    // Har bir route'dagi { "X-Forwarded": "Set", "Prefix": "Off" } MAJBURIY.
+    // YARP standart holatda o'zining X-Forwarded-Prefix transformini qo'shadi va uni
+    // gateway'ning PathBase'iga tenglashtiradi. PathBase bo'sh (gateway ildizda turadi),
+    // "Set" esa bo'sh qiymatda header'ni O'CHIRIB yuboradi — ya'ni bizning
+    // { "RequestHeader": "X-Forwarded-Prefix", "Set": "/auth" } qatorimiz bekor bo'lardi.
+    // Oqibati: downstream Swagger `servers` ni to'ldirmaydi va "Try it out"
+    // {gw}/api/... ga (prefikssiz) urib 404 oladi. "Prefix": "Off" YARP'ning o'sha
+    // transformini butunlay o'chiradi; For/Proto/Host esa "Set" bo'lib qolaveradi —
+    // ular downstream'dagi UseProxyForwardedHeaders va rate limiting uchun kerak.
     "Routes": {
       "auth": {
         "ClusterId": "auth",
@@ -54,6 +63,7 @@
         "RateLimiterPolicy": "auth-strict",
         "Transforms": [
           { "PathRemovePrefix": "/auth" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/auth" }
         ]
       },
@@ -64,6 +74,7 @@
         "RateLimiterPolicy": "per-user",
         "Transforms": [
           { "PathRemovePrefix": "/user" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/user" }
         ]
       },
@@ -74,6 +85,7 @@
         "RateLimiterPolicy": "per-user",
         "Transforms": [
           { "PathRemovePrefix": "/admin" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/admin" }
         ]
       },
@@ -84,6 +96,7 @@
         "RateLimiterPolicy": "per-user",
         "Transforms": [
           { "PathRemovePrefix": "/session" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/session" }
         ]
       },
@@ -94,6 +107,7 @@
         "RateLimiterPolicy": "per-user",
         "Transforms": [
           { "PathRemovePrefix": "/billing" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/billing" }
         ]
       },
@@ -102,6 +116,7 @@
         "Match": { "Path": "/payment/{**catch-all}" },
         "Transforms": [
           { "PathRemovePrefix": "/payment" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/payment" }
         ]
       },
@@ -112,6 +127,7 @@
         "RateLimiterPolicy": "per-user",
         "Transforms": [
           { "PathRemovePrefix": "/device" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/device" }
         ]
       },
@@ -129,6 +145,7 @@
         "Match": { "Path": "/auth/swagger/{**catch-all}" },
         "Transforms": [
           { "PathRemovePrefix": "/auth" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/auth" }
         ]
       },
@@ -138,6 +155,7 @@
         "Match": { "Path": "/user/swagger/{**catch-all}" },
         "Transforms": [
           { "PathRemovePrefix": "/user" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/user" }
         ]
       },
@@ -147,6 +165,7 @@
         "Match": { "Path": "/admin/swagger/{**catch-all}" },
         "Transforms": [
           { "PathRemovePrefix": "/admin" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/admin" }
         ]
       },
@@ -156,6 +175,7 @@
         "Match": { "Path": "/session/swagger/{**catch-all}" },
         "Transforms": [
           { "PathRemovePrefix": "/session" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/session" }
         ]
       },
@@ -165,6 +185,7 @@
         "Match": { "Path": "/billing/swagger/{**catch-all}" },
         "Transforms": [
           { "PathRemovePrefix": "/billing" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/billing" }
         ]
       },
@@ -174,6 +195,7 @@
         "Match": { "Path": "/payment/swagger/{**catch-all}" },
         "Transforms": [
           { "PathRemovePrefix": "/payment" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/payment" }
         ]
       },
@@ -183,6 +205,7 @@
         "Match": { "Path": "/device/swagger/{**catch-all}" },
         "Transforms": [
           { "PathRemovePrefix": "/device" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/device" }
         ]
       }
