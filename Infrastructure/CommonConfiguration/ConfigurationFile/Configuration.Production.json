@@ -24,10 +24,10 @@
     "PerUserBurst": 120,
     "PerUserPerMinute": 60
   },
+  // "*" — har qanday origin ochiq (simulyatorlar nginx ostidan va localhost'dan ishlaydi).
+  // Domen aniq bo'lgach shu yerga ro'yxat qilib yozing, "*" ni olib tashlang.
   "Cors": {
-    "AllowedOrigins": [
-      "https://company.uz"
-    ]
+    "AllowedOrigins": [ "*" ]
   },
   "Swagger": {
     "Enabled": false

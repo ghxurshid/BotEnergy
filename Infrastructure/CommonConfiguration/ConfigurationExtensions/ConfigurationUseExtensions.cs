@@ -100,25 +100,27 @@ namespace CommonConfiguration.ConfigurationExtensions
 
         /// <summary>
         /// Brauzerda ishlaydigan klientlar (simulyatorlar, admin panel) uchun CORS.
-        /// Originlar Cors:AllowedOrigins (string massiv) dan olinadi.
-        /// Ro'yxat berilmagan bo'lsa: Development'da hamma origin ochiq (simulyatorlar ishlashi uchun),
-        /// Production'da hech qanday cross-origin ruxsat berilmaydi (native app'larga CORS ta'sir qilmaydi).
+        /// Originlar Cors:AllowedOrigins (string massiv) dan olinadi. Ro'yxat bo'sh bo'lsa
+        /// yoki ichida "*" bo'lsa — muhitdan qat'i nazar har qanday origin qabul qilinadi
+        /// (simulyatorlar file://, localhost va nginx ostidan ochiladi).
+        /// DIQQAT: CORS server tomon himoyasi emas — u faqat brauzerga ta'sir qiladi, API
+        /// baribir curl va mobil ilova uchun ochiq. Himoya JWT + PermissionFilter zimmasida.
         /// </summary>
         public static IServiceCollection AddSimulatorCors(this IServiceCollection services, IConfiguration config)
         {
             var origins = config.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
-            var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
-            var isProduction = string.Equals(env, "Production", StringComparison.OrdinalIgnoreCase);
+            var allowAnyOrigin = origins.Length == 0 || origins.Contains("*");
 
             services.AddCors(options =>
             {
                 options.AddPolicy(SimulatorCorsPolicy, policy =>
                 {
-                    if (origins.Length > 0)
+                    // AllowCredentials() bilan AllowAnyOrigin() birga ishlamaydi (runtime'da exception
+                    // otadi), shuning uchun "hammasi ochiq" holatida origin aks ettiriladi.
+                    if (allowAnyOrigin)
+                        policy.SetIsOriginAllowed(_ => true);
+                    else
                         policy.WithOrigins(origins);
-                    else if (!isProduction)
-                        policy.SetIsOriginAllowed(_ => true); // faqat dev — simulyatorlar file:// yoki localhost'dan ochiladi
-                    // prod + ro'yxat yo'q → hech bir origin ruxsat etilmaydi
 
                     policy
                         .AllowAnyHeader()
