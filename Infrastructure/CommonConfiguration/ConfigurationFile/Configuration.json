@@ -19,6 +19,14 @@
     "ClockSkewSeconds": 30
   },
 
+  // Bu fayl HAR DOIM yuklanadi (optional:false), muhit fayli esa yuklanmasligi mumkin.
+  // AllowAnyOrigin ro'yxatdan ustun turadi — serverdagi Cors__AllowedOrigins__0 env var'i
+  // (u json'ni override qiladi) noto'g'ri domen tutib qolsa ham brauzer bloklanmaydi.
+  // Domen aniq bo'lgach false qiling va Cors:AllowedOrigins ro'yxatiga o'ting.
+  "Cors": {
+    "AllowAnyOrigin": true
+  },
+
   "Swagger": {
     "Enabled": true
   },

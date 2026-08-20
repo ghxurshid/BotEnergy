@@ -125,7 +125,14 @@ namespace CommonConfiguration.ConfigurationExtensions
                 .Select(o => o.Trim().TrimEnd('/'))
                 .ToArray();
 
-            var allowAnyOrigin = origins.Length == 0 || origins.Contains("*");
+            // Cors:AllowAnyOrigin — ro'yxatdan USTUN turadigan aniq bayroq. U bazaviy
+            // Configuration.json'da yashaydi (optional:false — har doim yuklanadi), ya'ni
+            // muhit fayli yuklanmasa ham, serverdagi Cors__AllowedOrigins__0 env var'i
+            // qanday qiymat tutsa ham, ochiqlik kafolatlanadi. Domen aniq bo'lgach shu
+            // bayroqni false qiling va ro'yxatga tayaning.
+            var allowAnyOrigin = config.GetValue("Cors:AllowAnyOrigin", false)
+                                 || origins.Length == 0
+                                 || origins.Contains("*");
             _corsOrigins = origins;
             _corsAllowAny = allowAnyOrigin;
 
