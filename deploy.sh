@@ -115,14 +115,31 @@ done
 
 # ── 2. Migratsiya + seed — YANGI binardan, almashtirishdan oldin ────────────
 # Yiqilsa servislar tegilmagan holda qoladi.
+#
+# DIQQAT: env faylni `. "$ENV_FILE"` bilan SOURCE QILIB BO'LMAYDI. Qiymatlar
+# ichida `;` bor (connection string), shell uni buyruq ajratgichi deb biladi va
+# o'zgaruvchi "Host=localhost" da kesilib qoladi. systemd EnvironmentFile'ni
+# literal o'qiydi — bu yerda ham xuddi shunday qilamiz.
+load_env() {
+  local line key val
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$''}"                       # Windows'da tahrirlangan bo'lsa
+    case "$line" in ''|'#'*) continue ;; esac
+    case "$line" in *=*) ;; *) continue ;; esac
+    key="${line%%=*}"
+    val="${line#*=}"
+    case "$key" in [A-Za-z_]*) ;; *) continue ;; esac
+    # systemd qo'shtirnoqlarni olib tashlaydi — biz ham
+    case "$val" in
+      \"*\") val="${val#\"}"; val="${val%\"}" ;;
+      '*') val="${val#'}"; val="${val%'}" ;;
+    esac
+    export "$key=$val"
+  done < "$ENV_FILE"
+}
+
 log "Migratsiya + seed"
-(
-  set -a
-  # shellcheck disable=SC1090
-  . "$ENV_FILE"
-  set +a
-  dotnet "$STAGING/Migrator/Migrator.dll"
-) || fail "Migratsiya yiqildi — servislar almashtirilmadi."
+( load_env; dotnet "$STAGING/Migrator/Migrator.dll" )   || fail "Migratsiya yiqildi — servislar almashtirilmadi."
 echo "  ✓ migratsiya o'tdi"
 
 # ── 3. Almashtirish + restart + health gate ─────────────────────────────────
