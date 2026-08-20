@@ -98,7 +98,29 @@ for svc in $SERVICES; do
   systemctl cat "botenergy-$svc.service" >/dev/null 2>&1 \
     || fail "botenergy-$svc.service topilmadi. SERVICES ro'yxatini serverdagi unit nomlariga moslang."
 done
-echo "  ✓ dotnet $(dotnet --version), $ROOT yoziladigan, ${SERVICES// /, } unit'lari joyida"
+# Unit'lar sirlarni ko'ryaptimi? `systemctl show` YUKLANGAN holatni beradi — drop-in
+# yaratilib `daemon-reload` qilinmagan holat ham shu yerda ushlanadi. Bu tekshiruvsiz
+# servis ishga tushadi va Configuration.Production.json'dagi "Env_*" placeholder bilan
+# yiqiladi (migratsiya esa allaqachon qo'llanilgan bo'ladi — rollback uni qaytarmaydi).
+# Chetlab o'tish kerak bo'lsa: SKIP_ENV_CHECK=1 ./deploy.sh
+if [ "${SKIP_ENV_CHECK:-0}" = "1" ]; then env_check=""; else env_check="$SERVICES"; fi
+missing_env=""
+for svc in $env_check; do
+  systemctl show "botenergy-$svc.service" -p EnvironmentFiles 2>/dev/null \
+    | grep -qF "$ENV_FILE" || missing_env="$missing_env $svc"
+done
+if [ -n "$missing_env" ]; then
+  echo "  $ENV_FILE quyidagi unit'larga ulanmagan:$missing_env" >&2
+  echo "  Tuzatish (bir marta, unit fayllarga tegmasdan):" >&2
+  echo "    for s in$missing_env; do" >&2
+  echo "      sudo mkdir -p /etc/systemd/system/botenergy-\$s.service.d" >&2
+  echo "      printf '[Service]\nEnvironmentFile=$ENV_FILE\n' \\" >&2
+  echo "        | sudo tee /etc/systemd/system/botenergy-\$s.service.d/env.conf >/dev/null" >&2
+  echo "    done" >&2
+  echo "    sudo systemctl daemon-reload" >&2
+  fail "Servislar sirlarni ololmaydi — deploy to'xtatildi (hech narsa o'zgarmadi)."
+fi
+echo "  ✓ dotnet $(dotnet --version), $ROOT yoziladigan, ${SERVICES// /, } unit'lari joyida (sirlar ulangan)"
 
 # ── 1. Publish — .staging ga ────────────────────────────────────────────────
 # Ishlab turgan versiya tegilmaydi: bu bosqichda xato bo'lsa hech narsa o'zgarmagan.

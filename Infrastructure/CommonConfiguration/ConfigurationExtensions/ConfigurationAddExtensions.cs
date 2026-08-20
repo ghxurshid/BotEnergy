@@ -250,7 +250,16 @@ namespace CommonConfiguration.ConfigurationExtensions
 
         public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
         {
-            var connectionString = config.GetConnectionString("DefaultConnection");
+            // ResolveSecret: Configuration.Production.json'dagi "Env_*" placeholder (ya'ni
+            // ConnectionStrings__DefaultConnection env var'i yetib kelmagan) Npgsql'ga o'tib
+            // ketmasin — u "Format of the initialization string does not conform to
+            // specification" deb yiqiladi va sababi loglardan umuman ko'rinmaydi.
+            var connectionString = ResolveSecret(config, "ConnectionStrings:DefaultConnection")
+                ?? throw new InvalidOperationException(
+                    "ConnectionStrings:DefaultConnection sozlanmagan. Env var sifatida bering: " +
+                    "ConnectionStrings__DefaultConnection. Serverda u /etc/botenergy/botenergy.env " +
+                    "dan systemd EnvironmentFile drop-in orqali keladi — drop-in yaratilganiga va " +
+                    "`systemctl daemon-reload` qilinganiga ishonch hosil qiling.");
 
             var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
             dataSourceBuilder.UseNetTopologySuite(); // PostGIS geografik turlar (StationEntity.Coordinates) uchun
