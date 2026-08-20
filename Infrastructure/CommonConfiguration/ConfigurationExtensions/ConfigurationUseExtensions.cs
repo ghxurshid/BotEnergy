@@ -181,13 +181,24 @@ namespace CommonConfiguration.ConfigurationExtensions
             {
                 options.PreSerializeFilters.Add((document, request) =>
                 {
-                    // Gateway YARP transform orqali yuboradi: X-Forwarded-Prefix: /api/auth
+                    // Gateway YARP transform orqali yuboradi: X-Forwarded-Prefix: /auth
+                    // Gateway faqat prefiksni olib tashlaydi, boshqa o'zgartirish qilmaydi —
+                    // shuning uchun ommaviy yo'l = prefiks + spec'dagi yo'l. "Try it out"
+                    // shu sababli to'g'ri manzilga uradi: /auth + /api/PlatformAuth/Login.
                     var prefix = request.Headers["X-Forwarded-Prefix"].FirstOrDefault();
                     if (!string.IsNullOrWhiteSpace(prefix))
                         document.Servers = new List<OpenApiServer> { new() { Url = prefix } };
                 });
             });
-            app.UseSwaggerUI();
+            app.UseSwaggerUI(options =>
+            {
+                // NISBIY yo'l — boshida "/" YO'Q. Swagger UI uni joriy sahifaga nisbatan hal qiladi:
+                //   to'g'ridan-to'g'ri  /swagger/index.html       → /swagger/v1/swagger.json
+                //   gateway ortida      /auth/swagger/index.html  → /auth/swagger/v1/swagger.json
+                // Absolyut "/swagger/v1/swagger.json" bo'lsa gateway ortida 404 bo'lardi:
+                // gateway'da prefiksiz "/swagger" marshruti yo'q.
+                options.SwaggerEndpoint("v1/swagger.json", "v1");
+            });
             return app;
         }
 

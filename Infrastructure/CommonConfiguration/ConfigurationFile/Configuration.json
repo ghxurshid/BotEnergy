@@ -50,76 +50,69 @@
     "Routes": {
       "auth": {
         "ClusterId": "auth",
-        "Match": { "Path": "/api/auth/{**catch-all}" },
+        "Match": { "Path": "/auth/{**catch-all}" },
         "RateLimiterPolicy": "auth-strict",
         "Transforms": [
-          { "PathRemovePrefix": "/api/auth" },
-          { "PathPrefix": "/api" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/auth" }
+          { "PathRemovePrefix": "/auth" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/auth" }
         ]
       },
       "user": {
         "ClusterId": "user",
-        "Match": { "Path": "/api/user/{**catch-all}" },
+        "Match": { "Path": "/user/{**catch-all}" },
         "AuthorizationPolicy": "authenticated",
         "RateLimiterPolicy": "per-user",
         "Transforms": [
-          { "PathRemovePrefix": "/api/user" },
-          { "PathPrefix": "/api" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/user" }
+          { "PathRemovePrefix": "/user" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/user" }
         ]
       },
       "admin": {
         "ClusterId": "admin",
-        "Match": { "Path": "/api/admin/{**catch-all}" },
+        "Match": { "Path": "/admin/{**catch-all}" },
         "AuthorizationPolicy": "authenticated",
         "RateLimiterPolicy": "per-user",
         "Transforms": [
-          { "PathRemovePrefix": "/api/admin" },
-          { "PathPrefix": "/api" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/admin" }
+          { "PathRemovePrefix": "/admin" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/admin" }
         ]
       },
       "session": {
         "ClusterId": "session",
-        "Match": { "Path": "/api/session/{**catch-all}" },
+        "Match": { "Path": "/session/{**catch-all}" },
         "AuthorizationPolicy": "authenticated",
         "RateLimiterPolicy": "per-user",
         "Transforms": [
-          { "PathRemovePrefix": "/api/session" },
-          { "PathPrefix": "/api" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/session" }
+          { "PathRemovePrefix": "/session" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/session" }
         ]
       },
       "billing": {
         "ClusterId": "billing",
-        "Match": { "Path": "/api/billing/{**catch-all}" },
+        "Match": { "Path": "/billing/{**catch-all}" },
         "AuthorizationPolicy": "authenticated",
         "RateLimiterPolicy": "per-user",
         "Transforms": [
-          { "PathRemovePrefix": "/api/billing" },
-          { "PathPrefix": "/api" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/billing" }
+          { "PathRemovePrefix": "/billing" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/billing" }
         ]
       },
       "payment": {
         "ClusterId": "payment",
-        "Match": { "Path": "/api/payment/{**catch-all}" },
+        "Match": { "Path": "/payment/{**catch-all}" },
         "Transforms": [
-          { "PathRemovePrefix": "/api/payment" },
-          { "PathPrefix": "/api" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/payment" }
+          { "PathRemovePrefix": "/payment" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/payment" }
         ]
       },
       "device": {
         "ClusterId": "device",
-        "Match": { "Path": "/api/device/{**catch-all}" },
+        "Match": { "Path": "/device/{**catch-all}" },
         "AuthorizationPolicy": "authenticated",
         "RateLimiterPolicy": "per-user",
         "Transforms": [
-          { "PathRemovePrefix": "/api/device" },
-          { "PathPrefix": "/api" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/device" }
+          { "PathRemovePrefix": "/device" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/device" }
         ]
       },
       "hubs": {
@@ -129,68 +122,68 @@
 
       // Swagger route'lari: Order=-1 bilan asosiy route'lardan OLDIN tekshiriladi va
       // AuthorizationPolicy'siz — Swagger UI hujjatni tokensiz o'qiy olishi uchun.
-      // Production'da Swagger:Enabled=false, shuning uchun downstream baribir 404 qaytaradi.
+      // Downstream'da Swagger:Enabled false bo'lsa baribir 404 qaytadi.
       "auth-swagger": {
         "ClusterId": "auth",
         "Order": -1,
-        "Match": { "Path": "/api/auth/swagger/{**catch-all}" },
+        "Match": { "Path": "/auth/swagger/{**catch-all}" },
         "Transforms": [
-          { "PathRemovePrefix": "/api/auth" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/auth" }
+          { "PathRemovePrefix": "/auth" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/auth" }
         ]
       },
       "user-swagger": {
         "ClusterId": "user",
         "Order": -1,
-        "Match": { "Path": "/api/user/swagger/{**catch-all}" },
+        "Match": { "Path": "/user/swagger/{**catch-all}" },
         "Transforms": [
-          { "PathRemovePrefix": "/api/user" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/user" }
+          { "PathRemovePrefix": "/user" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/user" }
         ]
       },
       "admin-swagger": {
         "ClusterId": "admin",
         "Order": -1,
-        "Match": { "Path": "/api/admin/swagger/{**catch-all}" },
+        "Match": { "Path": "/admin/swagger/{**catch-all}" },
         "Transforms": [
-          { "PathRemovePrefix": "/api/admin" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/admin" }
+          { "PathRemovePrefix": "/admin" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/admin" }
         ]
       },
       "session-swagger": {
         "ClusterId": "session",
         "Order": -1,
-        "Match": { "Path": "/api/session/swagger/{**catch-all}" },
+        "Match": { "Path": "/session/swagger/{**catch-all}" },
         "Transforms": [
-          { "PathRemovePrefix": "/api/session" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/session" }
+          { "PathRemovePrefix": "/session" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/session" }
         ]
       },
       "billing-swagger": {
         "ClusterId": "billing",
         "Order": -1,
-        "Match": { "Path": "/api/billing/swagger/{**catch-all}" },
+        "Match": { "Path": "/billing/swagger/{**catch-all}" },
         "Transforms": [
-          { "PathRemovePrefix": "/api/billing" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/billing" }
+          { "PathRemovePrefix": "/billing" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/billing" }
         ]
       },
       "payment-swagger": {
         "ClusterId": "payment",
         "Order": -1,
-        "Match": { "Path": "/api/payment/swagger/{**catch-all}" },
+        "Match": { "Path": "/payment/swagger/{**catch-all}" },
         "Transforms": [
-          { "PathRemovePrefix": "/api/payment" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/payment" }
+          { "PathRemovePrefix": "/payment" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/payment" }
         ]
       },
       "device-swagger": {
         "ClusterId": "device",
         "Order": -1,
-        "Match": { "Path": "/api/device/swagger/{**catch-all}" },
+        "Match": { "Path": "/device/swagger/{**catch-all}" },
         "Transforms": [
-          { "PathRemovePrefix": "/api/device" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api/device" }
+          { "PathRemovePrefix": "/device" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/device" }
         ]
       }
     },

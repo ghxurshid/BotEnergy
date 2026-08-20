@@ -29,8 +29,11 @@
   "Cors": {
     "AllowedOrigins": [ "*" ]
   },
+  // Gateway'dagi umumiy Swagger UI ({gateway}/swagger) shu bayroqqa bog'liq — hozir
+  // sinov bosqichi uchun yoqilgan. Ishga tushirilgach false qiling: API yuzasi,
+  // model'lar va endpoint ro'yxati aks holda ochiq turadi.
   "Swagger": {
-    "Enabled": false
+    "Enabled": true
   },
   "Migrate": {
     "AutoApply": false

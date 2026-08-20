@@ -3,7 +3,7 @@ namespace Gateway.Extensions
     /// <summary>
     /// Barcha backend servislarning Swagger hujjatlarini bitta UI'da yig'adi.
     ///
-    /// Swagger JSON gateway'ning o'zi orqali olinadi (<c>/api/{servis}/swagger/v1/swagger.json</c>),
+    /// Swagger JSON gateway'ning o'zi orqali olinadi (<c>/{servis}/swagger/v1/swagger.json</c>),
     /// shuning uchun downstream servislar tashqariga chiqarilmagan bo'lsa ham hujjat ko'rinadi.
     /// Downstream tomonda <c>UseSwaggerIfEnabled</c> <c>X-Forwarded-Prefix</c> ni o'qib
     /// <c>servers</c> URL'ini to'g'rilaydi — "Try it out" gateway orqali ishlaydi.
@@ -31,7 +31,7 @@ namespace Gateway.Extensions
             app.UseSwaggerUI(options =>
             {
                 foreach (var (route, title) in Services)
-                    options.SwaggerEndpoint($"/api/{route}/swagger/v1/swagger.json", title);
+                    options.SwaggerEndpoint($"/{route}/swagger/v1/swagger.json", title);
 
                 options.RoutePrefix = "swagger";
                 options.DocumentTitle = "BotEnergy API Gateway";
