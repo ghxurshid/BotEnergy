@@ -106,10 +106,28 @@ namespace CommonConfiguration.ConfigurationExtensions
         /// DIQQAT: CORS server tomon himoyasi emas — u faqat brauzerga ta'sir qiladi, API
         /// baribir curl va mobil ilova uchun ochiq. Himoya JWT + PermissionFilter zimmasida.
         /// </summary>
+        // UseSimulatorCors log'i uchun — qaysi qiymat KUCHGA KIRGANINI ko'rsatadi.
+        // Env var (Cors__AllowedOrigins__0=...) json'ni override qiladi, shuning uchun
+        // fayldagi qiymatga qarab xulosa qilib bo'lmaydi.
+        private static string[] _corsOrigins = Array.Empty<string>();
+        private static bool _corsAllowAny = true;
+
         public static IServiceCollection AddSimulatorCors(this IServiceCollection services, IConfiguration config)
         {
-            var origins = config.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+            var configured = config.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+
+            // Tozalash: bo'sh qatorlar, "Env_" placeholder'lari va atrofdagi bo'shliqlar
+            // hisobga olinmaydi; oxiridagi "/" kesiladi. Brauzer Origin'ni HECH QACHON
+            // oxirida "/" bilan yubormaydi — "https://x.uz/" deb yozilgan qiymat jimgina
+            // hech bir originga mos kelmay, hamma so'rovni blokda qoldirardi.
+            var origins = configured
+                .Where(o => !string.IsNullOrWhiteSpace(o) && !o.StartsWith("Env_", StringComparison.Ordinal))
+                .Select(o => o.Trim().TrimEnd('/'))
+                .ToArray();
+
             var allowAnyOrigin = origins.Length == 0 || origins.Contains("*");
+            _corsOrigins = origins;
+            _corsAllowAny = allowAnyOrigin;
 
             services.AddCors(options =>
             {
@@ -136,7 +154,17 @@ namespace CommonConfiguration.ConfigurationExtensions
         }
 
         public static IApplicationBuilder UseSimulatorCors(this IApplicationBuilder app)
-            => app.UseCors(SimulatorCorsPolicy);
+        {
+            // CORS jimgina bloklaydi: brauzer konsolida "Failed to fetch", serverda esa
+            // hech qanday xato yo'q. Shuning uchun samarali qiymat startda yoziladi.
+            var logger = app.ApplicationServices.GetService<ILoggerFactory>()?.CreateLogger("BotEnergy.Cors");
+            if (_corsAllowAny)
+                logger?.LogInformation("CORS: har qanday origin ochiq (Cors:AllowedOrigins bo'sh yoki \"*\")");
+            else
+                logger?.LogInformation("CORS: faqat shu originlar ruxsat etilgan: {Origins}", string.Join(", ", _corsOrigins));
+
+            return app.UseCors(SimulatorCorsPolicy);
+        }
 
         /// <summary>
         /// Hosting:UseHttps true bo'lsagina UseHttpsRedirection qo'shadi.
