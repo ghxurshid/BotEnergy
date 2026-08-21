@@ -43,5 +43,24 @@ namespace Domain.Repositories
 
         /// <summary>Merchantning barcha aktiv qurilmalari holati (admin snapshot uchun).</summary>
         Task<List<DeviceStatusInfo>> GetStatusInfoByMerchantAsync(long merchantId);
+
+        /// <summary>
+        /// Naqd sessiya muvaffaqiyatli yakunlanganda qurilma box qoldig'ini oshiradi.
+        /// <c>FOR UPDATE</c> lock + relative UPDATE — parallel sessiyalar bir-birini bosmaydi.
+        /// </summary>
+        /// <returns>Yangi qoldiq; qurilma topilmasa 0.</returns>
+        Task<decimal> AddCashAsync(long deviceId, decimal amount);
+
+        /// <summary>
+        /// Inkassatsiya tasdiqlanganda qoldiqni nolga tushiradi.
+        /// </summary>
+        /// <returns>Nolga tushirilishidan oldingi qoldiq (ya'ni olib ketilgan summa).</returns>
+        Task<decimal> CollectCashAsync(long deviceId);
+
+        /// <summary>
+        /// Inkassator ilovasi uchun: naqd qoldiq va stansiya koordinatasi bilan qurilmalar.
+        /// Xarita ko'rinishi uchun — Station eager yuklanadi.
+        /// </summary>
+        Task<List<DeviceEntity>> GetCashDevicesAsync(long? merchantId);
     }
 }

@@ -55,6 +55,8 @@ builder.Services.RegisterServices();
 builder.Services.RegisterSessionServices();
 builder.Services.AddPaymeClient(builder.Configuration);
 builder.Services.RegisterHoldInvoiceServices(builder.Configuration);
+// Naqd → karta: qurilma interfeysidan kelgan oqim (MQTT handler'lar + payout watcher).
+builder.Services.RegisterCashTopUpServices(builder.Configuration);
 
 // Redis
 builder.Services.AddRedisServices(builder.Configuration);
@@ -63,6 +65,13 @@ builder.Services.AddRedisServices(builder.Configuration);
 builder.Services.AddScoped<ISessionNotifier, SignalRSessionNotifier>();
 // Service qatlamidan qurilmaga buyruq — to'g'ridan-to'g'ri MQTT (oraliq hop yo'q)
 builder.Services.AddScoped<IDeviceCommandPublisher, MqttDeviceCommandPublisher>();
+
+// Inkassatsiya: bu process'da MQTT bor, shuning uchun ko'prik shart emas.
+// AdminApi esa xuddi shu servisni HttpDeviceCommandSender bilan ishlatadi.
+builder.Services.AddScoped<IDeviceCommandSender, LocalDeviceCommandSender>();
+builder.Services.RegisterIncassationServices();
+// AdminApi'dan keladigan internal chaqiruvni himoyalaydi (InternalDeviceController).
+builder.Services.AddScoped<InternalSecretFilter>();
 
 // MQTT connect oqimini boshqaruvchi servis (SessionConnectHandler tomonidan chaqiriladi)
 builder.Services.AddScoped<IDeviceSessionService, DeviceSessionService>();

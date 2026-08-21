@@ -56,7 +56,8 @@
     "ConnectionString": "localhost:6379"
   },
   "InternalApi": {
-    "SharedSecret": "botenergy-internal-secret-2026"
+    "SharedSecret": "botenergy-internal-secret-2026",
+    "SessionApiBaseUrl": "http://localhost:5007"
   },
   "Kestrel": {
     "Certificates": {
@@ -71,6 +72,28 @@
     "MerchantId": "",
     "Key": "",
     "TimeoutSeconds": 30
+  },
+  "Bank": {
+    "Provider": "Fake",
+    "BaseUrl": "",
+    "TimeoutSeconds": 30,
+    "Fake": {
+      "DelayMs": 200,
+      "FailureRate": 0,
+      "RejectCardPrefix": "0000"
+    }
+  },
+  "CashTopUp": {
+    "WatcherIntervalSeconds": 10,
+    "LeaseSeconds": 60,
+    "BatchSize": 20,
+    "MaxAttempts": 8,
+    "BackoffBaseSeconds": 10,
+    "BackoffMaxSeconds": 900,
+    "IdleTimeoutMinutes": 5,
+    "IdleCheckIntervalSeconds": 60,
+    "AllowedDenominations": [ 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000 ],
+    "MaxSessionAmount": 50000000
   },
   "HoldInvoices": {
     "WatcherIntervalSeconds": 5,

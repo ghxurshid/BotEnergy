@@ -46,6 +46,9 @@ namespace Persistence.Context
             ConfigurePaymentSession(modelBuilder);
             ConfigureHoldInvoice(modelBuilder);
             ConfigureHoldInvoiceStep(modelBuilder);
+            ConfigureCashSession(modelBuilder);
+            ConfigureCashSessionBill(modelBuilder);
+            ConfigureCashCollection(modelBuilder);
 
             ApplyGlobalSoftDeleteFilter(modelBuilder);
 
@@ -366,6 +369,11 @@ namespace Persistence.Context
                 b.Property(x => x.IsOnline).HasColumnName("is_online").HasDefaultValue(false);
                 b.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
                 b.Property(x => x.LastSeenAt).HasColumnName("last_seen_at").HasColumnType(TimestampWithoutTimeZone);
+                // Naqd box qoldig'i. Mavjud qatorlar uchun default 0 — migration NOT NULL qo'sha oladi.
+                b.Property(x => x.CashBalance).HasColumnName("cash_balance")
+                    .HasColumnType("numeric(18,2)").HasDefaultValue(0m);
+                b.Property(x => x.CashLastCollectedAt).HasColumnName("cash_last_collected_at")
+                    .HasColumnType(TimestampWithoutTimeZone);
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
@@ -803,6 +811,161 @@ namespace Persistence.Context
                 b.HasIndex(x => new { x.HoldInvoiceId, x.OccurredAt });
                 b.HasIndex(x => x.CorrelationId);
                 b.HasIndex(x => new { x.MerchantId, x.OccurredAt });
+            });
+        }
+
+        private static void ConfigureCashSession(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<CashSessionEntity>(b =>
+            {
+                b.ToTable("cash_sessions", AppSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.DeviceId).HasColumnName("device_id").IsRequired();
+                b.Property(x => x.SerialNumber).HasColumnName("serial_number").IsRequired().HasMaxLength(100);
+
+                // To'liq PAN saqlanmaydi — faqat maska va bank tokeni.
+                b.Property(x => x.CardMasked).HasColumnName("card_masked").IsRequired().HasMaxLength(32);
+                b.Property(x => x.CardToken).HasColumnName("card_token").IsRequired().HasMaxLength(256);
+
+                b.Property(x => x.Status).HasColumnName("status").HasConversion<int>().IsRequired();
+                b.Property(x => x.AcceptedAmount).HasColumnName("accepted_amount")
+                    .HasColumnType("numeric(18,2)").HasDefaultValue(0m);
+                b.Property(x => x.BillCount).HasColumnName("bill_count").HasDefaultValue(0);
+                b.Property(x => x.Currency).HasColumnName("currency").HasMaxLength(3).HasDefaultValue("UZS");
+
+                b.Property(x => x.PayoutReference).HasColumnName("payout_reference").HasMaxLength(128);
+                b.Property(x => x.IdempotencyKey).HasColumnName("idempotency_key").HasMaxLength(128);
+                b.Property(x => x.FailureReason).HasColumnName("failure_reason");
+
+                b.Property(x => x.CompletedAt).HasColumnName("completed_at").HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.LastActivityAt).HasColumnName("last_activity_at")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+
+                b.Property(x => x.AttemptCount).HasColumnName("attempt_count").HasDefaultValue(0);
+                b.Property(x => x.NextAttemptAt).HasColumnName("next_attempt_at").HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.LockedBy).HasColumnName("locked_by").HasMaxLength(128);
+                b.Property(x => x.LeaseUntil).HasColumnName("lease_until").HasColumnType(TimestampWithoutTimeZone);
+
+                b.Property(x => x.CreatedDate).HasColumnName("created_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+                b.HasOne(x => x.Device)
+                    .WithMany()
+                    .HasForeignKey(x => x.DeviceId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Qurilmada bir vaqtda faqat bitta ochiq sessiya bo'lishi kerak —
+                // Accepting(0)/Committing(1) holatlari uchun partial unique index.
+                b.HasIndex(x => x.DeviceId)
+                    .IsUnique()
+                    .HasFilter("status IN (0, 1) AND is_deleted = false")
+                    .HasDatabaseName("ix_cash_sessions_device_active");
+
+                b.HasIndex(x => new { x.SerialNumber, x.Status });
+                // Watcher hot-path: qayta urinish navbati.
+                b.HasIndex(x => new { x.Status, x.NextAttemptAt });
+                b.HasIndex(x => x.IdempotencyKey).IsUnique()
+                    .HasFilter("idempotency_key IS NOT NULL");
+            });
+        }
+
+        private static void ConfigureCashSessionBill(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<CashSessionBillEntity>(b =>
+            {
+                b.ToTable("cash_session_bills", AppSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.CashSessionId).HasColumnName("cash_session_id").IsRequired();
+                b.Property(x => x.DeviceId).HasColumnName("device_id").IsRequired();
+                b.Property(x => x.SerialNumber).HasColumnName("serial_number").IsRequired().HasMaxLength(100);
+
+                b.Property(x => x.Denomination).HasColumnName("denomination")
+                    .HasColumnType("numeric(18,2)").IsRequired();
+                b.Property(x => x.Currency).HasColumnName("currency").HasMaxLength(3).HasDefaultValue("UZS");
+                b.Property(x => x.BillSeq).HasColumnName("bill_seq").IsRequired();
+
+                b.Property(x => x.AcceptedAt).HasColumnName("accepted_at")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+
+                b.Property(x => x.CreatedDate).HasColumnName("created_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+                b.HasOne(x => x.CashSession)
+                    .WithMany(x => x.Bills)
+                    .HasForeignKey(x => x.CashSessionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // Idempotentlik: qurilma xabarni qayta yuborsa summa ikki marta oshmaydi.
+                b.HasIndex(x => new { x.CashSessionId, x.BillSeq }).IsUnique();
+                b.HasIndex(x => new { x.DeviceId, x.AcceptedAt });
+            });
+        }
+
+        private static void ConfigureCashCollection(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<CashCollectionEntity>(b =>
+            {
+                b.ToTable("cash_collections", AppSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.DeviceId).HasColumnName("device_id").IsRequired();
+                b.Property(x => x.SerialNumber).HasColumnName("serial_number").IsRequired().HasMaxLength(100);
+                b.Property(x => x.MerchantId).HasColumnName("merchant_id").IsRequired();
+                b.Property(x => x.StationId).HasColumnName("station_id").IsRequired();
+                b.Property(x => x.IncassatorUserId).HasColumnName("incassator_user_id").IsRequired();
+
+                b.Property(x => x.Status).HasColumnName("status").HasConversion<int>().IsRequired();
+                b.Property(x => x.ExpectedAmount).HasColumnName("expected_amount")
+                    .HasColumnType("numeric(18,2)").HasDefaultValue(0m);
+                b.Property(x => x.CountedAmount).HasColumnName("counted_amount")
+                    .HasColumnType("numeric(18,2)");
+                b.Property(x => x.Currency).HasColumnName("currency").HasMaxLength(3).HasDefaultValue("UZS");
+
+                b.Property(x => x.RequestedAt).HasColumnName("requested_at")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.BoxOpenedAt).HasColumnName("box_opened_at").HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.ConfirmedAt).HasColumnName("confirmed_at").HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.Notes).HasColumnName("notes");
+
+                b.Property(x => x.CreatedDate).HasColumnName("created_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+                b.HasOne(x => x.Device)
+                    .WithMany()
+                    .HasForeignKey(x => x.DeviceId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasOne(x => x.IncassatorUser)
+                    .WithMany()
+                    .HasForeignKey(x => x.IncassatorUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Qurilmada bir vaqtda faqat bitta tugallanmagan inkassatsiya —
+                // Requested(0)/BoxOpened(1) uchun partial unique index.
+                b.HasIndex(x => x.DeviceId)
+                    .IsUnique()
+                    .HasFilter("status IN (0, 1) AND is_deleted = false")
+                    .HasDatabaseName("ix_cash_collections_device_open");
+
+                b.HasIndex(x => new { x.MerchantId, x.RequestedAt });
+                b.HasIndex(x => new { x.IncassatorUserId, x.RequestedAt });
             });
         }
     }

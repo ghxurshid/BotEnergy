@@ -1,11 +1,15 @@
 using Application.BackgroundServices;
 using Application.Services;
+using CommonConfiguration.Messaging;
+using CommonConfiguration.Payments.Bank;
 using CommonConfiguration.Payments.Payme;
 using CommonConfiguration.Redis;
 using CommonConfiguration.Reporting;
 using Domain.Enums;
 using Domain.Interfaces;
+using Domain.Interfaces.Bank;
 using Domain.Interfaces.Payme;
+using Domain.Options;
 using Domain.Repositories;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -369,6 +373,12 @@ namespace CommonConfiguration.ConfigurationExtensions
             // Operator hold boshqaruvi — Payme'ni chaqirmaydi, faqat repo'lar (AdminApi'da ishlatiladi).
             services.AddScoped<IHoldInvoiceAdminService, HoldInvoiceAdminService>();
 
+            // Naqd → karta va inkassatsiya repo'lari — faqat DbContext'ga bog'liq.
+            // Servis qatlami (CashTopUpService / IncassationService) alohida extension'larda:
+            // ular qurilmaga buyruq yuboradi, ya'ni hamma API'da mavjud emas.
+            services.AddScoped<ICashSessionRepository, CashSessionRepository>();
+            services.AddScoped<ICashCollectionRepository, CashCollectionRepository>();
+
             // Reporting
             services.AddScoped<IUsageReportRepository, UsageReportRepository>();
             services.AddScoped<IUsageReportService, UsageReportService>();
@@ -442,6 +452,81 @@ namespace CommonConfiguration.ConfigurationExtensions
             // ISessionNotifier va IDeviceSessionService — SessionApi Program.cs da
             // ro'yxatdan o'tkaziladi (ular SessionApi'ga bog'liq).
             services.AddHostedService<IdleSessionCleanerService>();
+
+            return services;
+        }
+
+        /// <summary>
+        /// Naqd → karta oqimi (SessionApi'ga xos): servis IDeviceCommandPublisher orqali
+        /// qurilmaga natija push qiladi, ya'ni MQTT ulanishi bor process'da yashashi shart.
+        /// Boshqa API'da chaqirilsa ValidateOnBuild yiqiladi — bu ataylab shunday.
+        /// </summary>
+        public static IServiceCollection RegisterCashTopUpServices(
+            this IServiceCollection services, IConfiguration config)
+        {
+            services.Configure<CashTopUpOptions>(config.GetSection("CashTopUp"));
+            services.AddCardPayoutClient(config);
+
+            services.AddScoped<ICashTopUpService, CashTopUpService>();
+            services.AddHostedService<CashPayoutWatcherService>();
+
+            return services;
+        }
+
+        /// <summary>
+        /// Inkassatsiya servisi — AdminApi (endpointlar) va SessionApi (MQTT tasdig'i) chaqiradi.
+        ///
+        /// <see cref="IDeviceCommandSender"/> BU YERDA ro'yxatdan o'tkazilmaydi: uning
+        /// implementatsiyasi API'ga qarab farq qiladi (SessionApi — to'g'ridan-to'g'ri MQTT,
+        /// AdminApi — internal HTTP). Har bir API o'zinikini Program.cs da beradi.
+        /// </summary>
+        public static IServiceCollection RegisterIncassationServices(this IServiceCollection services)
+        {
+            services.AddScoped<IIncassationService, IncassationService>();
+
+            return services;
+        }
+
+        /// <summary>
+        /// MQTT ulanishi bo'lmagan API'lar uchun qurilma buyruqlari ko'prigi:
+        /// SessionApi'ning internal endpointiga typed HttpClient.
+        /// Manzil: <c>InternalApi:SessionApiBaseUrl</c> (default localhost:5007).
+        /// </summary>
+        public static IServiceCollection AddHttpDeviceCommandSender(
+            this IServiceCollection services, IConfiguration config)
+        {
+            var baseUrl = config["InternalApi:SessionApiBaseUrl"] ?? "http://localhost:5007";
+
+            services.AddHttpClient<IDeviceCommandSender, HttpDeviceCommandSender>(client =>
+            {
+                client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+                // Inkassator qurilma oldida turadi — uzoq kutish ma'nosiz, tez xato yaxshiroq.
+                client.Timeout = TimeSpan.FromSeconds(10);
+            });
+
+            return services;
+        }
+
+        /// <summary>
+        /// Kartaga pul o'tkazuvchi bank klienti. Hozircha faqat <c>Fake</c> provider —
+        /// haqiqiy integratsiya kelganda shu yerga typed HttpClient qo'shiladi
+        /// (<see cref="AddPaymeClient"/> bilan bir xil andoza).
+        /// </summary>
+        public static IServiceCollection AddCardPayoutClient(
+            this IServiceCollection services, IConfiguration config)
+        {
+            services.Configure<BankOptions>(config.GetSection("Bank"));
+
+            var provider = config["Bank:Provider"] ?? BankOptions.FakeProvider;
+
+            if (!string.Equals(provider, BankOptions.FakeProvider, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Bank:Provider = '{provider}' uchun implementatsiya yo'q. " +
+                    $"Hozircha faqat '{BankOptions.FakeProvider}' qo'llab-quvvatlanadi.");
+            }
+
+            services.AddScoped<ICardPayoutClient, FakeCardPayoutClient>();
 
             return services;
         }

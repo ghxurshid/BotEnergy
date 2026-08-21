@@ -22,6 +22,11 @@ builder.Services.RegisterServices();
 // IPaymentService — admin Reverse endpoint uchun (Payme chaqirilmaydi reverse'da, lekin DI uchun shart)
 builder.Services.AddPaymeClient(builder.Configuration);
 
+// Inkassatsiya (inkassator ilovasi). AdminApi'da MQTT yo'q, shuning uchun "boxni ochish"
+// buyrug'i SessionApi'ning internal endpointi orqali o'tadi.
+builder.Services.AddHttpDeviceCommandSender(builder.Configuration);
+builder.Services.RegisterIncassationServices();
+
 // Redis
 builder.Services.AddRedisServices(builder.Configuration);
 

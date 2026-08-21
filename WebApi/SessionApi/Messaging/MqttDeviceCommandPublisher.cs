@@ -56,5 +56,24 @@ namespace SessionApi.Messaging
                 correlation_id = e.CorrelationId,
                 timestamp = e.Timestamp
             }, ct);
+
+        public Task PublishCashSessionResultAsync(
+            string serialNumber, Domain.Dtos.Cash.CashSessionResultDto result, CancellationToken ct = default)
+            => _publisher.PublishRequestAsync(serialNumber, MqttHandlerTypes.CashSessionResult, new
+            {
+                cash_session_id = result.CashSessionId,
+                status = result.Status.ToString().ToLowerInvariant(),
+                amount = result.Amount,
+                payout_ref = result.PayoutReference,
+                message = result.Message,
+                device_cash_balance = result.DeviceCashBalance,
+                retry_scheduled = result.RetryScheduled
+            }, ct);
+
+        public Task PublishCashBoxOpenAsync(string serialNumber, long collectionId, CancellationToken ct = default)
+            => _publisher.PublishRequestAsync(serialNumber, MqttHandlerTypes.CashBoxOpen, new
+            {
+                collection_id = collectionId
+            }, ct);
     }
 }

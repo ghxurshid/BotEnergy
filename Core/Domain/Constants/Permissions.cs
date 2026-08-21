@@ -118,6 +118,17 @@ namespace Domain.Constants
         /// <summary>Merchant Payme credential'larini o'rnatish (write-only, Manage).</summary>
         public const string MerchantAdminSetPaymeCredentials = "MerchantAdmin.SetPaymeCredentials";
 
+        // ── AdminApi — Inkassatsiya (naqd pulni qurilmadan olib ketish) ──
+        // Inkassator ilovasi shu to'rttadan foydalanadi. Manage'ga cheklanmagan:
+        // merchant scope'idagi inkassator ham o'z qurilmalari bilan ishlaydi.
+        public const string IncassationGetDevices = "Incassation.GetDevices";
+        public const string IncassationRequestOpen = "Incassation.RequestOpen";
+        public const string IncassationConfirm = "Incassation.Confirm";
+        public const string IncassationGetHistory = "Incassation.GetHistory";
+
+        /// <summary>Naqd → karta sessiyalarini ko'rish (ayniqsa PayoutFailed ro'yxati).</summary>
+        public const string CashSessionAdminGetAll = "CashSessionAdmin.GetAll";
+
         // ── UserApi — Sessiya boshqaruvi ─────────────────────────────
         public const string SessionCreate = "Session.Create";
         public const string SessionClose = "Session.Close";
@@ -187,6 +198,11 @@ namespace Domain.Constants
             // Hold invoice operator boshqaruvi
             HoldAdminGetAll, HoldAdminGetById, HoldAdminGetSteps,
             HoldAdminCapture, HoldAdminRefund, HoldAdminCancel, HoldAdminRetry,
+
+            // Inkassatsiya (inkassator ilovasi) va naqd sessiyalar auditi
+            IncassationGetDevices, IncassationRequestOpen,
+            IncassationConfirm, IncassationGetHistory,
+            CashSessionAdminGetAll,
 
             // Billing
             BalanceTopUp,

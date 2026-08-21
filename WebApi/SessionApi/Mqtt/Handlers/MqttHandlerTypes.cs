@@ -15,6 +15,13 @@ namespace SessionApi.Mqtt.Handlers
         public const string DeviceStatus = "device.status";
         public const string PaymentQr = "payment.qr";
 
+        // device → server: naqd → karta oqimi (mijoz kolonka ekranida ishlaydi)
+        public const string CashSessionOpen = "cash.session.open";
+        public const string CashBillAccepted = "cash.bill.accepted";
+        public const string CashSessionCommit = "cash.session.commit";
+        public const string CashSessionCancel = "cash.session.cancel";
+        public const string CashBoxOpened = "cash.box.opened";
+
         // server → device (publisher tomonidan ishlatiladi, handler emas)
         public const string ProcessStart = "process.start";
         public const string ProcessPause = "process.pause";
@@ -23,5 +30,7 @@ namespace SessionApi.Mqtt.Handlers
         public const string PaymentResult = "payment.result";
         public const string SessionClose = "session.close";
         public const string BalanceUpdate = "balance.update";
+        public const string CashSessionResult = "cash.session.result";
+        public const string CashBoxOpen = "cash.box.open";
     }
 }

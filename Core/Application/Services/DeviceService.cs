@@ -186,7 +186,9 @@ namespace Application.Services
             StationName = d.Station?.Name ?? string.Empty,
             IsOnline = d.IsOnline,
             IsActive = d.IsActive,
-            CreatedDate = d.CreatedDate
+            CreatedDate = d.CreatedDate,
+            CashBalance = d.CashBalance,
+            CashLastCollectedAt = d.CashLastCollectedAt
         };
     }
 }

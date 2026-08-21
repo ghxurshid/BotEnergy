@@ -54,13 +54,40 @@
     "ConnectionString": "localhost:6379"
   },
   "InternalApi": {
-    "SharedSecret": "Env_InternalApi__SharedSecret"
+    "SharedSecret": "Env_InternalApi__SharedSecret",
+    // AdminApi → SessionApi (inkassatsiya "boxni ochish" buyrug'i). Localhost:
+    // servis portlari tashqaridan yopiq, chaqiruv server ichida qoladi.
+    "SessionApiBaseUrl": "http://localhost:5007"
   },
   "Payme": {
     "BaseUrl": "https://checkout.paycom.uz/api",
     "MerchantId": "Env_Payme__MerchantId",
     "Key": "Env_Payme__Key",
     "TimeoutSeconds": 30
+  },
+  // Haqiqiy bank integratsiyasi kelguncha Fake. Provider almashganda BaseUrl va
+  // sirlar env var orqali beriladi (Bank__ApiKey kabi) — bu faylga yozilmaydi.
+  "Bank": {
+    "Provider": "Fake",
+    "BaseUrl": "",
+    "TimeoutSeconds": 30,
+    "Fake": {
+      "DelayMs": 0,
+      "FailureRate": 0,
+      "RejectCardPrefix": "0000"
+    }
+  },
+  "CashTopUp": {
+    "WatcherIntervalSeconds": 10,
+    "LeaseSeconds": 60,
+    "BatchSize": 20,
+    "MaxAttempts": 8,
+    "BackoffBaseSeconds": 10,
+    "BackoffMaxSeconds": 900,
+    "IdleTimeoutMinutes": 5,
+    "IdleCheckIntervalSeconds": 60,
+    "AllowedDenominations": [ 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000 ],
+    "MaxSessionAmount": 50000000
   },
   "HoldInvoices": {
     "WatcherIntervalSeconds": 5,

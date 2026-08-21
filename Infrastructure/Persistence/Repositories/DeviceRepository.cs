@@ -131,6 +131,62 @@ namespace Persistence.Repositories
                 .Select(StatusProjection)
                 .ToListAsync();
 
+        public async Task<decimal> AddCashAsync(long deviceId, decimal amount)
+        {
+            if (amount <= 0)
+                return 0m;
+
+            // FOR UPDATE — satrni lock qiladi; tashqi ITransactionRunner tranzaksiyasida
+            // chaqirilganda lock commit'gacha ushlanadi. UPDATE o'zi relative bo'lgani uchun
+            // tranzaksiyasiz ham summa yo'qolmaydi.
+            var balances = await _context.Database
+                .SqlQuery<decimal>($@"SELECT cash_balance AS ""Value"" FROM app.devices WHERE id = {deviceId} AND is_deleted = false FOR UPDATE")
+                .ToListAsync();
+
+            if (balances.Count == 0)
+                return 0m;
+
+            var now = DateTime.Now;
+            await _context.Devices
+                .Where(d => d.Id == deviceId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(d => d.CashBalance, d => d.CashBalance + amount)
+                    .SetProperty(d => d.UpdatedDate, now));
+
+            return balances[0] + amount;
+        }
+
+        public async Task<decimal> CollectCashAsync(long deviceId)
+        {
+            var balances = await _context.Database
+                .SqlQuery<decimal>($@"SELECT cash_balance AS ""Value"" FROM app.devices WHERE id = {deviceId} AND is_deleted = false FOR UPDATE")
+                .ToListAsync();
+
+            if (balances.Count == 0)
+                return 0m;
+
+            var collected = balances[0];
+            var now = DateTime.Now;
+
+            await _context.Devices
+                .Where(d => d.Id == deviceId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(d => d.CashBalance, 0m)
+                    .SetProperty(d => d.CashLastCollectedAt, now)
+                    .SetProperty(d => d.UpdatedDate, now));
+
+            return collected;
+        }
+
+        public async Task<List<DeviceEntity>> GetCashDevicesAsync(long? merchantId)
+            => await _context.Devices
+                .Include(d => d.Station)
+                .Where(d => d.IsActive)
+                .Where(d => merchantId == null || d.Station!.MerchantId == merchantId)
+                .OrderByDescending(d => d.CashBalance)
+                .ThenBy(d => d.SerialNumber)
+                .ToListAsync();
+
         private static readonly System.Linq.Expressions.Expression<System.Func<DeviceEntity, DeviceStatusInfo>> StatusProjection =
             d => new DeviceStatusInfo(d.Id, d.SerialNumber, d.StationId, d.Station!.MerchantId, d.IsOnline, d.LastSeenAt);
     }

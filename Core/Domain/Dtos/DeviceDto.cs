@@ -33,6 +33,11 @@ namespace Domain.Dtos
         public bool IsOnline { get; set; }
         public bool IsActive { get; set; }
         public DateTime CreatedDate { get; set; }
+
+        /// <summary>Qurilma boxidagi naqd pul qoldig'i (UZS) — inkassatsiya kutayotgan summa.</summary>
+        public decimal CashBalance { get; set; }
+
+        public DateTime? CashLastCollectedAt { get; set; }
     }
 
     public class DeviceResultDto

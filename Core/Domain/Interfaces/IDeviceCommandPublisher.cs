@@ -24,5 +24,19 @@
         /// SignalR SessionBalanceChanged bilan BIR XIL event modeli (MQTT type: balance.update).
         /// </summary>
         Task PublishBalanceUpdateAsync(string serialNumber, Domain.Dtos.PaymentSession.SessionBalanceChangedDto e, CancellationToken ct = default);
+
+        /// <summary>
+        /// Naqd → karta sessiyasining YAKUNIY natijasi (MQTT type: <c>cash.session.result</c>).
+        /// Commit paytida bank javob bermay, keyin watcher hal qilgan holatda yuboriladi —
+        /// qurilma o'sha paytda "kutilmoqda" javobini olgan bo'ladi.
+        /// </summary>
+        Task PublishCashSessionResultAsync(
+            string serialNumber, Domain.Dtos.Cash.CashSessionResultDto result, CancellationToken ct = default);
+
+        /// <summary>
+        /// Inkassator so'roviga ko'ra naqd boxni ochish buyrug'i (MQTT type: <c>cash.box.open</c>).
+        /// Qurilma boxni ochgach <c>cash.box.opened</c> event bilan tasdiqlaydi.
+        /// </summary>
+        Task PublishCashBoxOpenAsync(string serialNumber, long collectionId, CancellationToken ct = default);
     }
 }
