@@ -12,6 +12,13 @@ namespace Application.Services
     /// <summary>
     /// Inkassatsiya oqimi.
     ///
+    /// <b>Faqat platforma xodimi (Platform/Manage).</b> Inkassator merchant tomonining
+    /// odami bo'la olmaydi: pulni olib ketayotgan va o'sha pulning egasi bir tomon bo'lib
+    /// qolsa, hisob-kitobni tekshiradigan mustaqil tomon qolmaydi. Shu cheklov ikki
+    /// qatlamda: <c>PermissionScopes.ManageOnly</c> permissionni Merchant rolga
+    /// biriktirishga yo'l qo'ymaydi, bu yerdagi tekshiruvlar esa permission xato
+    /// biriktirilib qolgan holatda ham amalni bajarmaydi.
+    ///
     /// Qoldiq faqat <see cref="ConfirmAsync"/> da nolga tushadi — boxning ochilgani
     /// pulning olinganini bildirmaydi (inkassator boxni ochib, pulni olmasdan ketishi mumkin).
     ///
@@ -20,6 +27,9 @@ namespace Application.Services
     /// </summary>
     public class IncassationService : IIncassationService
     {
+        private const string NotManageMessage =
+            "Inkassatsiya faqat platforma xodimlari uchun — merchant tomoni o'z qurilmasidan pul yig'a olmaydi.";
+
         private readonly ICashCollectionRepository _collectionRepo;
         private readonly ICashSessionRepository _cashSessionRepo;
         private readonly IDeviceRepository _deviceRepo;
@@ -45,10 +55,11 @@ namespace Application.Services
 
         public async Task<GenericDto<List<IncassationDeviceDto>>> GetDevicesAsync(AccessScope scope)
         {
-            if (!scope.IsManage && scope.MerchantId is null)
-                return GenericDto<List<IncassationDeviceDto>>.Success(new List<IncassationDeviceDto>());
+            if (!scope.IsManage)
+                return GenericDto<List<IncassationDeviceDto>>.Error(403, NotManageMessage);
 
-            var devices = await _deviceRepo.GetCashDevicesAsync(scope.IsManage ? null : scope.MerchantId);
+            // Manage — scope cheklovi yo'q: inkassator barcha merchantlarning qurilmalarini ko'radi.
+            var devices = await _deviceRepo.GetCashDevicesAsync(merchantId: null);
 
             var items = new List<IncassationDeviceDto>(devices.Count);
             foreach (var device in devices)
@@ -62,12 +73,12 @@ namespace Application.Services
 
         public async Task<GenericDto<CashCollectionDto>> RequestOpenAsync(AccessScope scope, long deviceId)
         {
+            if (!scope.IsManage)
+                return GenericDto<CashCollectionDto>.Error(403, NotManageMessage);
+
             var device = await _deviceRepo.GetByIdAsync(deviceId);
             if (device is null || device.Station is null)
                 return GenericDto<CashCollectionDto>.Error(404, "Qurilma topilmadi.");
-
-            if (!scope.CanAccessMerchant(device.Station.MerchantId))
-                return GenericDto<CashCollectionDto>.Error(403, "Bu qurilma sizning doirangizga tegishli emas.");
 
             // Ikkinchi inkassator ayni qurilmani parallel ochib yuborishining oldini olamiz.
             var existing = await _collectionRepo.GetOpenByDeviceAsync(deviceId);
@@ -140,15 +151,15 @@ namespace Application.Services
         public async Task<GenericDto<CashCollectionDto>> ConfirmAsync(
             AccessScope scope, long collectionId, decimal countedAmount, string? notes)
         {
+            if (!scope.IsManage)
+                return GenericDto<CashCollectionDto>.Error(403, NotManageMessage);
+
             if (countedAmount < 0)
                 return GenericDto<CashCollectionDto>.Error(400, "Sanalgan summa manfiy bo'lishi mumkin emas.");
 
             var collection = await _collectionRepo.GetByIdAsync(collectionId);
             if (collection is null)
                 return GenericDto<CashCollectionDto>.Error(404, "Inkassatsiya topilmadi.");
-
-            if (!scope.CanAccessMerchant(collection.MerchantId))
-                return GenericDto<CashCollectionDto>.Error(403, "Bu inkassatsiya sizning doirangizga tegishli emas.");
 
             if (collection.Status is not (CashCollectionStatus.Requested or CashCollectionStatus.BoxOpened))
                 return GenericDto<CashCollectionDto>.Error(409, "Inkassatsiya allaqachon yakunlangan.");
@@ -186,12 +197,12 @@ namespace Application.Services
         public async Task<GenericDto<CashCollectionDto>> CancelAsync(
             AccessScope scope, long collectionId, string? notes)
         {
+            if (!scope.IsManage)
+                return GenericDto<CashCollectionDto>.Error(403, NotManageMessage);
+
             var collection = await _collectionRepo.GetByIdAsync(collectionId);
             if (collection is null)
                 return GenericDto<CashCollectionDto>.Error(404, "Inkassatsiya topilmadi.");
-
-            if (!scope.CanAccessMerchant(collection.MerchantId))
-                return GenericDto<CashCollectionDto>.Error(403, "Bu inkassatsiya sizning doirangizga tegishli emas.");
 
             if (collection.Status is not (CashCollectionStatus.Requested or CashCollectionStatus.BoxOpened))
                 return GenericDto<CashCollectionDto>.Error(409, "Inkassatsiya allaqachon yakunlangan.");
@@ -209,11 +220,10 @@ namespace Application.Services
         public async Task<GenericDto<PagedResult<CashCollectionDto>>> GetHistoryAsync(
             AccessScope scope, PaginationParams param, long? deviceId)
         {
-            if (!scope.IsManage && scope.MerchantId is null)
-                return GenericDto<PagedResult<CashCollectionDto>>.Success(PagedResult<CashCollectionDto>.Empty(param));
+            if (!scope.IsManage)
+                return GenericDto<PagedResult<CashCollectionDto>>.Error(403, NotManageMessage);
 
-            var page = await _collectionRepo.GetAllAsync(
-                param, scope.IsManage ? null : scope.MerchantId, deviceId);
+            var page = await _collectionRepo.GetAllAsync(param, merchantId: null, deviceId);
 
             return GenericDto<PagedResult<CashCollectionDto>>.Success(page.Map(ToDto));
         }

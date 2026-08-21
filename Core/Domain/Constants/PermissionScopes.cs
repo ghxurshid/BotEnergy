@@ -38,6 +38,15 @@ namespace Domain.Constants
 
             // Natural (jismoniy) foydalanuvchilarning global ro'yxati — faqat Manage.
             Permissions.CustomerAdminGetNatural,
+
+            // Inkassatsiya — faqat platforma xodimi. Inkassator MERCHANT odami bo'la olmaydi:
+            // pulni qurilmadan olib ketayotgan va o'sha pulning egasi bir tomon bo'lib qolsa,
+            // hisob-kitobni tekshiradigan mustaqil tomon qolmaydi. Shu sabab bu permissionlar
+            // Merchant rolga umuman biriktirilmaydi (MerchantAllowed = PlatformAll − ManageOnly).
+            Permissions.IncassationGetDevices,
+            Permissions.IncassationRequestOpen,
+            Permissions.IncassationConfirm,
+            Permissions.IncassationGetHistory,
         };
 
         /// <summary>

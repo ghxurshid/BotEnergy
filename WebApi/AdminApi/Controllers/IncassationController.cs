@@ -25,8 +25,15 @@ namespace AdminApi.Controllers
     /// 3. qurilma boxni ochib tasdiqlaydi (`cash.box.opened`);
     /// 4. `Confirm` — sanalgan summa bilan tasdiqlaydi, qurilma qoldig'i nolga tushadi.
     ///
-    /// **Scope:** merchant inkassatori faqat o'z merchantining qurilmalarini ko'radi va ochadi.
-    /// Manage cheklovsiz.
+    /// **Kim ishlata oladi:** faqat platforma xodimi (Platform/Manage). Inkassator merchant
+    /// tomonining odami BO'LA OLMAYDI — pulni olib ketayotgan va o'sha pulning egasi bir tomon
+    /// bo'lib qolsa, hisob-kitobni tekshiradigan mustaqil tomon qolmaydi. Shu sabab
+    /// `Incassation.*` permissionlari `PermissionScopes.ManageOnly` da: ularni Merchant
+    /// rolga biriktirib ham bo'lmaydi. Manage bo'lgani uchun inkassator barcha merchantlarning
+    /// qurilmalarini ko'radi.
+    ///
+    /// Istisno — `CashSessions`: u inkassatsiya emas, naqd tushum auditi, shuning uchun
+    /// merchant o'z qurilmalari bo'yicha ko'ra oladi.
     ///
     /// Qoldiq faqat 4-qadamda nolga tushadi — boxning ochilgani pulning olinganini bildirmaydi.
     /// </remarks>

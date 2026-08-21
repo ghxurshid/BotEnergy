@@ -9,8 +9,13 @@ namespace Domain.Interfaces
     /// Inkassator ilovasining backend mantiqi: qurilmalardagi naqd pulni ko'rish,
     /// boxni ochtirish va olingan summani tasdiqlash.
     ///
-    /// Barcha amallar <see cref="AccessScope"/> bilan cheklanadi — merchant inkassatori
-    /// faqat o'z merchantining qurilmalarini ko'radi va ochadi.
+    /// <b>Inkassatsiya amallari — faqat Platform/Manage.</b> Inkassator merchantning
+    /// xodimi bo'la olmaydi (mustaqil tomon talabi), shuning uchun <c>Incassation.*</c>
+    /// permissionlari <c>PermissionScopes.ManageOnly</c> ro'yxatida va Merchant rolga
+    /// umuman biriktirilmaydi.
+    ///
+    /// Istisno — <see cref="GetCashSessionsAsync"/>: bu inkassatsiya emas, naqd tushum
+    /// auditi, shuning uchun merchant o'z qurilmalari bo'yicha ko'ra oladi.
     /// </summary>
     public interface IIncassationService
     {
