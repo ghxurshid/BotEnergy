@@ -1,4 +1,4 @@
-using Domain.Dtos;
+﻿using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Helpers;
@@ -38,6 +38,10 @@ namespace Application.Services
             var user = await _userRepo.GetByIdAsync(userId);
             if (user is null)
                 return GenericDto<MyProfileDto>.Error(404, "Foydalanuvchi topilmadi.");
+
+            // O'z qiymatini dublikat deb hisoblamaymiz (excludeUserId).
+            if (await _userRepo.ExistsByMailAsync(mail, excludeUserId: user.Id))
+                return GenericDto<MyProfileDto>.Error(409, "Bu elektron pochta boshqa foydalanuvchida band.");
 
             user.Mail = mail;
             await _userRepo.UpdateAsync(user);

@@ -1,4 +1,4 @@
-using Domain.Dtos.Base;
+﻿using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +25,16 @@ namespace Persistence.Repositories
 
         public async Task<MerchantEntity?> GetByPhoneNumberAsync(string phoneNumber)
             => await _context.Merchants.FirstOrDefaultAsync(c => c.PhoneNumber == phoneNumber);
+
+        public Task<bool> ExistsByInnAsync(string inn, long? excludeMerchantId = null)
+        {
+            var normalized = (inn ?? string.Empty).Trim();
+            if (normalized.Length == 0)
+                return Task.FromResult(false);
+
+            return _context.Merchants
+                .AnyAsync(m => m.Inn == normalized && (excludeMerchantId == null || m.Id != excludeMerchantId));
+        }
 
         public async Task<MerchantEntity> CreateAsync(MerchantEntity merchant)
         {

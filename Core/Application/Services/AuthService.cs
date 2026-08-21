@@ -1,4 +1,4 @@
-using Domain.Helpers;
+﻿using Domain.Helpers;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
@@ -66,6 +66,10 @@ namespace Application.Services
 
             // Self-register → Natural. Default global Natural rol avtomatik biriktiriladi
             // (aks holda foydalanuvchida hech qanday permission bo'lmaydi).
+            // mail ustunida unique indeks bor — dublikatni oldindan ushlaymiz.
+            if (await _userRepository.ExistsByMailAsync(request.Mail))
+                return GenericDto<RegisterResultDto>.Error(409, "Bu elektron pochta allaqachon ro'yxatdan o'tgan.");
+
             var defaultRole = await _roleRepository.GetDefaultNaturalRoleAsync();
 
             var newUser = new CustomerUserEntity

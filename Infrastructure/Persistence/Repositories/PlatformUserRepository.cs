@@ -1,4 +1,4 @@
-using Domain.Dtos.Base;
+﻿using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +25,19 @@ namespace Persistence.Repositories
                 .Include(u => u.Merchant)
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+
+        public Task<bool> ExistsByMailAsync(string mail, long? excludeUserId = null)
+        {
+            // SaveChanges choke-point pochta manzilini kichik harfga keltiradi, shuning
+            // uchun bu yerda ham normallashtirib solishtiramiz — aks holda "Ali@x.uz"
+            // bazada bor bo'lsa ham topilmay, xato faqat INSERT paytida chiqardi.
+            var normalized = (mail ?? string.Empty).Trim().ToLowerInvariant();
+            if (normalized.Length == 0)
+                return Task.FromResult(false);
+
+            return _context.PlatformUsers
+                .AnyAsync(u => u.Mail == normalized && (excludeUserId == null || u.Id != excludeUserId));
+        }
 
         public Task<PagedResult<PlatformUserEntity>> GetAllAsync(PaginationParams param, long? excludeUserId = null)
         {

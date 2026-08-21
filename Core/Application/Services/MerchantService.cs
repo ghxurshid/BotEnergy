@@ -1,4 +1,4 @@
-using Domain.Auth;
+﻿using Domain.Auth;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
@@ -19,6 +19,10 @@ namespace Application.Services
             var existing = await _repo.GetByPhoneNumberAsync(dto.PhoneNumber);
             if (existing is not null)
                 return GenericDto<MerchantResultDto>.Error(409, "Bu telefon raqam bilan merchant allaqachon mavjud.");
+
+            // inn ustunida ham unique indeks bor — telefon kabi oldindan tekshiramiz.
+            if (await _repo.ExistsByInnAsync(dto.Inn))
+                return GenericDto<MerchantResultDto>.Error(409, "Bu INN bilan merchant allaqachon mavjud.");
 
             var merchant = new MerchantEntity
             {

@@ -1,4 +1,4 @@
-using Domain.Helpers;
+﻿using Domain.Helpers;
 using Domain.Auth;
 using Domain.Dtos;
 using Domain.Dtos.Base;
@@ -36,6 +36,9 @@ namespace Application.Services
             var existingUser = await _userRepo.GetByPhoneNumberAsync(dto.PhoneNumber);
             if (existingUser is not null)
                 return GenericDto<UserAdminResultDto>.Error(409, "Bu telefon raqam bilan foydalanuvchi allaqachon mavjud.");
+
+            if (await _userRepo.ExistsByMailAsync(dto.Mail))
+                return GenericDto<UserAdminResultDto>.Error(409, "Bu elektron pochta bilan foydalanuvchi allaqachon mavjud.");
 
             var org = await _orgRepo.GetByIdAsync(dto.OrganizationId);
             if (org is null)

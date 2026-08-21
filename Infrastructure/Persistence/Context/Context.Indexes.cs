@@ -1,4 +1,4 @@
-using Domain.Entities;
+﻿using Domain.Entities;
 using Domain.Entities.BaseEntity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -15,6 +15,23 @@ namespace Persistence.Context
         // Telefon raqam DB-darajasidagi kafolati: canonical format 998XXXXXXXXX (12 raqam).
         // App-layer (SaveChanges guard + validatsiya filtrlar) bilan bir xil qoida — raw SQL yozuvlar ham himoyalanadi.
         private const string PhoneFormatCheckSql = "phone_number ~ '^998[0-9]{9}$'";
+
+        /// <summary>
+        /// Biznes identifikatorlari (telefon, pochta, seriya, INN, nom) bo'yicha unique
+        /// indekslarga qo'yiladigan filtr.
+        ///
+        /// Loyihada hard delete yo'q — o'chirilgan qator jadvalda <c>is_deleted = true</c>
+        /// bilan qoladi. Filtrsiz unique indeks o'sha qiymatni abadiy band qilib turadi:
+        /// foydalanuvchini o'chirib, o'sha telefon bilan yangisini yaratib bo'lmaydi va
+        /// xato faqat INSERT paytida (23505) chiqadi — servis qatlami global query filter
+        /// tufayli o'chirilgan qatorni ko'rmaydi, ya'ni oldindan tekshirib ham topolmaydi.
+        ///
+        /// DIQQAT: bu filtr faqat qayta kiritilishi mumkin bo'lgan BIZNES qiymatlariga
+        /// qo'yiladi. Idempotentlik/audit kalitlari (provider_order_id, idempotency_key,
+        /// session_token) filtrsiz qoladi — ular o'chirilgandan keyin ham qayta
+        /// ishlatilmasligi kerak, aks holda takroriy to'lov himoyasi buziladi.
+        /// </summary>
+        private const string SoftDeleteUniqueFilter = "is_deleted = false";
 
         partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 
@@ -105,8 +122,13 @@ namespace Persistence.Context
             b.Property(x => x.LastLoginDate).HasColumnName("last_login_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
             b.Property(x => x.LastActiveDate).HasColumnName("last_active_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
 
-            b.HasIndex(x => x.PhoneNumber).IsUnique();
-            b.HasIndex(x => x.Mail).IsUnique();
+            // Unique — LEKIN faqat o'chirilmagan qatorlar bo'yicha (SoftDeleteUniqueFilter).
+            // Soft delete'da qator jadvalda qoladi; oddiy unique indeks bo'lsa o'chirilgan
+            // foydalanuvchining telefoni/pochtasi abadiy band bo'lib qolardi va uni qayta
+            // yaratishga urinish 23505 bilan yiqilardi — global query filter tufayli
+            // servis qatlami u qatorni ko'rmagani uchun oldindan ogohlantira ham olmaydi.
+            b.HasIndex(x => x.PhoneNumber).IsUnique().HasFilter(SoftDeleteUniqueFilter);
+            b.HasIndex(x => x.Mail).IsUnique().HasFilter(SoftDeleteUniqueFilter);
             b.HasIndex(x => x.PhoneId);
         }
 
@@ -256,7 +278,8 @@ namespace Persistence.Context
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
-                b.HasIndex(x => x.Name).IsUnique();
+                // Seed permission qatorini o'chirib qayta yaratish mumkin bo'lsin.
+                b.HasIndex(x => x.Name).IsUnique().HasFilter(SoftDeleteUniqueFilter);
             });
         }
 
@@ -285,7 +308,8 @@ namespace Persistence.Context
                     .HasForeignKey(x => x.PermissionId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                b.HasIndex(x => new { x.RoleId, x.PermissionId }).IsUnique();
+                // Permissionni rolidan olib tashlab, keyin qaytadan berish mumkin bo'lsin.
+                b.HasIndex(x => new { x.RoleId, x.PermissionId }).IsUnique().HasFilter(SoftDeleteUniqueFilter);
             });
         }
 
@@ -314,7 +338,8 @@ namespace Persistence.Context
                     .HasForeignKey(x => x.PermissionId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                b.HasIndex(x => new { x.RoleId, x.PermissionId }).IsUnique();
+                // Permissionni rolidan olib tashlab, keyin qaytadan berish mumkin bo'lsin.
+                b.HasIndex(x => new { x.RoleId, x.PermissionId }).IsUnique().HasFilter(SoftDeleteUniqueFilter);
             });
         }
 
@@ -383,7 +408,8 @@ namespace Persistence.Context
                     .HasForeignKey(x => x.StationId)
                     .OnDelete(DeleteBehavior.Restrict);
 
-                b.HasIndex(x => x.SerialNumber).IsUnique();
+                // Qurilma o'chirilgach, o'sha seriya bilan qaytadan ro'yxatdan o'tkazish mumkin bo'lsin.
+                b.HasIndex(x => x.SerialNumber).IsUnique().HasFilter(SoftDeleteUniqueFilter);
                 b.HasIndex(x => x.StationId);
             });
         }
@@ -559,8 +585,8 @@ namespace Persistence.Context
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
-                b.HasIndex(x => x.PhoneNumber).IsUnique();
-                b.HasIndex(x => x.Inn).IsUnique();
+                b.HasIndex(x => x.PhoneNumber).IsUnique().HasFilter(SoftDeleteUniqueFilter);
+                b.HasIndex(x => x.Inn).IsUnique().HasFilter(SoftDeleteUniqueFilter);
             });
         }
 

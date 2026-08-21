@@ -1,3 +1,4 @@
+using Domain.Entities;
 using Domain.Entities.BaseEntity;
 using Domain.Exceptions;
 using Domain.Helpers;
@@ -42,7 +43,40 @@ namespace Persistence.Context
                 // himoya; API validatsiya filtrlar odatda oldindan 400 bilan ushlaydi.
                 if (entry.Entity is IHasPhoneNumber && entry.State is EntityState.Added or EntityState.Modified)
                     NormalizePhoneNumber(entry);
+
+                if (entry.Entity is UserBase && entry.State is EntityState.Added or EntityState.Modified)
+                    NormalizeMail(entry);
             }
+        }
+
+        /// <summary>
+        /// Pochta manzilining yagona choke-point'i: bo'shliqlar kesiladi va kichik harfga
+        /// o'tkaziladi.
+        ///
+        /// Nega kerak: <c>mail</c> ustunida unique indeks bor, PostgreSQL esa uni registrga
+        /// SEZGIR solishtiradi — ya'ni "Ali@mail.uz" va "ali@mail.uz" baza uchun ikki xil
+        /// qiymat, foydalanuvchi uchun esa bitta. Bu yerda normallashtirilgach indeks amalda
+        /// registrga befarq bo'lib qoladi va dublikat INSERT paytida emas, oldindan
+        /// tekshiruvda ushlanadi.
+        ///
+        /// Mavjud aralash registrli qatorlar ham har qanday keyingi saqlashda jimgina
+        /// to'g'rilanadi — alohida migratsiya kerak emas.
+        /// </summary>
+        private static void NormalizeMail(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
+        {
+            var mailProp = entry.Property(nameof(UserBase.Mail));
+
+            // Update paytida pochta o'zgarmagan bo'lsa tegmaymiz — keraksiz UPDATE qilmaslik uchun.
+            if (entry.State == EntityState.Modified && !mailProp.IsModified)
+                return;
+
+            var current = ((UserBase)entry.Entity).Mail;
+            if (string.IsNullOrWhiteSpace(current))
+                return;
+
+            var normalized = current.Trim().ToLowerInvariant();
+            if (!string.Equals(current, normalized, StringComparison.Ordinal))
+                ((UserBase)entry.Entity).Mail = normalized;
         }
 
         private static void NormalizePhoneNumber(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)

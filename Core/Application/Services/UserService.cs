@@ -1,4 +1,4 @@
-using Domain.Dtos;
+﻿using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Enums;
@@ -59,7 +59,12 @@ namespace Application.Services
                 return GenericDto<UpdateUserResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
             if (!string.IsNullOrEmpty(dto.Mail))
+            {
+                if (await _userRepository.ExistsByMailAsync(dto.Mail, excludeUserId: user.Id))
+                    return GenericDto<UpdateUserResultDto>.Error(409, "Bu elektron pochta boshqa foydalanuvchida band.");
+
                 user.Mail = dto.Mail;
+            }
 
             if (!string.IsNullOrEmpty(dto.PhoneId))
                 user.PhoneId = dto.PhoneId;

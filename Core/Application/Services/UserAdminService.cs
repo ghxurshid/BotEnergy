@@ -1,4 +1,4 @@
-using Domain.Helpers;
+﻿using Domain.Helpers;
 using Domain.Auth;
 using Domain.Dtos;
 using Domain.Dtos.Base;
@@ -45,6 +45,11 @@ namespace Application.Services
             var existingUser = await _userRepo.GetByPhoneNumberAsync(dto.PhoneNumber);
             if (existingUser is not null)
                 return GenericDto<UserAdminResultDto>.Error(409, "Bu telefon raqam bilan platform foydalanuvchi allaqachon mavjud.");
+
+            // mail ustunida ham unique indeks bor — busiz xato faqat INSERT paytida
+            // (23505) chiqib, operator sababini bilmay qolardi.
+            if (await _userRepo.ExistsByMailAsync(dto.Mail))
+                return GenericDto<UserAdminResultDto>.Error(409, "Bu elektron pochta bilan platform foydalanuvchi allaqachon mavjud.");
 
             var role = await _roleRepo.GetByIdAsync(dto.RoleId);
             if (role is null)
