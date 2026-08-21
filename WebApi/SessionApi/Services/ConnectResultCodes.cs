@@ -12,6 +12,8 @@ namespace SessionApi.Services
         public const string TokenMismatch = "TOKEN_MISMATCH";
         public const string DeviceUnknown = "DEVICE_UNKNOWN";
         public const string ActiveSessionExists = "ACTIVE_SESSION_EXISTS";
+        public const string UserBlocked = "USER_BLOCKED";
+        public const string StationInactive = "STATION_INACTIVE";
         public const string PendingServiceUnavailable = "PENDING_SERVICE_UNAVAILABLE";
         public const string InternalError = "INTERNAL_ERROR";
     }
@@ -26,6 +28,8 @@ namespace SessionApi.Services
             ConnectResultCodes.TokenMismatch => "QR tokeni mos kelmadi.",
             ConnectResultCodes.DeviceUnknown => "Qurilma serial raqami tizimda topilmadi yoki faol emas.",
             ConnectResultCodes.ActiveSessionExists => "Foydalanuvchida allaqachon faol sessiya bor — avval uni yopish kerak.",
+            ConnectResultCodes.UserBlocked => "Foydalanuvchi bloklangan — sessiya ochilmaydi.",
+            ConnectResultCodes.StationInactive => "Stansiya faol emas — qurilmadan xizmat olib bo'lmaydi.",
             ConnectResultCodes.PendingServiceUnavailable => "Pending sessiya servisi javob bermayapti.",
             ConnectResultCodes.InternalError => "Server ichki xatosi.",
             _ => "Noma'lum xatolik."

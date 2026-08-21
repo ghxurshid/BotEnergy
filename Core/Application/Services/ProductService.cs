@@ -4,6 +4,7 @@ using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Guards;
 using Domain.Interfaces;
 using Domain.Repositories;
 
@@ -15,17 +16,20 @@ namespace Application.Services
         private readonly IDeviceRepository _deviceRepo;
         private readonly IStationRepository _stationRepo;
         private readonly IPlatformUserRepository _userRepo;
+        private readonly IUsageProbeRepository _usageProbe;
 
         public ProductService(
             IProductRepository productRepo,
             IDeviceRepository deviceRepo,
             IStationRepository stationRepo,
-            IPlatformUserRepository userRepo)
+            IPlatformUserRepository userRepo,
+            IUsageProbeRepository usageProbe)
         {
             _productRepo = productRepo;
             _deviceRepo = deviceRepo;
             _stationRepo = stationRepo;
             _userRepo = userRepo;
+            _usageProbe = usageProbe;
         }
 
         public GenericDto<AllowedProductTypesResultDto> GetAllowedProductTypes(DeviceType deviceType)
@@ -42,34 +46,35 @@ namespace Application.Services
         public async Task<GenericDto<ProductResultDto>> CreateAsync(CreateProductDto dto, long callerId, HashSet<string> callerPermissions)
         {
             var device = await _deviceRepo.GetByIdAsync(dto.DeviceId);
-            if (device is null)
-                return GenericDto<ProductResultDto>.Error(404, "Qurilma topilmadi.");
 
-            if (!device.IsActive)
-                return GenericDto<ProductResultDto>.Error(400, "Qurilma faol emas.");
+            var stop = StopFactorCheck.For(StopActions.ProductCreate)
+                .StopIf(device is null, StopFactors.Device.NotFound)
+                .StopIf(() => !device!.IsActive, StopFactors.Device.Inactive)
+                .StopIf(() => !DeviceTypeProductMap.IsAllowed(device!.DeviceType, dto.ProductType),
+                        () => StopFactors.Product.TypeNotAllowed(
+                            device!.DeviceType, dto.ProductType,
+                            string.Join(", ", DeviceTypeProductMap.GetAllowed(device.DeviceType))))
+                .Result();
 
-            if (!DeviceTypeProductMap.IsAllowed(device.DeviceType, dto.ProductType))
-            {
-                var allowed = string.Join(", ", DeviceTypeProductMap.GetAllowed(device.DeviceType));
-                return GenericDto<ProductResultDto>.Error(400,
-                    $"{device.DeviceType} uchun '{dto.ProductType}' tanlash mumkin emas. Ruxsat etilgan: {allowed}.");
-            }
+            if (stop is not null)
+                return GenericDto<ProductResultDto>.Blocked(stop);
 
             if (!callerPermissions.Contains(Permissions.MerchantAdminRegister))
             {
-                var station = await _stationRepo.GetByIdAsync(device.StationId);
-                if (station is null)
-                    return GenericDto<ProductResultDto>.Error(404, "Qurilma stansiyasi topilmadi.");
-
-                if (!station.IsActive)
-                    return GenericDto<ProductResultDto>.Error(400, "Qurilma stansiyasi faol emas.");
-
+                var station = await _stationRepo.GetByIdAsync(device!.StationId);
                 var caller = await _userRepo.GetByIdAsync(callerId);
-                if (caller is null)
-                    return GenericDto<ProductResultDto>.Error(403, "Foydalanuvchi topilmadi.");
 
-                if (caller.Type == PlatformUserType.Merchant && caller.MerchantId != station.MerchantId)
-                    return GenericDto<ProductResultDto>.Error(403, "Bu stansiya sizning merchantingizga tegishli emas.");
+                var accessStop = StopFactorCheck.For(StopActions.ProductCreate)
+                    .StopIf(station is null, StopFactors.Station.NotFound)
+                    .StopIf(() => !station!.IsActive, StopFactors.Station.Inactive)
+                    .StopIf(caller is null, StopFactors.User.NotFound)
+                    .StopIf(() => caller!.Type == PlatformUserType.Merchant
+                                  && caller.MerchantId != station!.MerchantId,
+                            StopFactors.Station.OutOfScope)
+                    .Result();
+
+                if (accessStop is not null)
+                    return GenericDto<ProductResultDto>.Blocked(accessStop);
             }
 
             var product = new ProductEntity
@@ -104,11 +109,16 @@ namespace Application.Services
         public async Task<GenericDto<List<ProductItemDto>>> GetByDeviceAsync(long deviceId, AccessScope scope)
         {
             var device = await _deviceRepo.GetByIdAsync(deviceId);
-            if (device is null)
-                return GenericDto<List<ProductItemDto>>.Error(404, "Qurilma topilmadi.");
 
-            if (!scope.IsManage && (device.Station is null || device.Station.MerchantId != scope.MerchantId))
-                return GenericDto<List<ProductItemDto>>.Error(403, "Bu qurilma sizning doirangizga tegishli emas.");
+            var stop = StopFactorCheck.For("Product.GetByDevice")
+                .StopIf(device is null, StopFactors.Device.NotFound)
+                .StopIf(() => !scope.IsManage
+                              && (device!.Station is null || device.Station.MerchantId != scope.MerchantId),
+                        StopFactors.Device.OutOfScope)
+                .Result();
+
+            if (stop is not null)
+                return GenericDto<List<ProductItemDto>>.Blocked(stop);
 
             var list = await _productRepo.GetByDeviceIdAsync(deviceId);
             return GenericDto<List<ProductItemDto>>.Success(list.Select(ToItem).ToList());
@@ -117,25 +127,36 @@ namespace Application.Services
         public async Task<GenericDto<ProductItemDto>> GetByIdAsync(long id, AccessScope scope)
         {
             var product = await _productRepo.GetByIdAsync(id);
-            if (product is null)
-                return GenericDto<ProductItemDto>.Error(404, "Mahsulot topilmadi.");
 
-            var deny = DenyIfOutOfScope(product, scope);
-            if (deny is not null)
-                return GenericDto<ProductItemDto>.Error(deny.Value.code, deny.Value.message);
+            var stop = StopFactorCheck.For("Product.GetById")
+                .StopIf(product is null, StopFactors.Product.NotFound)
+                .StopIf(() => OutOfScope(product!, scope), StopFactors.Product.OutOfScope)
+                .Result();
 
-            return GenericDto<ProductItemDto>.Success(ToItem(product));
+            if (stop is not null)
+                return GenericDto<ProductItemDto>.Blocked(stop);
+
+            return GenericDto<ProductItemDto>.Success(ToItem(product!));
         }
 
         public async Task<GenericDto<ProductResultDto>> UpdateAsync(long id, UpdateProductDto dto, AccessScope scope)
         {
-            var product = await _productRepo.GetByIdAsync(id);
-            if (product is null)
-                return GenericDto<ProductResultDto>.Error(404, "Mahsulot topilmadi.");
+            var found = await _productRepo.GetByIdAsync(id);
 
-            var deny = DenyIfOutOfScope(product, scope);
-            if (deny is not null)
-                return GenericDto<ProductResultDto>.Error(deny.Value.code, deny.Value.message);
+            var stop = await StopFactorCheck.For(StopActions.ProductUpdate)
+                .StopIf(found is null, StopFactors.Product.NotFound)
+                .StopIf(() => OutOfScope(found!, scope), StopFactors.Product.OutOfScope)
+                // Narx yoki faollik ketayotgan jarayon ostida o'zgarsa, mijoz boshqa narxda
+                // boshlagan xizmat uchun boshqa summa to'lardi.
+                .StopIfAsync(async () => (dto.Price.HasValue || dto.IsActive == false)
+                                         && await _usageProbe.ProductHasActiveProcessAsync(id),
+                             StopFactors.Product.InUse)
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<ProductResultDto>.Blocked(stop);
+
+            var product = found!;
 
             if (!string.IsNullOrWhiteSpace(dto.Name)) product.Name = dto.Name;
             if (dto.Description is not null) product.Description = dto.Description;
@@ -154,12 +175,15 @@ namespace Application.Services
         public async Task<GenericDto<ProductResultDto>> DeleteAsync(long id, AccessScope scope)
         {
             var product = await _productRepo.GetByIdAsync(id);
-            if (product is null)
-                return GenericDto<ProductResultDto>.Error(404, "Mahsulot topilmadi.");
 
-            var deny = DenyIfOutOfScope(product, scope);
-            if (deny is not null)
-                return GenericDto<ProductResultDto>.Error(deny.Value.code, deny.Value.message);
+            var stop = await StopFactorCheck.For(StopActions.ProductDelete)
+                .StopIf(product is null, StopFactors.Product.NotFound)
+                .StopIf(() => OutOfScope(product!, scope), StopFactors.Product.OutOfScope)
+                .StopIfAsync(() => _usageProbe.ProductHasActiveProcessAsync(id), StopFactors.Product.InUse)
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<ProductResultDto>.Blocked(stop);
 
             await _productRepo.DeleteAsync(id);
 
@@ -171,19 +195,16 @@ namespace Application.Services
         }
 
         /// <summary>
-        /// Mahsulot caller scope'iga tegishli emasligini tekshiradi
-        /// (product → device → station.MerchantId). Platform har doim o'tadi.
+        /// Mahsulot caller scope'idan tashqaridami
+        /// (product → device → station.MerchantId). Manage har doim o'tadi.
         /// </summary>
-        private static (int code, string message)? DenyIfOutOfScope(ProductEntity product, AccessScope scope)
+        private static bool OutOfScope(ProductEntity product, AccessScope scope)
         {
             if (scope.IsManage)
-                return null;
+                return false;
 
             var merchantId = product.Device?.Station?.MerchantId;
-            if (merchantId is null || merchantId != scope.MerchantId)
-                return (403, "Bu mahsulot sizning doirangizga tegishli emas.");
-
-            return null;
+            return merchantId is null || merchantId != scope.MerchantId;
         }
 
         private static ProductItemDto ToItem(ProductEntity p) => new()

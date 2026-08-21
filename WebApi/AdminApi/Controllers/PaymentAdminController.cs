@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using AdminApi.Models.Requests;
 using CommonConfiguration.Attributes;
 using Domain.Enums;
@@ -93,7 +94,7 @@ namespace AdminApi.Controllers
 
             var result = await _paymentService.ReverseAsync(transactionId, adminUserId, request.Reason);
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result);
         }

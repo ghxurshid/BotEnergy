@@ -35,7 +35,7 @@ namespace SessionApi.Mqtt.Handlers
             if (!result.IsSuccess)
                 _logger.LogWarning(
                     "[process.paused] rad etildi serial={Serial} process={Process} code={Code} msg={Msg}",
-                    context.SerialNumber, payload.ProcessId, result.ErrorObj?.Code, result.ErrorObj?.ErrorMessage);
+                    context.SerialNumber, payload.ProcessId, result.ErrorObj?.Reason, result.ErrorObj?.ErrorMessage);
         }
 
         public sealed class Payload

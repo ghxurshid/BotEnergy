@@ -22,7 +22,7 @@ namespace Application.Services
             // xatosini keltirib chiqaradi. Shuning uchun sekvensial await.
             var userResult = await _userService.GetCurrentUserAsync(userId);
             if (!userResult.IsSuccess)
-                return GenericDto<BootstrapResultDto>.Error(userResult.ErrorObj!.Code, userResult.ErrorObj.ErrorMessage);
+                return GenericDto<BootstrapResultDto>.FromError(userResult);
 
             var sessionResult = await _sessionService.GetCurrentAsync(userId);
             // Aktiv sessiya yo'qligi xato emas — null qaytaramiz.

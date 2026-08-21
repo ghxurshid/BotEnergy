@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using AdminApi.Extensions;
 using Permissions = Domain.Constants.Permissions;
 using AdminApi.Filters.ValidationFilters;
@@ -80,7 +81,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Register([FromBody] RegisterDeviceRequest request)
         {
             var result = await _service.RegisterAsync(request.ToDto(), User.GetUserId(), User.GetPermissions());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -133,7 +134,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> GetById(long id)
         {
             var result = await _service.GetByIdAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -189,7 +190,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Update(long id, [FromBody] UpdateDeviceRequest request)
         {
             var result = await _service.UpdateAsync(id, request.ToDto(), User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -213,7 +214,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Delete(long id)
         {
             var result = await _service.DeleteAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -242,7 +243,7 @@ namespace AdminApi.Controllers
         {
             var device = await _service.GetByIdAsync(id, User.GetScope());
             if (!device.IsSuccess)
-                return StatusCode(device.ErrorObj!.Code, new { message = device.ErrorObj.ErrorMessage });
+                return device.ToErrorResponse();
 
             await idStore.ResetAsync(device.Result!.SerialNumber);
             return Ok(new { message = $"MQTT counter'lar 0'ga tushirildi: {device.Result.SerialNumber}" });
@@ -280,7 +281,7 @@ namespace AdminApi.Controllers
             // Scope tekshiruvi servis orqali — merchant o'zgalarning qurilmasini ko'ra olmasin.
             var device = await _service.GetByIdAsync(id, User.GetScope());
             if (!device.IsSuccess)
-                return StatusCode(device.ErrorObj!.Code, new { message = device.ErrorObj.ErrorMessage });
+                return device.ToErrorResponse();
 
             var entity = await deviceRepository.GetBySerialNumberAsync(device.Result!.SerialNumber);
             if (entity is null)

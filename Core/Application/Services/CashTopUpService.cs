@@ -2,6 +2,7 @@ using Domain.Dtos.Base;
 using Domain.Dtos.Cash;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Guards;
 using Domain.Helpers;
 using Domain.Interfaces;
 using Domain.Interfaces.Bank;
@@ -25,6 +26,7 @@ namespace Application.Services
     {
         private readonly ICashSessionRepository _sessionRepo;
         private readonly IDeviceRepository _deviceRepo;
+        private readonly IUsageProbeRepository _usageProbe;
         private readonly ICardPayoutClient _bank;
         private readonly ITransactionRunner _transaction;
         private readonly CashTopUpOptions _options;
@@ -33,6 +35,7 @@ namespace Application.Services
         public CashTopUpService(
             ICashSessionRepository sessionRepo,
             IDeviceRepository deviceRepo,
+            IUsageProbeRepository usageProbe,
             ICardPayoutClient bank,
             ITransactionRunner transaction,
             IOptions<CashTopUpOptions> options,
@@ -40,6 +43,7 @@ namespace Application.Services
         {
             _sessionRepo = sessionRepo;
             _deviceRepo = deviceRepo;
+            _usageProbe = usageProbe;
             _bank = bank;
             _transaction = transaction;
             _options = options.Value;
@@ -49,22 +53,36 @@ namespace Application.Services
         public async Task<GenericDto<CashSessionOpenedDto>> OpenSessionAsync(
             string serialNumber, string cardPan, CancellationToken ct = default)
         {
-            if (!CardNumberHelper.TryNormalize(cardPan, out var pan))
-                return GenericDto<CashSessionOpenedDto>.Error(400, CardNumberHelper.ErrorMessage);
+            var cardOk = CardNumberHelper.TryNormalize(cardPan, out var pan);
+            var found = await _deviceRepo.GetBySerialNumberAsync(serialNumber);
 
-            var device = await _deviceRepo.GetBySerialNumberAsync(serialNumber);
-            if (device is null)
-                return GenericDto<CashSessionOpenedDto>.Error(404, "Qurilma topilmadi yoki faol emas.");
+            // Bank chaqiruvidan OLDIN barcha to'siqlar tekshiriladi — baribir rad etiladigan
+            // so'rov bilan tashqi tizimni bezovta qilmaymiz va sessiya yozuvi ham yaratilmaydi.
+            var stop = await StopFactorCheck.For(StopActions.CashSessionOpen)
+                .StopIf(!cardOk, StopFactors.Cash.CardInvalid(CardNumberHelper.ErrorMessage))
+                // GetBySerialNumberAsync faqat faol qurilmani qaytaradi — topilmasa yo yo'q, yo nofaol.
+                .StopIf(found is null, StopFactors.Device.NotFound)
+                .StopIf(() => found!.Station is not null && !found.Station.IsActive,
+                        StopFactors.Station.Inactive)
+                // Bitta qurilmada bir vaqtda bitta ochiq sessiya. Ilgarigisi osilib qolgan bo'lsa —
+                // mijoz almashgan bo'lishi mumkin, shuning uchun avtomatik yopmaymiz: bu pul
+                // bilan bog'liq holat, qaror idle timeout siyosatiga qoldiriladi.
+                .StopIfAsync(async () => await _sessionRepo.GetActiveByDeviceAsync(found!.Id) is not null,
+                             StopFactors.Device.HasOpenCashSession)
+                // Box inkassatsiya uchun ochiq bo'lsa, tushgan kupyura kutilgan summadan
+                // tashqarida qoladi — inkassatsiya hisobi buziladi.
+                .StopIfAsync(() => _usageProbe.DeviceHasOpenCollectionAsync(found!.Id),
+                             StopFactors.Cash.BoxOpen)
+                .ResultAsync();
 
-            // Bitta qurilmada bir vaqtda bitta ochiq sessiya. Ilgarigisi osilib qolgan bo'lsa —
-            // mijoz almashgan bo'lishi mumkin, shuning uchun avtomatik yopmaymiz: bu pul
-            // bilan bog'liq holat, qaror idle timeout siyosatiga qoldiriladi.
-            var active = await _sessionRepo.GetActiveByDeviceAsync(device.Id);
-            if (active is not null)
+            if (stop is not null)
             {
-                return GenericDto<CashSessionOpenedDto>.Error(409,
-                    "Qurilmada tugallanmagan naqd sessiya bor. Avval uni yakunlang.");
+                _logger.LogInformation(
+                    "[CASH] Sessiya ochilmadi serial={Serial} sabab={Reason}", serialNumber, stop.Code);
+                return GenericDto<CashSessionOpenedDto>.Blocked(stop);
             }
+
+            var device = found!;
 
             var verification = await _bank.VerifyCardAsync(pan, ct);
             if (!verification.IsSuccess)
@@ -73,11 +91,10 @@ namespace Application.Services
                     "[CASH] Karta tasdiqlanmadi serial={Serial} masked={Masked} kind={Kind} code={Code}",
                     serialNumber, CardNumberHelper.Mask(pan), verification.FailureKind, verification.ErrorCode);
 
-                var message = verification.FailureKind == CardPayoutFailureKind.Rejected
-                    ? verification.FailureMessage ?? "Karta qabul qilinmadi."
-                    : "Bank bilan aloqa yo'q. Birozdan keyin urinib ko'ring.";
-
-                return GenericDto<CashSessionOpenedDto>.Error(422, message);
+                return GenericDto<CashSessionOpenedDto>.Blocked(
+                    verification.FailureKind == CardPayoutFailureKind.Rejected
+                        ? StopFactors.Cash.CardRejected(verification.FailureMessage ?? "Karta qabul qilinmadi.")
+                        : StopFactors.Cash.BankUnavailable);
             }
 
             var card = verification.Result!;
@@ -108,32 +125,33 @@ namespace Application.Services
             CancellationToken ct = default)
         {
             var session = await _sessionRepo.GetByIdAsync(cashSessionId);
-            if (session is null || session.SerialNumber != serialNumber)
-                return GenericDto<CashSessionTotalDto>.Error(404, "Naqd sessiya topilmadi.");
 
-            if (session.Status != CashSessionStatus.Accepting)
-                return GenericDto<CashSessionTotalDto>.Error(409, "Sessiya naqd qabul qilish holatida emas.");
+            var stop = StopFactorCheck.For(StopActions.CashBillAdd)
+                .StopIf(session is null || session.SerialNumber != serialNumber, StopFactors.Cash.SessionNotFound)
+                .StopIf(() => session!.Status != CashSessionStatus.Accepting, StopFactors.Cash.NotAccepting)
+                // Nominal ro'yxati — buzilgan yoki soxta xabar summani sun'iy oshirib yuborishidan himoya.
+                .StopIf(() => !_options.AllowedDenominations.Contains(denomination),
+                        StopFactors.Cash.DenominationRejected)
+                .StopIf(() => session!.AcceptedAmount + denomination > _options.MaxSessionAmount,
+                        StopFactors.Cash.LimitExceeded)
+                .StopIf(billSeq <= 0, StopFactors.Cash.InvalidBillSequence)
+                .Result();
 
-            // Nominal ro'yxati — buzilgan yoki soxta xabar summani sun'iy oshirib yuborishidan himoya.
-            if (!_options.AllowedDenominations.Contains(denomination))
+            if (stop is not null)
             {
                 _logger.LogWarning(
-                    "[CASH] Ruxsat etilmagan nominal serial={Serial} sessionId={SessionId} nominal={Denomination}",
-                    serialNumber, cashSessionId, denomination);
-                return GenericDto<CashSessionTotalDto>.Error(400, "Kupyura nominali qabul qilinmaydi.");
+                    "[CASH] Kupyura rad etildi serial={Serial} sessionId={SessionId} nominal={Denomination} sabab={Reason}",
+                    serialNumber, cashSessionId, denomination, stop.Code);
+                return GenericDto<CashSessionTotalDto>.Blocked(stop);
             }
 
-            if (session.AcceptedAmount + denomination > _options.MaxSessionAmount)
-                return GenericDto<CashSessionTotalDto>.Error(409, "Sessiya bo'yicha maksimal summa oshib ketdi.");
-
-            if (billSeq <= 0)
-                return GenericDto<CashSessionTotalDto>.Error(400, "bill_seq noldan katta bo'lishi kerak.");
+            var accepting = session!;
 
             // Kupyura yozuvi va jami summa bitta tranzaksiyada — biri yozilib ikkinchisi
             // yozilmay qolsa hisob buziladi.
             var result = await _transaction.RunAsync(() =>
                 _sessionRepo.TryAddBillAsync(
-                    session.Id, session.DeviceId, session.SerialNumber, denomination, billSeq));
+                    accepting.Id, accepting.DeviceId, accepting.SerialNumber, denomination, billSeq));
 
             if (!result.Added)
             {
@@ -144,7 +162,7 @@ namespace Application.Services
 
             return GenericDto<CashSessionTotalDto>.Success(new CashSessionTotalDto
             {
-                CashSessionId = session.Id,
+                CashSessionId = accepting.Id,
                 AcceptedTotal = result.AcceptedTotal,
                 BillCount = result.BillCount,
                 Added = result.Added
@@ -156,17 +174,20 @@ namespace Application.Services
         {
             var session = await _sessionRepo.GetByIdAsync(cashSessionId);
             if (session is null || session.SerialNumber != serialNumber)
-                return GenericDto<CashSessionResultDto>.Error(404, "Naqd sessiya topilmadi.");
+                return GenericDto<CashSessionResultDto>.Blocked(StopFactors.Cash.SessionNotFound);
 
             // Takroriy commit (device javobni olmay qayta yuborgan) — mavjud natijani qaytaramiz.
             if (session.Status is CashSessionStatus.Completed or CashSessionStatus.Committing)
                 return GenericDto<CashSessionResultDto>.Success(ToResult(session, message: null));
 
-            if (session.Status != CashSessionStatus.PayoutFailed && session.Status != CashSessionStatus.Accepting)
-                return GenericDto<CashSessionResultDto>.Error(409, "Sessiya yakunlangan.");
+            var stop = StopFactorCheck.For(StopActions.CashCommit)
+                .StopIf(session.Status is not (CashSessionStatus.PayoutFailed or CashSessionStatus.Accepting),
+                        StopFactors.Cash.Finished)
+                .StopIf(session.AcceptedAmount <= 0, StopFactors.Cash.Empty)
+                .Result();
 
-            if (session.AcceptedAmount <= 0)
-                return GenericDto<CashSessionResultDto>.Error(400, "Hech qanday pul qabul qilinmagan.");
+            if (stop is not null)
+                return GenericDto<CashSessionResultDto>.Blocked(stop);
 
             if (!string.IsNullOrWhiteSpace(clientRef))
                 session.IdempotencyKey = clientRef;
@@ -178,40 +199,42 @@ namespace Application.Services
             string serialNumber, long cashSessionId, CancellationToken ct = default)
         {
             var session = await _sessionRepo.GetByIdAsync(cashSessionId);
-            if (session is null || session.SerialNumber != serialNumber)
-                return GenericDto<CashSessionResultDto>.Error(404, "Naqd sessiya topilmadi.");
 
-            if (session.Status != CashSessionStatus.Accepting)
-                return GenericDto<CashSessionResultDto>.Error(409, "Sessiya bekor qilinadigan holatda emas.");
+            var stop = StopFactorCheck.For(StopActions.CashCancel)
+                .StopIf(session is null || session.SerialNumber != serialNumber, StopFactors.Cash.SessionNotFound)
+                .StopIf(() => session!.Status != CashSessionStatus.Accepting, StopFactors.Cash.NotAccepting)
+                // Bill acceptor qabul qilingan pulni qaytara olmaydi — pul solingan bo'lsa
+                // yagona to'g'ri yakun kartaga o'tkazish.
+                .StopIf(() => session!.AcceptedAmount > 0, StopFactors.Cash.HasMoney)
+                .Result();
 
-            // Bill acceptor qabul qilingan pulni qaytara olmaydi — pul solingan bo'lsa
-            // yagona to'g'ri yakun kartaga o'tkazish.
-            if (session.AcceptedAmount > 0)
-            {
-                return GenericDto<CashSessionResultDto>.Error(409,
-                    "Pul qabul qilingan — sessiyani bekor qilib bo'lmaydi, kartaga o'tkazing.");
-            }
+            if (stop is not null)
+                return GenericDto<CashSessionResultDto>.Blocked(stop);
 
-            session.Status = CashSessionStatus.Cancelled;
-            session.LastActivityAt = DateTime.Now;
-            await _sessionRepo.UpdateAsync(session);
+            var cancelling = session!;
+            cancelling.Status = CashSessionStatus.Cancelled;
+            cancelling.LastActivityAt = DateTime.Now;
+            await _sessionRepo.UpdateAsync(cancelling);
 
-            _logger.LogInformation("[CASH] Sessiya bekor qilindi sessionId={SessionId}", session.Id);
+            _logger.LogInformation("[CASH] Sessiya bekor qilindi sessionId={SessionId}", cancelling.Id);
 
-            return GenericDto<CashSessionResultDto>.Success(ToResult(session, "Sessiya bekor qilindi."));
+            return GenericDto<CashSessionResultDto>.Success(ToResult(cancelling, "Sessiya bekor qilindi."));
         }
 
         public async Task<GenericDto<CashSessionResultDto>> RetryPayoutAsync(
             long cashSessionId, CancellationToken ct = default)
         {
             var session = await _sessionRepo.GetByIdAsync(cashSessionId);
-            if (session is null)
-                return GenericDto<CashSessionResultDto>.Error(404, "Naqd sessiya topilmadi.");
 
-            if (session.Status != CashSessionStatus.PayoutFailed)
-                return GenericDto<CashSessionResultDto>.Error(409, "Sessiya qayta urinishga muhtoj emas.");
+            var stop = StopFactorCheck.For(StopActions.CashRetry)
+                .StopIf(session is null, StopFactors.Cash.SessionNotFound)
+                .StopIf(() => session!.Status != CashSessionStatus.PayoutFailed, StopFactors.Cash.RetryNotNeeded)
+                .Result();
 
-            return await ExecutePayoutAsync(session, ct);
+            if (stop is not null)
+                return GenericDto<CashSessionResultDto>.Blocked(stop);
+
+            return await ExecutePayoutAsync(session!, ct);
         }
 
         public async Task<int> CloseIdleSessionsAsync(CancellationToken ct = default)

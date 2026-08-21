@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using CommonConfiguration.Attributes;
 using CommonConfiguration.Filters;
 using Domain.Dtos.PaymentSession;
@@ -74,7 +75,7 @@ namespace SessionApi.Controllers
 
             return result.IsSuccess
                 ? Ok(result.Result)
-                : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -98,7 +99,7 @@ namespace SessionApi.Controllers
             var result = await _invoiceService.CancelByUserAsync(invoiceId, userId, ct);
             return result.IsSuccess
                 ? Ok(result.Result)
-                : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                : result.ToErrorResponse();
         }
 
         /// <summary>Sessiyaning barcha hold invoice'lari (FIFO tartibda).</summary>
@@ -113,7 +114,7 @@ namespace SessionApi.Controllers
             var result = await _invoiceService.GetForSessionAsync(sessionId, userId);
             return result.IsSuccess
                 ? Ok(result.Result)
-                : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                : result.ToErrorResponse();
         }
 
         /// <summary>Sessiya to'lov konteksti: hold balans + invoice ro'yxati.</summary>
@@ -128,7 +129,7 @@ namespace SessionApi.Controllers
             var result = await _paymentSessionService.GetForSessionAsync(sessionId, userId);
             return result.IsSuccess
                 ? Ok(result.Result)
-                : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                : result.ToErrorResponse();
         }
 
         private bool TryGetUserId(out long userId)

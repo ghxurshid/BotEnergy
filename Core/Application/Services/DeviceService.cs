@@ -3,6 +3,7 @@ using Domain.Constants;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
+using Domain.Guards;
 using Domain.Interfaces;
 using Domain.Repositories;
 
@@ -13,30 +14,41 @@ namespace Application.Services
         private readonly IDeviceRepository _repo;
         private readonly IStationRepository _stationRepo;
         private readonly IPlatformUserRepository _userRepo;
+        private readonly IUsageProbeRepository _usageProbe;
 
-        public DeviceService(IDeviceRepository repo, IStationRepository stationRepo, IPlatformUserRepository userRepo)
+        public DeviceService(
+            IDeviceRepository repo,
+            IStationRepository stationRepo,
+            IPlatformUserRepository userRepo,
+            IUsageProbeRepository usageProbe)
         {
             _repo = repo;
             _stationRepo = stationRepo;
             _userRepo = userRepo;
+            _usageProbe = usageProbe;
         }
 
         public async Task<GenericDto<DeviceResultDto>> RegisterAsync(RegisterDeviceDto dto, long callerId, HashSet<string> callerPermissions)
         {
             var station = await _stationRepo.GetByIdAsync(dto.StationId);
-            if (station is null)
-                return GenericDto<DeviceResultDto>.Error(404, "Stansiya topilmadi.");
 
-            if (!station.IsActive)
-                return GenericDto<DeviceResultDto>.Error(400, "Stansiya faol emas.");
+            var stop = StopFactorCheck.For(StopActions.DeviceRegister)
+                .StopIf(station is null, StopFactors.Station.NotFound)
+                .StopIf(() => !station!.IsActive, StopFactors.Station.Inactive)
+                .Result();
 
-            var accessCheck = await CheckStationAccessAsync(callerId, callerPermissions, station);
+            if (stop is not null)
+                return GenericDto<DeviceResultDto>.Blocked(stop);
+
+            // Doira tekshiruvi seriya raqamidan OLDIN: aks holda begona merchantning
+            // qurilma seriyasi band-yo'qligini tashqi odam bilib olardi.
+            var accessCheck = await CheckStationAccessAsync(callerId, callerPermissions, station!);
             if (accessCheck is not null)
                 return accessCheck;
 
             // Nofaol qurilma ham unique indexni band qiladi — shu sabab IsActive'siz tekshiriladi.
             if (await _repo.ExistsBySerialNumberAsync(dto.SerialNumber))
-                return GenericDto<DeviceResultDto>.Error(409, $"'{dto.SerialNumber}' seriya raqamli qurilma allaqachon mavjud.");
+                return GenericDto<DeviceResultDto>.Blocked(StopFactors.Device.SerialTaken(dto.SerialNumber));
 
             var device = new DeviceEntity
             {
@@ -70,11 +82,14 @@ namespace Application.Services
         public async Task<GenericDto<List<DeviceItemDto>>> GetByStationAsync(long stationId, AccessScope scope)
         {
             var station = await _stationRepo.GetByIdAsync(stationId);
-            if (station is null)
-                return GenericDto<List<DeviceItemDto>>.Error(404, "Stansiya topilmadi.");
 
-            if (!scope.CanAccessMerchant(station.MerchantId))
-                return GenericDto<List<DeviceItemDto>>.Error(403, "Bu stansiya sizning doirangizga tegishli emas.");
+            var stop = StopFactorCheck.For("Device.GetByStation")
+                .StopIf(station is null, StopFactors.Station.NotFound)
+                .StopIf(() => !scope.CanAccessMerchant(station!.MerchantId), StopFactors.Station.OutOfScope)
+                .Result();
+
+            if (stop is not null)
+                return GenericDto<List<DeviceItemDto>>.Blocked(stop);
 
             var list = await _repo.GetByStationIdAsync(stationId);
             return GenericDto<List<DeviceItemDto>>.Success(list.Select(ToItem).ToList());
@@ -83,25 +98,39 @@ namespace Application.Services
         public async Task<GenericDto<DeviceItemDto>> GetByIdAsync(long id, AccessScope scope)
         {
             var device = await _repo.GetByIdAsync(id);
-            if (device is null)
-                return GenericDto<DeviceItemDto>.Error(404, "Qurilma topilmadi.");
 
-            var deny = DenyIfOutOfScope(device, scope);
-            if (deny is not null)
-                return GenericDto<DeviceItemDto>.Error(deny.Value.code, deny.Value.message);
+            var stop = StopFactorCheck.For("Device.GetById")
+                .StopIf(device is null, StopFactors.Device.NotFound)
+                .StopIf(() => OutOfScope(device!, scope), StopFactors.Device.OutOfScope)
+                .Result();
 
-            return GenericDto<DeviceItemDto>.Success(ToItem(device));
+            if (stop is not null)
+                return GenericDto<DeviceItemDto>.Blocked(stop);
+
+            return GenericDto<DeviceItemDto>.Success(ToItem(device!));
         }
 
         public async Task<GenericDto<DeviceResultDto>> UpdateAsync(long id, UpdateDeviceDto dto, AccessScope scope)
         {
-            var device = await _repo.GetByIdAsync(id);
-            if (device is null)
-                return GenericDto<DeviceResultDto>.Error(404, "Qurilma topilmadi.");
+            var found = await _repo.GetByIdAsync(id);
 
-            var deny = DenyIfOutOfScope(device, scope);
-            if (deny is not null)
-                return GenericDto<DeviceResultDto>.Error(deny.Value.code, deny.Value.message);
+            var stop = await StopFactorCheck.For(StopActions.DeviceUpdate)
+                .StopIf(found is null, StopFactors.Device.NotFound)
+                .StopIf(() => OutOfScope(found!, scope), StopFactors.Device.OutOfScope)
+                // Nofaollashtirish — bu qurilmani ishdan chiqarish: ustida ketayotgan sessiya
+                // buyruqsiz osilib qolardi (mijoz pulini to'lab, xizmatni ololmay).
+                .StopIfAsync(async () => dto.IsActive == false && found!.IsActive
+                                         && await _usageProbe.DeviceHasActiveSessionAsync(id),
+                             StopFactors.Device.HasActiveSession)
+                .StopIfAsync(async () => dto.IsActive == false && found!.IsActive
+                                         && await _usageProbe.DeviceHasOpenCashSessionAsync(id),
+                             StopFactors.Device.HasOpenCashSession)
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<DeviceResultDto>.Blocked(stop);
+
+            var device = found!;
 
             if (!string.IsNullOrWhiteSpace(dto.Model)) device.Model = dto.Model;
             if (!string.IsNullOrWhiteSpace(dto.FirmwareVersion)) device.FirmwareVersion = dto.FirmwareVersion;
@@ -120,12 +149,23 @@ namespace Application.Services
         public async Task<GenericDto<DeviceResultDto>> DeleteAsync(long id, AccessScope scope)
         {
             var device = await _repo.GetByIdAsync(id);
-            if (device is null)
-                return GenericDto<DeviceResultDto>.Error(404, "Qurilma topilmadi.");
 
-            var deny = DenyIfOutOfScope(device, scope);
-            if (deny is not null)
-                return GenericDto<DeviceResultDto>.Error(deny.Value.code, deny.Value.message);
+            var stop = await StopFactorCheck.For(StopActions.DeviceDelete)
+                .StopIf(device is null, StopFactors.Device.NotFound)
+                .StopIf(() => OutOfScope(device!, scope), StopFactors.Device.OutOfScope)
+                .StopIfAsync(() => _usageProbe.DeviceHasActiveSessionAsync(id),
+                             StopFactors.Device.HasActiveSession)
+                .StopIfAsync(() => _usageProbe.DeviceHasOpenCashSessionAsync(id),
+                             StopFactors.Device.HasOpenCashSession)
+                .StopIfAsync(() => _usageProbe.DeviceHasOpenCollectionAsync(id),
+                             StopFactors.Device.HasOpenCollection)
+                // Qoldiq nolga tushmasdan o'chirilsa, boxdagi pul hisobdan yo'qoladi.
+                .StopIf(() => device!.CashBalance > 0,
+                        () => StopFactors.Device.HasCash(device!.CashBalance))
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<DeviceResultDto>.Blocked(stop);
 
             await _repo.DeleteAsync(id);
 
@@ -144,35 +184,28 @@ namespace Application.Services
 
             var caller = await _userRepo.GetByIdAsync(callerId);
             if (caller is null)
-                return GenericDto<DeviceResultDto>.Error(403, "Foydalanuvchi topilmadi.");
+                return GenericDto<DeviceResultDto>.Blocked(StopFactors.User.NotFound);
 
-            if (caller.Type == Domain.Enums.PlatformUserType.Merchant)
-            {
-                if (caller.MerchantId != station.MerchantId)
-                    return GenericDto<DeviceResultDto>.Error(403, "Bu stansiya sizning merchantingizga tegishli emas.");
-            }
-            else
-            {
-                return GenericDto<DeviceResultDto>.Error(403, "Bu operatsiya uchun merchant xodimi bo'lishingiz kerak.");
-            }
+            if (caller.Type != Domain.Enums.PlatformUserType.Merchant)
+                return GenericDto<DeviceResultDto>.Blocked(StopFactors.Access.Denied);
+
+            if (caller.MerchantId != station.MerchantId)
+                return GenericDto<DeviceResultDto>.Blocked(StopFactors.Station.OutOfScope);
 
             return null;
         }
 
         /// <summary>
-        /// Qurilma caller scope'iga tegishli emasligini tekshiradi (device → station.MerchantId).
-        /// Platform har doim o'tadi; merchant user faqat o'z merchanti; aks holda rad.
+        /// Qurilma caller scope'idan tashqaridami (device → station.MerchantId).
+        /// Manage har doim o'tadi; merchant operator faqat o'z merchanti.
         /// </summary>
-        private static (int code, string message)? DenyIfOutOfScope(DeviceEntity device, AccessScope scope)
+        private static bool OutOfScope(DeviceEntity device, AccessScope scope)
         {
             if (scope.IsManage)
-                return null;
+                return false;
 
             var merchantId = device.Station?.MerchantId;
-            if (merchantId is null || merchantId != scope.MerchantId)
-                return (403, "Bu qurilma sizning doirangizga tegishli emas.");
-
-            return null;
+            return merchantId is null || merchantId != scope.MerchantId;
         }
 
         private static DeviceItemDto ToItem(DeviceEntity d) => new()

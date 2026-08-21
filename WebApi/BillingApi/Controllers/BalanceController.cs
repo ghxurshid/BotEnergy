@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using BillingApi.Extensions;
 using Permissions = Domain.Constants.Permissions;
 using BillingApi.Filters.ValidationFilters;
@@ -55,7 +56,7 @@ namespace BillingApi.Controllers
         public async Task<IActionResult> TopUp([FromBody] TopUpBalanceRequest request)
         {
             var result = await _billingService.TopUpAsync(request.ToDto());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
     }
 }

@@ -6,6 +6,7 @@ using Domain.Enums;
 using Domain.Helpers;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Domain.Guards;
 
 namespace Application.Services
 {
@@ -41,15 +42,15 @@ namespace Application.Services
 
         public async Task<GenericDto<HoldInvoiceAdminItemDto>> GetByIdAsync(long invoiceId, AccessScope scope)
         {
-            var (invoice, ps, error) = await LoadAsync(invoiceId, scope);
-            if (error is not null) return GenericDto<HoldInvoiceAdminItemDto>.Error(error.Value.code, error.Value.msg);
+            var (invoice, ps, stop) = await LoadAsync(invoiceId, scope);
+            if (stop is not null) return GenericDto<HoldInvoiceAdminItemDto>.Blocked(stop);
             return GenericDto<HoldInvoiceAdminItemDto>.Success(MapItem(invoice!));
         }
 
         public async Task<GenericDto<List<HoldInvoiceStepItemDto>>> GetStepsAsync(long invoiceId, AccessScope scope)
         {
-            var (invoice, ps, error) = await LoadAsync(invoiceId, scope);
-            if (error is not null) return GenericDto<List<HoldInvoiceStepItemDto>>.Error(error.Value.code, error.Value.msg);
+            var (invoice, ps, stop) = await LoadAsync(invoiceId, scope);
+            if (stop is not null) return GenericDto<List<HoldInvoiceStepItemDto>>.Blocked(stop);
 
             var steps = await _invoiceRepo.GetStepsAsync(invoiceId);
             return GenericDto<List<HoldInvoiceStepItemDto>>.Success(steps.Select(MapStep).ToList());
@@ -57,17 +58,17 @@ namespace Application.Services
 
         public async Task<GenericDto<HoldInvoiceAdminItemDto>> ForceCaptureAsync(long invoiceId, HoldInvoiceOperatorActionDto dto, long adminUserId, AccessScope scope)
         {
-            var (invoice, ps, error) = await LoadAsync(invoiceId, scope);
-            if (error is not null) return GenericDto<HoldInvoiceAdminItemDto>.Error(error.Value.code, error.Value.msg);
+            var (invoice, ps, stop) = await LoadAsync(invoiceId, scope);
+            if (stop is not null) return GenericDto<HoldInvoiceAdminItemDto>.Blocked(stop);
 
             var captureTiyin = dto.AmountUzs.HasValue ? Money.ToTiyin(dto.AmountUzs.Value) : invoice!.ConsumedTiyin;
             if (captureTiyin <= 0)
-                return GenericDto<HoldInvoiceAdminItemDto>.Error(400, "Capture summasi 0 dan katta bo'lishi kerak.");
+                return GenericDto<HoldInvoiceAdminItemDto>.Blocked(StopFactors.Payment.AmountNotPositive);
 
             if (!await _invoiceRepo.TryTransitionAsync(invoiceId, HoldInvoiceStatus.CapturePending,
                     captureAmountTiyin: captureTiyin, nextAttemptAt: DateTime.Now))
-                return GenericDto<HoldInvoiceAdminItemDto>.Error(409,
-                    $"Joriy holat ({invoice!.Status}) capture'ga ruxsat bermaydi.");
+                return GenericDto<HoldInvoiceAdminItemDto>.Blocked(
+                    StopFactors.Payment.InvoiceTransitionNotAllowed(invoice!.Status, "capture"));
 
             await LogOperatorAsync(invoice!, ps!, adminUserId, $"CAPTURE {captureTiyin} tiyin — {dto.Reason}");
             return await ReloadItemAsync(invoiceId);
@@ -75,12 +76,12 @@ namespace Application.Services
 
         public async Task<GenericDto<HoldInvoiceAdminItemDto>> ForceRefundAsync(long invoiceId, HoldInvoiceOperatorActionDto dto, long adminUserId, AccessScope scope)
         {
-            var (invoice, ps, error) = await LoadAsync(invoiceId, scope);
-            if (error is not null) return GenericDto<HoldInvoiceAdminItemDto>.Error(error.Value.code, error.Value.msg);
+            var (invoice, ps, stop) = await LoadAsync(invoiceId, scope);
+            if (stop is not null) return GenericDto<HoldInvoiceAdminItemDto>.Blocked(stop);
 
             if (!await _invoiceRepo.TryTransitionAsync(invoiceId, HoldInvoiceStatus.RefundPending, nextAttemptAt: DateTime.Now))
-                return GenericDto<HoldInvoiceAdminItemDto>.Error(409,
-                    $"Joriy holat ({invoice!.Status}) refund'ga ruxsat bermaydi.");
+                return GenericDto<HoldInvoiceAdminItemDto>.Blocked(
+                    StopFactors.Payment.InvoiceTransitionNotAllowed(invoice!.Status, "refund"));
 
             // Hold balansdan chiqarib qo'yamiz (agar hali hisoblangan bo'lsa).
             if (invoice!.Status is HoldInvoiceStatus.Hold && invoice.ConsumedTiyin == 0)
@@ -92,15 +93,16 @@ namespace Application.Services
 
         public async Task<GenericDto<HoldInvoiceAdminItemDto>> ForceCancelAsync(long invoiceId, HoldInvoiceOperatorActionDto dto, long adminUserId, AccessScope scope)
         {
-            var (invoice, ps, error) = await LoadAsync(invoiceId, scope);
-            if (error is not null) return GenericDto<HoldInvoiceAdminItemDto>.Error(error.Value.code, error.Value.msg);
+            var (invoice, ps, stop) = await LoadAsync(invoiceId, scope);
+            if (stop is not null) return GenericDto<HoldInvoiceAdminItemDto>.Blocked(stop);
 
             if (!HoldInvoiceStateMachine.CanTransition(invoice!.Status, HoldInvoiceStatus.Cancelled))
-                return GenericDto<HoldInvoiceAdminItemDto>.Error(409,
-                    $"Joriy holat ({invoice.Status}) cancel'ga ruxsat bermaydi — Hold bo'lsa Refund ishlating.");
+                return GenericDto<HoldInvoiceAdminItemDto>.Blocked(
+                    StopFactors.Payment.InvoiceTransitionNotAllowed(
+                        invoice.Status, "cancel", "Hold bo'lsa Refund ishlating."));
 
             if (!await _invoiceRepo.TryTransitionAsync(invoiceId, HoldInvoiceStatus.Cancelled))
-                return GenericDto<HoldInvoiceAdminItemDto>.Error(409, "Holat o'zgargan — qayta urinib ko'ring.");
+                return GenericDto<HoldInvoiceAdminItemDto>.Blocked(StopFactors.Payment.InvoiceStateChanged);
 
             await LogOperatorAsync(invoice, ps!, adminUserId, $"CANCEL — {dto.Reason}");
             return await ReloadItemAsync(invoiceId);
@@ -108,11 +110,11 @@ namespace Application.Services
 
         public async Task<GenericDto<HoldInvoiceAdminItemDto>> RetryAsync(long invoiceId, HoldInvoiceOperatorActionDto dto, long adminUserId, AccessScope scope)
         {
-            var (invoice, ps, error) = await LoadAsync(invoiceId, scope);
-            if (error is not null) return GenericDto<HoldInvoiceAdminItemDto>.Error(error.Value.code, error.Value.msg);
+            var (invoice, ps, stop) = await LoadAsync(invoiceId, scope);
+            if (stop is not null) return GenericDto<HoldInvoiceAdminItemDto>.Blocked(stop);
 
             if (invoice!.Status != HoldInvoiceStatus.Failed)
-                return GenericDto<HoldInvoiceAdminItemDto>.Error(409, "Faqat Failed invoice retry qilinadi.");
+                return GenericDto<HoldInvoiceAdminItemDto>.Blocked(StopFactors.Payment.InvoiceRetryNotApplicable);
 
             // Consume bo'lgan bo'lsa capture, aks holda refund maqsadiga qaytaramiz.
             var target = invoice.ConsumedTiyin > 0 ? HoldInvoiceStatus.CapturePending : HoldInvoiceStatus.RefundPending;
@@ -120,7 +122,7 @@ namespace Application.Services
 
             if (!await _invoiceRepo.TryTransitionAsync(invoiceId, target,
                     captureAmountTiyin: captureAmount, nextAttemptAt: DateTime.Now))
-                return GenericDto<HoldInvoiceAdminItemDto>.Error(409, "Holat o'zgargan — qayta urinib ko'ring.");
+                return GenericDto<HoldInvoiceAdminItemDto>.Blocked(StopFactors.Payment.InvoiceStateChanged);
 
             await LogOperatorAsync(invoice, ps!, adminUserId, $"RETRY → {target} — {dto.Reason}");
             return await ReloadItemAsync(invoiceId);
@@ -128,18 +130,23 @@ namespace Application.Services
 
         // ── Yordamchi ─────────────────────────────────────────────
 
-        private async Task<(HoldInvoiceEntity? invoice, PaymentSessionEntity? ps, (int code, string msg)? error)> LoadAsync(long invoiceId, AccessScope scope)
+        /// <summary>
+        /// Har bir operator amali uchun umumiy uch to'siq: invoice bor, to'lov konteksti bor,
+        /// caller doirasida. Topilsa <c>stop</c> to'ldiriladi va amal bajarilmaydi.
+        /// </summary>
+        private async Task<(HoldInvoiceEntity? invoice, PaymentSessionEntity? ps, StopFactor? stop)> LoadAsync(
+            long invoiceId, AccessScope scope)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (invoice is null)
-                return (null, null, (404, "Invoice topilmadi."));
+                return (null, null, StopFactors.Payment.InvoiceNotFound);
 
             var ps = await _paymentSessionRepo.GetByIdAsync(invoice.PaymentSessionId);
             if (ps is null)
-                return (null, null, (404, "To'lov konteksti topilmadi."));
+                return (null, null, StopFactors.Payment.PaymentContextNotFound);
 
             if (!scope.CanAccessMerchant(ps.MerchantId))
-                return (null, null, (403, "Bu invoice sizning doirangizga tegishli emas."));
+                return (null, null, StopFactors.Payment.InvoiceNotOwned);
 
             return (invoice, ps, null);
         }

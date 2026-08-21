@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using AdminApi.Extensions;
 using Permissions = Domain.Constants.Permissions;
 using AdminApi.Filters.ValidationFilters;
@@ -75,7 +76,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> CreateRole([FromBody] CreateRoleRequest request)
         {
             var result = await _roleService.CreateRoleAsync(request.ToDto(), User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -97,7 +98,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> GetAll()
         {
             var result = await _roleService.GetRolesAsync(User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -121,7 +122,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> GetById(long id)
         {
             var result = await _roleService.GetRoleByIdAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -159,7 +160,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Update(long id, [FromBody] UpdateRoleRequest request)
         {
             var result = await _roleService.UpdateRoleAsync(id, request.ToDto(), User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -182,7 +183,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Delete(long id)
         {
             var result = await _roleService.DeleteRoleAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -205,7 +206,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> GetPermissions(long roleId)
         {
             var result = await _roleService.GetRolePermissionsAsync(roleId, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -228,7 +229,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> GetAllowedPermissions([FromQuery] RoleKind kind)
         {
             var result = await _roleService.GetAllowedPermissionsAsync(kind, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
     }
 }

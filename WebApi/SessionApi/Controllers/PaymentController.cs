@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using CommonConfiguration.Attributes;
 using CommonConfiguration.Filters;
 using Domain.Dtos.Payment;
@@ -97,7 +98,7 @@ namespace SessionApi.Controllers
 
             var result = await _paymentService.ProcessQrTopUpAsync(dto, ct);
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             // Foydalanuvchining barcha qurilmalariga real-time xabar — boshqa device'da ham balans yangilanadi
             if (result.Result!.Status == PaymentStatus.Succeeded)

@@ -6,6 +6,7 @@ using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Interfaces.Payme;
 using Domain.Repositories;
+using Domain.Guards;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Services
@@ -43,7 +44,7 @@ namespace Application.Services
         {
             // 1. Sodda input validatsiyasi (permission tekshiruvi controller'da bo'lib o'tadi)
             if (request.Amount <= 0)
-                return GenericDto<QrTopUpResultDto>.Error(400, "To'ldirish miqdori 0 dan katta bo'lishi kerak.");
+                return GenericDto<QrTopUpResultDto>.Blocked(StopFactors.Payment.AmountNotPositive);
 
             if (string.IsNullOrWhiteSpace(request.PaymeToken))
                 return GenericDto<QrTopUpResultDto>.Error(400, "Payme tokeni bo'sh.");
@@ -59,9 +60,9 @@ namespace Application.Services
             // 3. Foydalanuvchini olish (Organization avtomatik LegalUser uchun yuklanadi)
             var user = await _userRepo.GetByIdAsync(request.InitiatedByUserId);
             if (user is null)
-                return GenericDto<QrTopUpResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<QrTopUpResultDto>.Blocked(StopFactors.User.NotFound);
             if (user.IsBlocked)
-                return GenericDto<QrTopUpResultDto>.Error(403, "Foydalanuvchi bloklangan.");
+                return GenericDto<QrTopUpResultDto>.Blocked(StopFactors.User.Blocked);
 
             // 4. PayeeType bo'yicha balans egasini aniqlash
             long? userPayeeId = null;
@@ -120,7 +121,7 @@ namespace Application.Services
             if (!createCall.IsSuccess)
             {
                 await MarkFailedAsync(tx, $"Receipt yaratish: {createCall.FailureMessage}");
-                return GenericDto<QrTopUpResultDto>.Error(502, "Payme bilan bog'lanishda xatolik.");
+                return GenericDto<QrTopUpResultDto>.Blocked(StopFactors.Payment.ProviderUnavailable);
             }
 
             tx.ProviderReceiptId = createCall.Result!.Id;
@@ -203,7 +204,7 @@ namespace Application.Services
 
             var tx = await _repo.GetByIdAsync(transactionId);
             if (tx is null)
-                return GenericDto<ReverseTransactionResultDto>.Error(404, "To'lov topilmadi.");
+                return GenericDto<ReverseTransactionResultDto>.Blocked(StopFactors.Payment.NotFound);
 
             if (tx.Status != PaymentStatus.Succeeded)
                 return GenericDto<ReverseTransactionResultDto>.Error(400,

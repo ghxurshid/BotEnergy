@@ -2,6 +2,7 @@ using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Guards;
 using Domain.Interfaces;
 using Domain.Repositories;
 using Microsoft.Extensions.Logging;
@@ -34,7 +35,7 @@ namespace Application.Services
         {
             var user = await _userRepo.GetByIdAsync(userId);
             if (user is null)
-                return GenericDto<GetBalanceResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<GetBalanceResultDto>.Blocked(StopFactors.User.NotFound);
 
             return GenericDto<GetBalanceResultDto>.Success(new GetBalanceResultDto
             {
@@ -45,29 +46,40 @@ namespace Application.Services
 
         public async Task<GenericDto<TopUpBalanceResultDto>> TopUpAsync(TopUpBalanceDto dto)
         {
-            if (dto.Amount <= 0)
-                return GenericDto<TopUpBalanceResultDto>.Error(400, "To'ldirish miqdori 0 dan katta bo'lishi kerak.");
+            var found = await _userRepo.GetByIdAsync(dto.UserId);
 
-            var user = await _userRepo.GetByIdAsync(dto.UserId);
-            if (user is null)
-                return GenericDto<TopUpBalanceResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+            var stop = StopFactorCheck.For(StopActions.BalanceTopUp)
+                .StopIf(dto.Amount <= 0, StopFactors.Payment.AmountNotPositive)
+                .StopIf(found is null, StopFactors.User.NotFound)
+                // Bloklangan foydalanuvchi pulini ishlata olmaydi — hisobni to'ldirish
+                // uni "yechib bo'lmaydigan" mablag'ga aylantirardi.
+                .StopIf(() => found!.IsBlocked, StopFactors.User.Blocked)
+                .StopIf(() => found!.Type == CustomerUserType.Corporate && found.OrganizationId is null,
+                        StopFactors.Organization.NotLinked)
+                // Organization soft-delete bo'lsa Include null qaytaradi — ikkalasi bir to'siq:
+                // tashkilot yo'q yoki nofaol bo'lsa uning balansini to'ldirib bo'lmaydi.
+                .StopIf(() => found!.Type == CustomerUserType.Corporate && found.Organization is null,
+                        StopFactors.Organization.NotFound)
+                .StopIf(() => found!.Type == CustomerUserType.Corporate
+                              && found.Organization is { IsActive: false },
+                        StopFactors.Organization.Inactive)
+                .Result();
 
-            decimal? newBalance;
+            if (stop is not null)
+                return GenericDto<TopUpBalanceResultDto>.Blocked(stop);
 
-            if (user.Type == CustomerUserType.Natural)
-            {
-                newBalance = await _userRepo.TopUpBalanceAsync(user.Id, dto.Amount);
-            }
-            else // Corporate
-            {
-                if (user.OrganizationId is null)
-                    return GenericDto<TopUpBalanceResultDto>.Error(400, "Corporate foydalanuvchining tashkiloti topilmadi.");
+            var user = found!;
 
-                newBalance = await _orgRepo.TopUpBalanceAsync(user.OrganizationId.Value, dto.Amount);
-            }
+            var newBalance = user.Type == CustomerUserType.Natural
+                ? await _userRepo.TopUpBalanceAsync(user.Id, dto.Amount)
+                : await _orgRepo.TopUpBalanceAsync(user.OrganizationId!.Value, dto.Amount);
 
+            // Poyga: tekshiruvdan keyin balans egasi o'chirilgan bo'lishi mumkin.
             if (newBalance is null)
-                return GenericDto<TopUpBalanceResultDto>.Error(404, "Balans egasi topilmadi.");
+                return GenericDto<TopUpBalanceResultDto>.Blocked(
+                    user.Type == CustomerUserType.Natural
+                        ? StopFactors.User.NotFound
+                        : StopFactors.Organization.NotFound);
 
             _logger.LogInformation(
                 "Balans to'ldirildi: userId={UserId} type={Type} amount={Amount} newBalance={NewBalance}",

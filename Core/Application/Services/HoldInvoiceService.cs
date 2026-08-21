@@ -8,6 +8,7 @@ using Domain.Interfaces;
 using Domain.Interfaces.Payme;
 using Domain.Options;
 using Domain.Repositories;
+using Domain.Guards;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -59,22 +60,22 @@ namespace Application.Services
         {
             // ── 1. Validatsiya ──
             if (dto.AmountUzs <= 0)
-                return GenericDto<HoldInvoiceResultDto>.Error(400, "Summa musbat bo'lishi kerak.");
+                return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Payment.AmountNotPositive);
 
             var session = await _sessionRepo.GetByIdAsync(dto.SessionId);
             if (session is null)
-                return GenericDto<HoldInvoiceResultDto>.Error(404, "Sessiya topilmadi.");
+                return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Session.NotFound);
             if (session.UserId != dto.UserId)
-                return GenericDto<HoldInvoiceResultDto>.Error(403, "Bu sessiya sizga tegishli emas.");
+                return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Session.NotOwned);
 
             if (session.Status is not (SessionStatus.Connected or SessionStatus.InProcess))
-                return GenericDto<HoldInvoiceResultDto>.Error(409,
-                    session.Status switch
-                    {
-                        SessionStatus.Paused => "Sessiya pauzada (qurilma bilan aloqa yo'q) — yangi invoice yaratib bo'lmaydi.",
-                        SessionStatus.Settling => "Sessiya hisob-kitob qilinmoqda — yangi invoice yaratib bo'lmaydi.",
-                        _ => "Sessiya holati invoice yaratishga ruxsat bermaydi."
-                    });
+                return GenericDto<HoldInvoiceResultDto>.Blocked(session.Status switch
+                {
+                    SessionStatus.Paused => StopFactors.Session.Paused,
+                    SessionStatus.Settling => StopFactors.Session.Settling,
+                    SessionStatus.Closed => StopFactors.Session.Closed,
+                    _ => StopFactors.Session.NotConnected
+                });
 
             // ── 2. Idempotency replay ──
             if (!string.IsNullOrEmpty(dto.IdempotencyKey))
@@ -89,30 +90,29 @@ namespace Application.Services
             if (paymentSession is null)
             {
                 if (session.DeviceId is null)
-                    return GenericDto<HoldInvoiceResultDto>.Error(409, "Sessiyaga qurilma ulanmagan.");
+                    return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Device.NotAttachedToSession);
 
                 var device = await _deviceRepo.GetByIdAsync(session.DeviceId.Value);
                 if (device?.Station is null)
-                    return GenericDto<HoldInvoiceResultDto>.Error(409, "Qurilma stansiyaga biriktirilmagan.");
+                    return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Device.NoStation);
 
                 paymentSession = await _paymentSessionService.CreateForSessionAsync(
                     dto.SessionId, device.Id, dto.UserId, device.Station.MerchantId);
             }
 
             if (paymentSession.Status != PaymentSessionStatus.Active)
-                return GenericDto<HoldInvoiceResultDto>.Error(409, "To'lov konteksti aktiv emas (hisob-kitob boshlangan).");
+                return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Session.PaymentContextClosed);
 
             // ── 4. Limit ──
             var activeCount = await _invoiceRepo.CountActiveForPaymentSessionAsync(paymentSession.Id);
             if (activeCount >= _options.MaxInvoicesPerSession)
-                return GenericDto<HoldInvoiceResultDto>.Error(400,
-                    $"Bir sessiyada ko'pi bilan {_options.MaxInvoicesPerSession} ta aktiv invoice bo'lishi mumkin.");
+                return GenericDto<HoldInvoiceResultDto>.Blocked(
+                    StopFactors.Payment.InvoiceLimit(_options.MaxInvoicesPerSession));
 
             // ── 5. Merchant credential'lari (fallback YO'Q — sozlanmagan bo'lsa rad) ──
             var creds = await _credResolver.ForMerchantAsync(paymentSession.MerchantId);
             if (creds is null)
-                return GenericDto<HoldInvoiceResultDto>.Error(409,
-                    "Merchant uchun Payme sozlanmagan — administratorga murojaat qiling.");
+                return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Merchant.PaymeNotConfigured);
 
             // ── 6. Invoice yozuvi (Created) ──
             var amountTiyin = Money.ToTiyin(dto.AmountUzs);
@@ -149,7 +149,7 @@ namespace Application.Services
             {
                 await _invoiceRepo.TryTransitionAsync(invoice.Id, HoldInvoiceStatus.Failed,
                     failureReason: $"Receipt yaratish: {createCall.FailureMessage}");
-                return GenericDto<HoldInvoiceResultDto>.Error(502, "Payme bilan bog'lanishda xatolik.");
+                return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Payment.ProviderUnavailable);
             }
 
             invoice.ProviderReceiptId = createCall.Result!.Id;
@@ -188,15 +188,14 @@ namespace Application.Services
         {
             var invoice = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (invoice is null)
-                return GenericDto<HoldInvoiceResultDto>.Error(404, "Invoice topilmadi.");
+                return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Payment.InvoiceNotFound);
 
             var paymentSession = await _paymentSessionRepo.GetByIdAsync(invoice.PaymentSessionId);
             if (paymentSession is null || paymentSession.UserId != userId)
-                return GenericDto<HoldInvoiceResultDto>.Error(403, "Bu invoice sizga tegishli emas.");
+                return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Payment.InvoiceNotOwned);
 
             if (invoice.ConsumedTiyin > 0)
-                return GenericDto<HoldInvoiceResultDto>.Error(409,
-                    "Invoice mablag'i qisman ishlatilgan — bekor qilib bo'lmaydi, sessiyani yakunlang.");
+                return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Payment.InvoicePartiallyConsumed);
 
             switch (invoice.Status)
             {
@@ -204,7 +203,7 @@ namespace Application.Services
                     // Pul ushlab turilibdi — refund maqsadi, watcher qaytaradi.
                     if (!await _invoiceRepo.TryTransitionAsync(invoiceId, HoldInvoiceStatus.RefundPending,
                             nextAttemptAt: DateTime.Now))
-                        return GenericDto<HoldInvoiceResultDto>.Error(409, "Invoice holati o'zgargan — qayta urinib ko'ring.");
+                        return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Payment.InvoiceStateChanged);
 
                     // Sessiya balansidan chiqarib qo'yamiz (bu mablag' endi ishlatilmaydi).
                     await _paymentSessionRepo.TryAddHoldBalanceAsync(paymentSession.Id, -invoice.AmountTiyin);
@@ -229,12 +228,12 @@ namespace Application.Services
                     }
 
                     if (!await _invoiceRepo.TryTransitionAsync(invoiceId, HoldInvoiceStatus.Cancelled))
-                        return GenericDto<HoldInvoiceResultDto>.Error(409, "Invoice holati o'zgargan — qayta urinib ko'ring.");
+                        return GenericDto<HoldInvoiceResultDto>.Blocked(StopFactors.Payment.InvoiceStateChanged);
                     break;
 
                 default:
-                    return GenericDto<HoldInvoiceResultDto>.Error(409,
-                        $"Invoice holati ({invoice.Status}) bekor qilishga ruxsat bermaydi.");
+                    return GenericDto<HoldInvoiceResultDto>.Blocked(
+                        StopFactors.Payment.InvoiceTransitionNotAllowed(invoice.Status, "bekor qilish"));
             }
 
             // Status o'zgardi (Cancelled yoki RefundPending) — sessiya guruhiga real-time yuboramiz.
@@ -249,9 +248,9 @@ namespace Application.Services
         {
             var session = await _sessionRepo.GetByIdAsync(sessionId);
             if (session is null)
-                return GenericDto<List<HoldInvoiceItemDto>>.Error(404, "Sessiya topilmadi.");
+                return GenericDto<List<HoldInvoiceItemDto>>.Blocked(StopFactors.Session.NotFound);
             if (session.UserId != userId)
-                return GenericDto<List<HoldInvoiceItemDto>>.Error(403, "Bu sessiya sizga tegishli emas.");
+                return GenericDto<List<HoldInvoiceItemDto>>.Blocked(StopFactors.Session.NotOwned);
 
             var paymentSession = await _paymentSessionRepo.GetBySessionIdAsync(sessionId);
             if (paymentSession is null)

@@ -324,6 +324,10 @@ namespace CommonConfiguration.ConfigurationExtensions
             // Bir nechta repo chaqiruvini bitta DB tranzaksiyada bajarish uchun
             services.AddScoped<ITransactionRunner, TransactionRunner>();
 
+            // To'sqinlik omillari (stop factor) uchun "band-mi?" so'rovlari — o'chirish va
+            // nofaollashtirish amallarining oldindan tekshiruvi shu repo orqali ketadi.
+            services.AddScoped<IUsageProbeRepository, UsageProbeRepository>();
+
             // User repos (Platform / Customer alohida)
             services.AddScoped<IPlatformUserRepository, PlatformUserRepository>();
             services.AddScoped<ICustomerUserRepository, CustomerUserRepository>();

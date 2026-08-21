@@ -47,15 +47,12 @@ namespace SessionApi.Mqtt.Handlers
 
             if (!result.IsSuccess)
             {
-                var code = result.ErrorObj!.Code == 400 && payload.Denomination > 0
-                    ? CashResultCodes.BillRejected
-                    : CashResultCodes.FromHttpCode(result.ErrorObj.Code);
-
                 _logger.LogWarning(
                     "[cash.bill.accepted] Rad etildi serial={Serial} sessionId={SessionId} seq={Seq} sabab={Reason}",
-                    context.SerialNumber, payload.CashSessionId, payload.BillSeq, result.ErrorObj.ErrorMessage);
+                    context.SerialNumber, payload.CashSessionId, payload.BillSeq, result.ErrorObj!.Reason);
 
-                return MqttResponseEnvelope.Fail<Ack>(code, result.ErrorObj.ErrorMessage);
+                return MqttResponseEnvelope.Fail<Ack>(
+                    CashResultCodes.FromResult(result), result.ErrorObj.ErrorMessage);
             }
 
             var total = result.Result!;

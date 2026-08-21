@@ -1,10 +1,11 @@
-﻿using Domain.Helpers;
+using Domain.Helpers;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Domain.Guards;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Services
@@ -94,7 +95,7 @@ namespace Application.Services
         {
             var user = await _userRepository.GetByIdAsync(request.UserId);
             if (user is null)
-                return GenericDto<VerifyResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<VerifyResultDto>.Blocked(StopFactors.User.NotFound);
 
             if (user.IsOtpVerified)
                 return GenericDto<VerifyResultDto>.Success(
@@ -115,7 +116,7 @@ namespace Application.Services
         {
             var user = await _userRepository.GetByIdAsync(request.UserId);
             if (user is null)
-                return GenericDto<SetPasswordResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<SetPasswordResultDto>.Blocked(StopFactors.User.NotFound);
 
             if (!user.IsOtpVerified)
                 return GenericDto<SetPasswordResultDto>.Error(403, "OTP tasdiqlanmagan. Avval /Verify ga murojaat qiling.");
@@ -165,7 +166,7 @@ namespace Application.Services
                 return GenericDto<LoginResultDto>.Error(403, "Akkaunt tasdiqlanmagan. Iltimos OTP orqali tasdiqlang.");
 
             if (user.IsBlocked)
-                return GenericDto<LoginResultDto>.Error(403, "Akkaunt bloklangan.");
+                return GenericDto<LoginResultDto>.Blocked(StopFactors.User.Blocked);
 
             // Legacy SHA256 hash bo'lsa — parol to'g'ri kelgan paytda PBKDF2 ga ko'chiramiz.
             if (PasswordHelper.NeedsRehash(user.PasswordHash))
@@ -202,13 +203,13 @@ namespace Application.Services
 
             var user = await _userRepository.GetByIdAsync(userId.Value);
             if (user is null)
-                return GenericDto<RefreshTokenResultDto>.Error(401, "Foydalanuvchi topilmadi.");
+                return GenericDto<RefreshTokenResultDto>.Blocked(StopFactors.User.NotFound);
 
             if (user.IsBlocked)
-                return GenericDto<RefreshTokenResultDto>.Error(403, "Akkaunt bloklangan.");
+                return GenericDto<RefreshTokenResultDto>.Blocked(StopFactors.User.Blocked);
 
             if (user.IsDeleted)
-                return GenericDto<RefreshTokenResultDto>.Error(403, "Akkaunt o'chirilgan.");
+                return GenericDto<RefreshTokenResultDto>.Blocked(StopFactors.User.Deleted);
 
             await _refreshTokenStore.RevokeAsync(request.RefreshToken);
 
@@ -242,7 +243,7 @@ namespace Application.Services
         {
             var user = await _userRepository.GetByIdAsync(request.UserId);
             if (user is null)
-                return GenericDto<ResetPasswordVerifyResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<ResetPasswordVerifyResultDto>.Blocked(StopFactors.User.NotFound);
 
             if (!user.IsVerified)
                 return GenericDto<ResetPasswordVerifyResultDto>.Error(403, "Faqat to'liq ro'yxatdan o'tgan foydalanuvchilar parolni tiklashi mumkin.");
@@ -259,7 +260,7 @@ namespace Application.Services
         {
             var user = await _userRepository.GetByIdAsync(request.UserId);
             if (user is null)
-                return GenericDto<ResetPasswordSetResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<ResetPasswordSetResultDto>.Blocked(StopFactors.User.NotFound);
 
             if (!user.IsVerified)
                 return GenericDto<ResetPasswordSetResultDto>.Error(403, "Faqat to'liq ro'yxatdan o'tgan foydalanuvchilar parolni tiklashi mumkin.");

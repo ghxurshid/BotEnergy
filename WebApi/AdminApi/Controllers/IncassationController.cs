@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using AdminApi.Extensions;
 using AdminApi.Models.Requests;
 using CommonConfiguration.Attributes;
@@ -64,7 +65,7 @@ namespace AdminApi.Controllers
         {
             var result = await _service.GetDevicesAsync(User.GetScope());
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result);
         }
@@ -94,7 +95,7 @@ namespace AdminApi.Controllers
 
             var result = await _service.RequestOpenAsync(User.GetScope(), request.DeviceId);
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result);
         }
@@ -122,7 +123,7 @@ namespace AdminApi.Controllers
                 User.GetScope(), request.CollectionId, request.CountedAmount, request.Notes);
 
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result);
         }
@@ -146,7 +147,7 @@ namespace AdminApi.Controllers
 
             var result = await _service.CancelAsync(User.GetScope(), request.CollectionId, request.Notes);
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result);
         }
@@ -167,7 +168,7 @@ namespace AdminApi.Controllers
         {
             var result = await _service.GetHistoryAsync(User.GetScope(), param, deviceId);
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result);
         }
@@ -193,7 +194,7 @@ namespace AdminApi.Controllers
         {
             var result = await _service.GetCashSessionsAsync(User.GetScope(), param, status);
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result);
         }

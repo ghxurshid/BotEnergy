@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using CommonConfiguration.Attributes;
 using Domain.Dtos.Base;
 using Domain.Interfaces;
@@ -34,7 +35,7 @@ namespace UserApi.Controllers
         {
             var scope = User.GetScope();
             var result = await _service.CreateAsync(request.ToDto(scope.OrganizationId ?? 0), scope);
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>O'z tashkiloti foydalanuvchilari ro'yxati (o'zini ko'rsatmaydi).</summary>
@@ -44,7 +45,7 @@ namespace UserApi.Controllers
         {
             var scope = User.GetScope();
             var result = await _service.GetByOrganizationAsync(scope.OrganizationId ?? 0, param, scope);
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Tashkilot foydalanuvchisini ID bo'yicha olish.</summary>
@@ -53,7 +54,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> GetById(long id)
         {
             var result = await _service.GetByIdAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Yangi foydalanuvchiga birinchi parolni o'rnatish (o'z joriy parol tasdig'i bilan).</summary>
@@ -62,7 +63,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> SetPassword(long id, [FromBody] SetOrgUserPasswordRequest request)
         {
             var result = await _service.SetPasswordAsync(request.ToDto(id), User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Foydalanuvchi parolini tiklash (o'z joriy parol tasdig'i bilan).</summary>
@@ -71,7 +72,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> ResetPassword(long id, [FromBody] ResetOrgUserPasswordRequest request)
         {
             var result = await _service.ResetPasswordAsync(request.ToDto(id), User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Tashkilot foydalanuvchisini bloklash.</summary>
@@ -80,7 +81,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> Block(long id)
         {
             var result = await _service.BlockAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Tashkilot foydalanuvchisini blokdan chiqarish.</summary>
@@ -89,7 +90,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> Unblock(long id)
         {
             var result = await _service.UnblockAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Tashkilot foydalanuvchisini o'chirish (soft delete).</summary>
@@ -98,7 +99,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> Delete(long id)
         {
             var result = await _service.DeleteAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
     }
 }

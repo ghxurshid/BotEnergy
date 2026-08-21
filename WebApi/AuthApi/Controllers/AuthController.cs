@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using AuthApi.Extensions;
 using AuthApi.Filters.ValidationFilters;
 using AuthApi.Models.Requests;
@@ -75,7 +76,7 @@ namespace UserApi.Controllers
         {
             var result = await _authService.RegisterAsync(request.ToDto());
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -111,7 +112,7 @@ namespace UserApi.Controllers
         {
             var result = await _authService.VerifyAsync(request.ToDto());
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -148,7 +149,7 @@ namespace UserApi.Controllers
         {
             var result = await _authService.SetPasswordAsync(request.ToDto());
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -186,7 +187,7 @@ namespace UserApi.Controllers
         {
             var result = await _authService.LoginAsync(request.ToDto());
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -217,7 +218,7 @@ namespace UserApi.Controllers
         {
             var result = await _authService.RefreshTokenAsync(request.ToDto());
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -251,7 +252,7 @@ namespace UserApi.Controllers
         {
             var result = await _authService.ResetPasswordRequestAsync(request.ToDto());
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -280,7 +281,7 @@ namespace UserApi.Controllers
         {
             var result = await _authService.ResetPasswordVerifyAsync(request.ToDto());
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -309,7 +310,7 @@ namespace UserApi.Controllers
         {
             var result = await _authService.ResetPasswordSetAsync(request.ToDto());
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }

@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using AdminApi.Extensions;
 using CommonConfiguration.Attributes;
 using Domain.Dtos.PaymentSession;
@@ -39,7 +40,7 @@ namespace AdminApi.Controllers
         {
             var skip = (Math.Max(pageNumber, 1) - 1) * pageSize;
             var result = await _service.ListAsync(skip, pageSize, merchantId, sessionId, status, from, to, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Bitta invoice tafsilotlari.</summary>
@@ -50,7 +51,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> ById(long invoiceId)
         {
             var result = await _service.GetByIdAsync(invoiceId, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Invoice audit step'lari (to'liq jsonb izi).</summary>
@@ -60,7 +61,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Steps(long invoiceId)
         {
             var result = await _service.GetStepsAsync(invoiceId, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>[EXPERT] Majburiy capture (ishlatilgan summa yoki berilgan amount).</summary>
@@ -72,7 +73,7 @@ namespace AdminApi.Controllers
         {
             if (!TryGetUserId(out var adminUserId)) return Unauthorized();
             var result = await _service.ForceCaptureAsync(invoiceId, request, adminUserId, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>[EXPERT] Majburiy refund (hold'ni qaytarish).</summary>
@@ -84,7 +85,7 @@ namespace AdminApi.Controllers
         {
             if (!TryGetUserId(out var adminUserId)) return Unauthorized();
             var result = await _service.ForceRefundAsync(invoiceId, request, adminUserId, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>[EXPERT] To'lovgacha bekor qilish (Created/WaitingForConfirmation).</summary>
@@ -96,7 +97,7 @@ namespace AdminApi.Controllers
         {
             if (!TryGetUserId(out var adminUserId)) return Unauthorized();
             var result = await _service.ForceCancelAsync(invoiceId, request, adminUserId, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>[EXPERT] Failed invoice'ni qayta navbatga qo'yish.</summary>
@@ -108,7 +109,7 @@ namespace AdminApi.Controllers
         {
             if (!TryGetUserId(out var adminUserId)) return Unauthorized();
             var result = await _service.RetryAsync(invoiceId, request, adminUserId, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         private bool TryGetUserId(out long userId)

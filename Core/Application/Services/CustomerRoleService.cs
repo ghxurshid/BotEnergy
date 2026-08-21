@@ -4,6 +4,7 @@ using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Guards;
 using Domain.Interfaces;
 using Domain.Repositories;
 
@@ -18,15 +19,18 @@ namespace Application.Services
         private readonly ICustomerRoleRepository _roleRepository;
         private readonly IPermissionRepository _permissionRepository;
         private readonly IOrganizationRepository _organizationRepository;
+        private readonly IUsageProbeRepository _usageProbe;
 
         public CustomerRoleService(
             ICustomerRoleRepository roleRepository,
             IPermissionRepository permissionRepository,
-            IOrganizationRepository organizationRepository)
+            IOrganizationRepository organizationRepository,
+            IUsageProbeRepository usageProbe)
         {
             _roleRepository = roleRepository;
             _permissionRepository = permissionRepository;
             _organizationRepository = organizationRepository;
+            _usageProbe = usageProbe;
         }
 
         public async Task<GenericDto<CreateRoleResultDto>> CreateRoleAsync(CreateRoleDto dto, AccessScope scope)
@@ -50,7 +54,7 @@ namespace Application.Services
 
             var org = await _organizationRepository.GetByIdAsync(organizationId);
             if (org is null)
-                return GenericDto<CreateRoleResultDto>.Error(404, "Tashkilot topilmadi.");
+                return GenericDto<CreateRoleResultDto>.Blocked(StopFactors.Organization.NotFound);
 
             var role = new CustomerRoleEntity
             {
@@ -97,9 +101,9 @@ namespace Application.Services
         {
             var role = await _roleRepository.GetByIdAsync(id);
             if (role is null)
-                return GenericDto<RoleItemDto>.Error(404, "Rol topilmadi.");
+                return GenericDto<RoleItemDto>.Blocked(StopFactors.Role.NotFound);
             if (!CanAccess(role, scope))
-                return GenericDto<RoleItemDto>.Error(403, "Bu rol sizning doirangizga tegishli emas.");
+                return GenericDto<RoleItemDto>.Blocked(StopFactors.Role.OutOfScope);
 
             var permissions = await _roleRepository.GetPermissionsByRoleIdAsync(role.Id);
             return GenericDto<RoleItemDto>.Success(ToItem(role, permissions));
@@ -109,9 +113,9 @@ namespace Application.Services
         {
             var role = await _roleRepository.GetByIdWithPermissionsAsync(id);
             if (role is null)
-                return GenericDto<RoleResultDto>.Error(404, "Rol topilmadi.");
+                return GenericDto<RoleResultDto>.Blocked(StopFactors.Role.NotFound);
             if (!CanAccess(role, scope))
-                return GenericDto<RoleResultDto>.Error(403, "Bu rol sizning doirangizga tegishli emas.");
+                return GenericDto<RoleResultDto>.Blocked(StopFactors.Role.OutOfScope);
 
             if (!string.IsNullOrWhiteSpace(dto.Name)) role.Name = dto.Name;
             if (dto.Description is not null) role.Description = dto.Description;
@@ -149,10 +153,17 @@ namespace Application.Services
         public async Task<GenericDto<RoleResultDto>> DeleteRoleAsync(long id, AccessScope scope)
         {
             var role = await _roleRepository.GetByIdAsync(id);
-            if (role is null)
-                return GenericDto<RoleResultDto>.Error(404, "Rol topilmadi.");
-            if (!CanAccess(role, scope))
-                return GenericDto<RoleResultDto>.Error(403, "Bu rol sizning doirangizga tegishli emas.");
+
+            var stop = await StopFactorCheck.For(StopActions.RoleDelete)
+                .StopIf(role is null, StopFactors.Role.NotFound)
+                .StopIf(() => !CanAccess(role!, scope), StopFactors.Role.OutOfScope)
+                // Rol o'chirilsa unga bog'langan xodimlar permissionsiz qolib,
+                // ilovada hech narsa qila olmasdi.
+                .StopIfCountAsync(() => _usageProbe.CustomerRoleUserCountAsync(id), StopFactors.Role.InUse)
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<RoleResultDto>.Blocked(stop);
 
             await _roleRepository.DeleteAsync(id);
 
@@ -167,9 +178,9 @@ namespace Application.Services
         {
             var role = await _roleRepository.GetByIdAsync(roleId);
             if (role is null)
-                return GenericDto<GetRolePermissionsResultDto>.Error(404, "Rol topilmadi.");
+                return GenericDto<GetRolePermissionsResultDto>.Blocked(StopFactors.Role.NotFound);
             if (!CanAccess(role, scope))
-                return GenericDto<GetRolePermissionsResultDto>.Error(403, "Bu rol sizning doirangizga tegishli emas.");
+                return GenericDto<GetRolePermissionsResultDto>.Blocked(StopFactors.Role.OutOfScope);
 
             var permissions = await _roleRepository.GetPermissionsByRoleIdAsync(roleId);
 

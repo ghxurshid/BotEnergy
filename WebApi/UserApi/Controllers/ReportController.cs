@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using CommonConfiguration.Attributes;
 using Domain.Dtos.Base;
 using Domain.Dtos.Report;
@@ -69,7 +70,7 @@ namespace UserApi.Controllers
 
             return result.IsSuccess
                 ? Ok(result.Result)
-                : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                : result.ToErrorResponse();
         }
 
         /// <summary>

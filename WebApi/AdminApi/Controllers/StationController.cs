@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using AdminApi.Extensions;
 using Permissions = Domain.Constants.Permissions;
 using AdminApi.Filters.ValidationFilters;
@@ -77,7 +78,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Create([FromBody] CreateStationRequest request)
         {
             var result = await _service.CreateAsync(request.ToDto(), User.GetUserId(), User.GetPermissions());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -130,7 +131,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> GetById(long id)
         {
             var result = await _service.GetByIdAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -190,7 +191,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Update(long id, [FromBody] UpdateStationRequest request)
         {
             var result = await _service.UpdateAsync(id, request.ToDto(), User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -214,7 +215,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Delete(long id)
         {
             var result = await _service.DeleteAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
     }
 }

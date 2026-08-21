@@ -3,6 +3,7 @@ using Domain.Dtos.Base;
 using Domain.Dtos.Session;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Guards;
 using Domain.Interfaces;
 using Domain.Repositories;
 using Microsoft.Extensions.Logging;
@@ -32,7 +33,13 @@ namespace Application.Services
 
         private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan PendingSessionTtl = TimeSpan.FromMinutes(30);
-        private static readonly TimeSpan DeviceOfflineThreshold = TimeSpan.FromSeconds(90);
+
+        /// <summary>
+        /// Qurilma oflayn deb hisoblanadigan jimlik chegarasi. To'siq tekshiruvi bilan BIR XIL
+        /// manbadan olinadi — aks holda "buyruq yuborsa bo'ladi" deb hisoblangan qurilma
+        /// bu yerda oflayn sanalib, ikki qatlam bir-biriga zid xulosa chiqarardi.
+        /// </summary>
+        private static readonly TimeSpan DeviceOfflineThreshold = DeviceAvailability.OfflineThreshold;
 
         public SessionService(
             ISessionRepository sessionRepo,
@@ -69,24 +76,24 @@ namespace Application.Services
         public async Task<GenericDto<CreateSessionResultDto>> CreateSessionAsync(CreateSessionDto dto)
         {
             var user = await _userRepo.GetByIdAsync(dto.UserId);
-            if (user is null)
-                return GenericDto<CreateSessionResultDto>.Error(404, "Foydalanuvchi topilmadi.");
 
-            if (user.IsBlocked)
-                return GenericDto<CreateSessionResultDto>.Error(403, "Foydalanuvchi bloklangan.");
+            var stop = await StopFactorCheck.For(StopActions.SessionCreate)
+                .StopIf(user is null, StopFactors.User.NotFound)
+                .StopIf(() => user!.IsBlocked, StopFactors.User.Blocked)
+                // DB'da aktiv sessiya bor bo'lsa — yangi pending yaratmaymiz (avval yopish kerak).
+                // Paused (device offline) va Settling (hisob-kitob) ham "band" hisoblanadi.
+                .StopIfAsync(() => _sessionRepo.HasActiveAsync(
+                        dto.UserId,
+                        SessionStatus.Created,
+                        SessionStatus.Connected,
+                        SessionStatus.InProcess,
+                        SessionStatus.Paused,
+                        SessionStatus.Settling),
+                    StopFactors.Session.AlreadyActive)
+                .ResultAsync();
 
-            // DB'da aktiv sessiya bor bo'lsa — yangi pending yaratmaymiz (avval yopish kerak).
-            // Paused (device offline) va Settling (hisob-kitob) ham "band" hisoblanadi.
-            var hasActive = await _sessionRepo.HasActiveAsync(
-                dto.UserId,
-                SessionStatus.Created,
-                SessionStatus.Connected,
-                SessionStatus.InProcess,
-                SessionStatus.Paused,
-                SessionStatus.Settling);
-
-            if (hasActive)
-                return GenericDto<CreateSessionResultDto>.Error(409, "Sizda allaqachon faol sessiya bor. Avval uni yoping.");
+            if (stop is not null)
+                return GenericDto<CreateSessionResultDto>.Blocked(stop);
 
             // Pending cache'da bo'lsa — xuddi shu tokenni qaytarish (idempotent retry).
             var existing = await _pendingStore.GetAsync(dto.UserId);
@@ -124,17 +131,22 @@ namespace Application.Services
 
         public async Task<GenericDto<DeviceConnectedResultDto>> NotifyDeviceConnectedAsync(string sessionToken)
         {
-            var session = await _sessionRepo.GetByTokenAsync(sessionToken);
-            if (session is null)
-                return GenericDto<DeviceConnectedResultDto>.Error(404, "Sessiya topilmadi.");
+            var found = await _sessionRepo.GetByTokenAsync(sessionToken);
 
-            if (session.Device is null)
-                return GenericDto<DeviceConnectedResultDto>.Error(500, "Sessiya qurilmasiz ko'rinadi.");
+            var stop = StopFactorCheck.For(StopActions.SessionConnect)
+                .StopIf(found is null, StopFactors.Session.NotFound)
+                .StopIf(() => found!.Device is null, StopFactors.Device.NotAttachedToSession)
+                .Result();
+
+            if (stop is not null)
+                return GenericDto<DeviceConnectedResultDto>.Blocked(stop);
+
+            var session = found!;
 
             // Mahsulotlarni alohida yuklash kerak — GetByTokenAsync Device.Products'ni include qilmaydi.
-            var device = await _deviceRepo.GetBySerialNumberAsync(session.Device.SerialNumber);
+            var device = await _deviceRepo.GetBySerialNumberAsync(session.Device!.SerialNumber);
             if (device is null)
-                return GenericDto<DeviceConnectedResultDto>.Error(404, "Qurilma topilmadi yoki faol emas.");
+                return GenericDto<DeviceConnectedResultDto>.Blocked(StopFactors.Device.NotFound);
 
             var capabilities = (device.Products ?? Enumerable.Empty<ProductEntity>())
                 .Where(p => p.IsActive)
@@ -176,25 +188,26 @@ namespace Application.Services
 
         public async Task<GenericDto<CloseSessionResultDto>> CloseSessionByUserAsync(CloseSessionDto dto)
         {
-            var session = await _sessionRepo.GetByIdWithProcessesAsync(dto.SessionId);
-            if (session is null)
-                return GenericDto<CloseSessionResultDto>.Error(404, "Sessiya topilmadi.");
+            var found = await _sessionRepo.GetByIdWithProcessesAsync(dto.SessionId);
 
-            if (session.UserId != dto.UserId)
-                return GenericDto<CloseSessionResultDto>.Error(403, "Bu sessiya sizga tegishli emas.");
+            var stop = await StopFactorCheck.For(StopActions.SessionClose)
+                .StopIf(found is null, StopFactors.Session.NotFound)
+                .StopIf(() => found!.UserId != dto.UserId, StopFactors.Session.NotOwned)
+                .StopIf(() => found!.Status == SessionStatus.Closed, StopFactors.Session.Closed)
+                .StopIf(() => found!.Status == SessionStatus.Settling, StopFactors.Session.Settling)
+                // Aktiv jarayon (Started/InProcess/Paused yoki stop-pending) bo'lsa, sessiyani yopishga
+                // ruxsat bermaymiz — avval jarayon qurilma tasdig'i bilan to'liq yakunlanishi kerak.
+                // (Background timeout/offline cleaner'lar bundan istisno — ular majburan yopadi.)
+                // Paused sessiyada esa yopishga ruxsat beramiz (qurilma offline, user qo'lda yakunlaydi).
+                .StopIfAsync(async () => found!.Status != SessionStatus.Paused
+                                         && await _processRepo.HasActiveProcessAsync(found.Id),
+                             StopFactors.Session.HasActiveProcess)
+                .ResultAsync();
 
-            if (session.Status == SessionStatus.Closed)
-                return GenericDto<CloseSessionResultDto>.Error(400, "Sessiya allaqachon yopilgan.");
+            if (stop is not null)
+                return GenericDto<CloseSessionResultDto>.Blocked(stop);
 
-            if (session.Status == SessionStatus.Settling)
-                return GenericDto<CloseSessionResultDto>.Error(409, "Sessiya hisob-kitob qilinmoqda — biroz kuting.");
-
-            // Aktiv jarayon (Started/InProcess/Paused yoki stop-pending) bo'lsa, sessiyani yopishga
-            // ruxsat bermaymiz — avval jarayon qurilma tasdig'i bilan to'liq yakunlanishi kerak.
-            // (Background timeout/offline cleaner'lar bundan istisno — ular majburan yopadi.)
-            // Paused sessiyada esa yopishga ruxsat beramiz (qurilma offline, user qo'lda yakunlaydi).
-            if (session.Status != SessionStatus.Paused && await _processRepo.HasActiveProcessAsync(session.Id))
-                return GenericDto<CloseSessionResultDto>.Error(409, "Avval jarayonni to'xtating, keyin sessiyani yoping.");
+            var session = found!;
 
             var (totalDelivered, totalCost) = await FinalizeOpenProcessesAsync(
                 session, ProcessEndReason.UserStopped, sendStopCommand: session.Status != SessionStatus.Paused);
@@ -330,31 +343,36 @@ namespace Application.Services
 
         public async Task<GenericDto<CurrentSessionDto>> GetByIdAsync(long sessionId, long userId)
         {
-            var session = await _sessionRepo.GetByIdWithProcessesAsync(sessionId);
-            if (session is null)
-                return GenericDto<CurrentSessionDto>.Error(404, "Sessiya topilmadi.");
+            var found = await _sessionRepo.GetByIdWithProcessesAsync(sessionId);
 
-            if (session.UserId != userId)
-                return GenericDto<CurrentSessionDto>.Error(403, "Bu sessiya sizga tegishli emas.");
+            var stop = StopFactorCheck.For("Session.GetById")
+                .StopIf(found is null, StopFactors.Session.NotFound)
+                .StopIf(() => found!.UserId != userId, StopFactors.Session.NotOwned)
+                .Result();
 
-            return GenericDto<CurrentSessionDto>.Success(MapToCurrent(session)!);
+            if (stop is not null)
+                return GenericDto<CurrentSessionDto>.Blocked(stop);
+
+            return GenericDto<CurrentSessionDto>.Success(MapToCurrent(found)!);
         }
 
         public async Task<GenericDto<HeartbeatResultDto>> HeartbeatAsync(long sessionId, long userId)
         {
             var session = await _sessionRepo.GetByIdAsync(sessionId);
-            if (session is null)
-                return GenericDto<HeartbeatResultDto>.Error(404, "Sessiya topilmadi.");
 
-            if (session.UserId != userId)
-                return GenericDto<HeartbeatResultDto>.Error(403, "Bu sessiya sizga tegishli emas.");
+            var stop = StopFactorCheck.For(StopActions.SessionHeartbeat)
+                .StopIf(session is null, StopFactors.Session.NotFound)
+                .StopIf(() => session!.UserId != userId, StopFactors.Session.NotOwned)
+                .StopIf(() => session!.Status == SessionStatus.Closed, StopFactors.Session.Closed)
+                .Result();
 
-            if (session.Status == SessionStatus.Closed)
-                return GenericDto<HeartbeatResultDto>.Error(400, "Sessiya yopilgan, heartbeat qabul qilinmaydi.");
+            if (stop is not null)
+                return GenericDto<HeartbeatResultDto>.Blocked(stop);
 
+            // Poyga: tekshiruvdan keyin sessiya yopilib qolgan bo'lishi mumkin.
             var affected = await _sessionRepo.TouchAsync(sessionId);
             if (affected == 0)
-                return GenericDto<HeartbeatResultDto>.Error(409, "Sessiya holati o'zgargan.");
+                return GenericDto<HeartbeatResultDto>.Blocked(StopFactors.Session.Closed);
 
             var now = DateTime.Now;
             return GenericDto<HeartbeatResultDto>.Success(new HeartbeatResultDto

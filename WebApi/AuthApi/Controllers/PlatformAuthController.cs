@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using AuthApi.Extensions;
 using AuthApi.Filters.ValidationFilters;
 using AuthApi.Models.Requests;
@@ -31,7 +32,7 @@ namespace AuthApi.Controllers
         {
             var result = await _authService.LoginAsync(request.ToDto());
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -45,7 +46,7 @@ namespace AuthApi.Controllers
         {
             var result = await _authService.RefreshTokenAsync(request.ToDto());
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }

@@ -3,6 +3,7 @@ using Domain.Constants;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
+using Domain.Guards;
 using Domain.Interfaces;
 using Domain.Repositories;
 using NetTopologySuite.Geometries;
@@ -14,35 +15,40 @@ namespace Application.Services
         private readonly IStationRepository _repo;
         private readonly IMerchantRepository _merchantRepo;
         private readonly IPlatformUserRepository _userRepo;
+        private readonly IUsageProbeRepository _usageProbe;
 
-        public StationService(IStationRepository repo, IMerchantRepository merchantRepo, IPlatformUserRepository userRepo)
+        public StationService(
+            IStationRepository repo,
+            IMerchantRepository merchantRepo,
+            IPlatformUserRepository userRepo,
+            IUsageProbeRepository usageProbe)
         {
             _repo = repo;
             _merchantRepo = merchantRepo;
             _userRepo = userRepo;
+            _usageProbe = usageProbe;
         }
 
         public async Task<GenericDto<StationResultDto>> CreateAsync(CreateStationDto dto, long callerId, HashSet<string> callerPermissions)
         {
             var merchant = await _merchantRepo.GetByIdAsync(dto.MerchantId);
-            if (merchant is null)
-                return GenericDto<StationResultDto>.Error(404, "Merchant topilmadi.");
 
-            if (!merchant.IsActive)
-                return GenericDto<StationResultDto>.Error(400, "Merchant faol emas.");
+            var stop = StopFactorCheck.For(StopActions.StationCreate)
+                .StopIf(merchant is null, StopFactors.Merchant.NotFound)
+                .StopIf(() => !merchant!.IsActive, StopFactors.Merchant.Inactive)
+                .Result();
+
+            if (stop is not null)
+                return GenericDto<StationResultDto>.Blocked(stop);
 
             if (!callerPermissions.Contains(Permissions.MerchantAdminRegister))
             {
                 var caller = await _userRepo.GetByIdAsync(callerId);
-                if (caller is { Type: Domain.Enums.PlatformUserType.Merchant })
-                {
-                    if (caller.MerchantId != dto.MerchantId)
-                        return GenericDto<StationResultDto>.Error(403, "Faqat o'z merchantingizga stansiya qo'sha olasiz.");
-                }
-                else
-                {
-                    return GenericDto<StationResultDto>.Error(403, "Boshqa merchantlarga stansiya qo'shish uchun tegishli ruxsat kerak.");
-                }
+                if (caller is not { Type: Domain.Enums.PlatformUserType.Merchant })
+                    return GenericDto<StationResultDto>.Blocked(StopFactors.Access.Denied);
+
+                if (caller.MerchantId != dto.MerchantId)
+                    return GenericDto<StationResultDto>.Blocked(StopFactors.Merchant.OutOfScope);
             }
 
             var station = new StationEntity
@@ -76,7 +82,7 @@ namespace Application.Services
         public async Task<GenericDto<List<StationItemDto>>> GetByMerchantAsync(long merchantId, AccessScope scope)
         {
             if (!scope.CanAccessMerchant(merchantId))
-                return GenericDto<List<StationItemDto>>.Error(403, "Bu merchant sizning doirangizga tegishli emas.");
+                return GenericDto<List<StationItemDto>>.Blocked(StopFactors.Merchant.OutOfScope);
 
             var list = await _repo.GetByMerchantIdAsync(merchantId);
             return GenericDto<List<StationItemDto>>.Success(list.Select(ToItem).ToList());
@@ -85,23 +91,36 @@ namespace Application.Services
         public async Task<GenericDto<StationItemDto>> GetByIdAsync(long id, AccessScope scope)
         {
             var station = await _repo.GetByIdAsync(id);
-            if (station is null)
-                return GenericDto<StationItemDto>.Error(404, "Stansiya topilmadi.");
 
-            if (!scope.CanAccessMerchant(station.MerchantId))
-                return GenericDto<StationItemDto>.Error(403, "Bu stansiya sizning doirangizga tegishli emas.");
+            var stop = StopFactorCheck.For("Station.GetById")
+                .StopIf(station is null, StopFactors.Station.NotFound)
+                .StopIf(() => !scope.CanAccessMerchant(station!.MerchantId), StopFactors.Station.OutOfScope)
+                .Result();
 
-            return GenericDto<StationItemDto>.Success(ToItem(station));
+            if (stop is not null)
+                return GenericDto<StationItemDto>.Blocked(stop);
+
+            return GenericDto<StationItemDto>.Success(ToItem(station!));
         }
 
         public async Task<GenericDto<StationResultDto>> UpdateAsync(long id, UpdateStationDto dto, AccessScope scope)
         {
-            var station = await _repo.GetByIdAsync(id);
-            if (station is null)
-                return GenericDto<StationResultDto>.Error(404, "Stansiya topilmadi.");
+            var found = await _repo.GetByIdAsync(id);
 
-            if (!scope.CanAccessMerchant(station.MerchantId))
-                return GenericDto<StationResultDto>.Error(403, "Bu stansiya sizning doirangizga tegishli emas.");
+            var stop = await StopFactorCheck.For(StopActions.StationUpdate)
+                .StopIf(found is null, StopFactors.Station.NotFound)
+                .StopIf(() => !scope.CanAccessMerchant(found!.MerchantId), StopFactors.Station.OutOfScope)
+                // Stansiyani nofaollashtirish uning qurilmalarini ishdan chiqaradi —
+                // ketayotgan sessiyalar oxiriga yetmay qolardi.
+                .StopIfAsync(async () => dto.IsActive == false && found!.IsActive
+                                         && await _usageProbe.StationHasActiveSessionAsync(id),
+                             StopFactors.Station.HasActiveSession)
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<StationResultDto>.Blocked(stop);
+
+            var station = found!;
 
             if (!string.IsNullOrWhiteSpace(dto.Name)) station.Name = dto.Name;
             if (!string.IsNullOrWhiteSpace(dto.Address)) station.Address = dto.Address;
@@ -122,11 +141,18 @@ namespace Application.Services
         public async Task<GenericDto<StationResultDto>> DeleteAsync(long id, AccessScope scope)
         {
             var station = await _repo.GetByIdAsync(id);
-            if (station is null)
-                return GenericDto<StationResultDto>.Error(404, "Stansiya topilmadi.");
 
-            if (!scope.CanAccessMerchant(station.MerchantId))
-                return GenericDto<StationResultDto>.Error(403, "Bu stansiya sizning doirangizga tegishli emas.");
+            var stop = await StopFactorCheck.For(StopActions.StationDelete)
+                .StopIf(station is null, StopFactors.Station.NotFound)
+                .StopIf(() => !scope.CanAccessMerchant(station!.MerchantId), StopFactors.Station.OutOfScope)
+                // Soft-delete kaskad qilmaydi: stansiya o'chsa, qurilmalari "egasiz" bo'lib
+                // ro'yxatlarda ko'rinishda davom etardi.
+                .StopIfCountAsync(() => _usageProbe.StationDeviceCountAsync(id),
+                                  StopFactors.Station.HasDevices)
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<StationResultDto>.Blocked(stop);
 
             await _repo.DeleteAsync(id);
 

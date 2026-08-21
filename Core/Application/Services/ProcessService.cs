@@ -2,6 +2,7 @@ using Domain.Dtos.Base;
 using Domain.Dtos.Process;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Guards;
 using Domain.Helpers;
 using Domain.Interfaces;
 using Domain.Repositories;
@@ -58,57 +59,73 @@ namespace Application.Services
 
         public async Task<GenericDto<StartProcessResultDto>> StartAsync(StartProcessDto dto)
         {
-            var session = await _sessionRepo.GetByIdAsync(dto.SessionId);
-            if (session is null)
-                return GenericDto<StartProcessResultDto>.Error(404, "Sessiya topilmadi.");
-
-            if (session.UserId != dto.UserId)
-                return GenericDto<StartProcessResultDto>.Error(403, "Bu sessiya sizga tegishli emas.");
-
-            if (session.Status != SessionStatus.Connected && session.Status != SessionStatus.InProcess)
-                return GenericDto<StartProcessResultDto>.Error(400, "Sessiya ulanmagan yoki yopilgan.");
-
-            if (session.Device is null || session.DeviceId is null)
-                return GenericDto<StartProcessResultDto>.Error(400, "Qurilma sessiyaga ulanmagan.");
-
-            if (await _processRepo.HasActiveProcessAsync(session.Id))
-                return GenericDto<StartProcessResultDto>.Error(409, "Sessiyada hali tugamagan jarayon mavjud.");
-
-            var product = await _productRepo.GetByIdAsync(dto.ProductId);
-            if (product is null || !product.IsActive)
-                return GenericDto<StartProcessResultDto>.Error(404, "Mahsulot topilmadi yoki faol emas.");
-
-            if (product.DeviceId != session.DeviceId)
-                return GenericDto<StartProcessResultDto>.Error(400, "Mahsulot ushbu qurilmaga tegishli emas.");
+            var foundSession = await _sessionRepo.GetByIdAsync(dto.SessionId);
+            var foundProduct = await _productRepo.GetByIdAsync(dto.ProductId);
 
             // Funding FAQAT tasdiqlangan Hold balansidan. Internal balance biznes mantig'ida
             // ishlatilmaydi (faqat entity + GET). "No hold = no fuel": tasdiqlangan Hold bo'lmasa
-            // (holdTiyin == 0) jarayon boshlanmaydi — ichki balansga fallback yo'q.
-            var holdTiyin = await _holdSettlement.GetAvailableHoldTiyinAsync(session.Id);
-            if (holdTiyin <= 0)
-                return GenericDto<StartProcessResultDto>.Error(400,
-                    "Tasdiqlangan Hold mavjud emas — avval to'lovni bloklang (hold invoice yarating).");
+            // jarayon boshlanmaydi — ichki balansga fallback yo'q.
+            long holdTiyin = 0;
+            decimal limit = 0;
 
-            var fundingSource = ProcessFundingSource.HoldBalance;
-            var availableForLimit = Money.ToUzs(holdTiyin);
+            var stop = await StopFactorCheck.For(StopActions.ProcessStart)
+                .StopIf(foundSession is null, StopFactors.Session.NotFound)
+                .StopIf(() => foundSession!.UserId != dto.UserId, StopFactors.Session.NotOwned)
+                .StopIf(() => foundSession!.User is { IsBlocked: true }, StopFactors.User.Blocked)
+                .StopIf(() => foundSession!.Status == SessionStatus.Paused, StopFactors.Session.Paused)
+                .StopIf(() => foundSession!.Status == SessionStatus.Settling, StopFactors.Session.Settling)
+                .StopIf(() => foundSession!.Status is not (SessionStatus.Connected or SessionStatus.InProcess),
+                        StopFactors.Session.NotConnected)
+                .StopIf(() => foundSession!.Device is null || foundSession.DeviceId is null,
+                        StopFactors.Device.NotAttachedToSession)
+                .StopIf(() => !foundSession!.Device!.IsActive, StopFactors.Device.Inactive)
+                // Buyruq brokerga ketadi, lekin oflayn qurilma uni olmaydi: jarayon "boshlandi"
+                // deb yozilib, hech narsa berilmasdan watchdog uni yakunlagan bo'lardi.
+                .StopIf(() => !foundSession!.Device!.IsReachable(),
+                        () => StopFactors.Device.Offline(
+                            foundSession!.Device!.SerialNumber, foundSession.Device.LastSeenAt))
+                .StopIfAsync(() => _processRepo.HasActiveProcessAsync(foundSession!.Id),
+                             StopFactors.Process.AlreadyActive)
+                .StopIf(foundProduct is null, StopFactors.Product.NotFound)
+                .StopIf(() => !foundProduct!.IsActive, StopFactors.Product.Inactive)
+                .StopIf(() => foundProduct!.DeviceId != foundSession!.DeviceId, StopFactors.Product.DeviceMismatch)
+                .StopIfAsync(async () =>
+                {
+                    holdTiyin = await _holdSettlement.GetAvailableHoldTiyinAsync(foundSession!.Id);
+                    return holdTiyin <= 0;
+                }, StopFactors.Process.NoFunding)
+                .StopIf(() =>
+                {
+                    var maxAmount = foundProduct!.Price > 0 ? Money.ToUzs(holdTiyin) / foundProduct.Price : 0;
+                    limit = dto.RequestedAmount.HasValue
+                        ? Math.Min(dto.RequestedAmount.Value, maxAmount)
+                        : maxAmount;
+                    return limit <= 0;
+                }, StopFactors.Process.FundingTooSmall)
+                // Lock oxirgi to'siq: undan keyin darhol yozuv yaratiladi, ya'ni band qilingan
+                // qurilma boshqa sababga ko'ra bo'sh qolib ketmaydi.
+                .StopIfAsync(async () =>
+                {
+                    if (await _deviceLock.TryLockDeviceAsync(foundSession!.Device!.SerialNumber, dto.UserId))
+                        return false;
+                    var owner = await _deviceLock.GetLockOwnerAsync(foundSession.Device.SerialNumber);
+                    return owner != dto.UserId;
+                }, StopFactors.Device.LockedByOtherUser)
+                .ResultAsync();
 
-            var maxAmount = product.Price > 0 ? availableForLimit / product.Price : 0;
-
-            var limit = dto.RequestedAmount.HasValue
-                ? Math.Min(dto.RequestedAmount.Value, maxAmount)
-                : maxAmount;
-
-            if (limit <= 0)
-                return GenericDto<StartProcessResultDto>.Error(400,
-                    "Hold balansi yetarli emas — yangi invoice yarating.");
-
-            var lockTaken = await _deviceLock.TryLockDeviceAsync(session.Device.SerialNumber, dto.UserId);
-            if (!lockTaken)
+            if (stop is not null)
             {
-                var owner = await _deviceLock.GetLockOwnerAsync(session.Device.SerialNumber);
-                if (owner != dto.UserId)
-                    return GenericDto<StartProcessResultDto>.Error(409, "Qurilma boshqa foydalanuvchi tomonidan band qilingan.");
+                _logger.LogInformation(
+                    "Jarayon boshlanmadi: sessionId={SessionId} userId={UserId} sabab={Reason}",
+                    dto.SessionId, dto.UserId, stop.Code);
+                return GenericDto<StartProcessResultDto>.Blocked(stop);
             }
+
+            // Zanjir o'tdi ⇒ ikkalasi ham mavjud va qurilma buyruqni qabul qila oladi.
+            var session = foundSession!;
+            var product = foundProduct!;
+            var device = session.Device!;
+            var fundingSource = ProcessFundingSource.HoldBalance;
 
             var process = new ProductProcessEntity
             {
@@ -129,7 +146,7 @@ namespace Application.Services
             session.LastActivityAt = DateTime.Now;
             await _sessionRepo.UpdateAsync(session);
 
-            await _commandPublisher.PublishStartAsync(session.Device.SerialNumber, process.Id, product.Id, limit, product.Name, product.Unit.ToString(), product.Price);
+            await _commandPublisher.PublishStartAsync(device.SerialNumber, process.Id, product.Id, limit, product.Name, product.Unit.ToString(), product.Price);
 
             _logger.LogInformation(
                 "Jarayon boshlandi: processId={ProcessId} sessionId={SessionId} productId={ProductId} limit={Limit}",
@@ -154,27 +171,37 @@ namespace Application.Services
                 Unit = product.Unit.ToString(),
                 PricePerUnit = product.Price,
                 LimitAmount = limit,
-                DeviceSerialNumber = session.Device.SerialNumber,
+                DeviceSerialNumber = device.SerialNumber,
                 ResultMessage = "Jarayon boshlandi. Qurilmaga start buyrug'i yuborildi."
             });
         }
 
         public async Task<GenericDto<ProcessControlResultDto>> StopByUserAsync(ProcessControlDto dto)
         {
-            var process = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
-            var validation = ValidateProcessOwner(process, dto.UserId);
-            if (validation is not null) return validation;
+            var found = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
 
-            if (process!.Status == ProcessStatus.Ended)
-                return GenericDto<ProcessControlResultDto>.Error(400, "Jarayon allaqachon yakunlangan.");
+            var stop = OwnershipCheck(StopActions.ProcessStop, found, dto.UserId)
+                .StopIf(() => found!.Status == ProcessStatus.Ended, StopFactors.Process.AlreadyEnded)
+                // Oflayn qurilmaga stop yuborib "yuborildi" deyish yolg'on bo'lardi. Foydalanuvchi
+                // kutib qolmasligi uchun aniq aytamiz: jarayonni 60 soniyalik watchdog oxirgi
+                // o'lchov bo'yicha o'zi yakunlaydi.
+                .StopIf(() => DeviceOf(found) is null, StopFactors.Device.NotAttachedToSession)
+                .StopIf(() => !DeviceOf(found)!.IsReachable(),
+                        () => StopFactors.Process.DeviceOffline(
+                            DeviceOf(found)!.SerialNumber, "to'xtatish",
+                            "Jarayon oxirgi o'lchov bo'yicha avtomatik yakunlanadi."))
+                .Result();
+
+            if (stop is not null)
+                return GenericDto<ProcessControlResultDto>.Blocked(stop);
+
+            var process = found!;
 
             // Faqat qurilmaga stop yuboramiz — DB statusini O'ZGARTIRMAYMIZ.
             // Suyuqlik inersiya bilan to'xtaydi; qurilma to'liq yakunlab `process.finished` yuborgach
             // ReportDeviceFinishedAsync yakuniy miqdorni yozadi, balansni yechadi va lockni bo'shatadi.
             // Tasdiq kelmasa, watchdog (FinalizeStalledProcessesAsync) zaxira sifatida yakunlaydi.
-            var serial = process.Session?.Device?.SerialNumber;
-            if (!string.IsNullOrWhiteSpace(serial))
-                await _commandPublisher.PublishStopAsync(serial!, process.Id);
+            await _commandPublisher.PublishStopAsync(process.Session!.Device!.SerialNumber, process.Id);
 
             await TouchSessionAsync(process.Session);
 
@@ -195,19 +222,25 @@ namespace Application.Services
 
         public async Task<GenericDto<ProcessControlResultDto>> PauseAsync(ProcessControlDto dto)
         {
-            var process = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
-            var validation = ValidateProcessOwner(process, dto.UserId);
-            if (validation is not null) return validation;
+            var found = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
 
-            if (process!.Status != ProcessStatus.InProcess && process.Status != ProcessStatus.Started)
-                return GenericDto<ProcessControlResultDto>.Error(400, "Jarayon pauza qilish uchun mos holatda emas.");
+            var stop = OwnershipCheck(StopActions.ProcessPause, found, dto.UserId)
+                .StopIf(() => found!.Status is not (ProcessStatus.InProcess or ProcessStatus.Started),
+                        StopFactors.Process.NotPausable)
+                .StopIf(() => DeviceOf(found) is null, StopFactors.Device.NotAttachedToSession)
+                .StopIf(() => !DeviceOf(found)!.IsReachable(),
+                        () => StopFactors.Process.DeviceOffline(DeviceOf(found)!.SerialNumber, "pauza"))
+                .Result();
+
+            if (stop is not null)
+                return GenericDto<ProcessControlResultDto>.Blocked(stop);
+
+            var process = found!;
 
             // Faqat pause buyrug'ini yuboramiz — DB statusini O'ZGARTIRMAYMIZ.
             // Qurilma oqimni inersiya bilan to'xtatib, `process.paused` yuborgach
             // ReportDevicePausedAsync statusni Paused ga o'tkazadi.
-            var serial = process.Session?.Device?.SerialNumber;
-            if (!string.IsNullOrWhiteSpace(serial))
-                await _commandPublisher.PublishPauseAsync(serial!, process.Id);
+            await _commandPublisher.PublishPauseAsync(process.Session!.Device!.SerialNumber, process.Id);
 
             await TouchSessionAsync(process.Session);
 
@@ -228,16 +261,23 @@ namespace Application.Services
 
         public async Task<GenericDto<ProcessControlResultDto>> ResumeAsync(ProcessControlDto dto)
         {
-            var process = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
-            var validation = ValidateProcessOwner(process, dto.UserId);
-            if (validation is not null) return validation;
+            var found = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
 
-            if (process!.Status != ProcessStatus.Paused)
-                return GenericDto<ProcessControlResultDto>.Error(400, "Jarayon pauzada emas.");
+            var stop = OwnershipCheck(StopActions.ProcessResume, found, dto.UserId)
+                .StopIf(() => found!.Status != ProcessStatus.Paused, StopFactors.Process.NotPaused)
+                .StopIf(() => DeviceOf(found) is null, StopFactors.Device.NotAttachedToSession)
+                // Buyruq yetib bormasa status InProcess'ga o'tib ketardi va jarayon
+                // "davom etmoqda" bo'lib ko'rinardi — aslida qurilma o'chgan.
+                .StopIf(() => !DeviceOf(found)!.IsReachable(),
+                        () => StopFactors.Process.DeviceOffline(DeviceOf(found)!.SerialNumber, "davom ettirish"))
+                .Result();
 
-            var serial = process.Session?.Device?.SerialNumber;
-            if (!string.IsNullOrWhiteSpace(serial))
-                await _commandPublisher.PublishResumeAsync(serial!, process.Id);
+            if (stop is not null)
+                return GenericDto<ProcessControlResultDto>.Blocked(stop);
+
+            var process = found!;
+
+            await _commandPublisher.PublishResumeAsync(process.Session!.Device!.SerialNumber, process.Id);
 
             process.Status = ProcessStatus.InProcess;
             process.PausedAt = null;
@@ -264,15 +304,14 @@ namespace Application.Services
             if (dto.ProcessId <= 0 || dto.TotalGiven < 0)
                 return GenericDto<ProcessTelemetryResultDto>.Error(400, "ProcessId musbat va TotalGiven manfiy bo'lmasligi shart.");
 
-            var process = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
-            if (process is null)
-                return GenericDto<ProcessTelemetryResultDto>.Error(404, "Jarayon topilmadi.");
+            var found = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
 
-            if (process.Session?.SessionToken != dto.SessionToken)
-                return GenericDto<ProcessTelemetryResultDto>.Error(403, "Sessiya tokeni mos kelmadi.");
+            var stop = DeviceReportCheck(found, dto.SessionToken, dto.SerialNumber);
+            if (stop is not null)
+                return GenericDto<ProcessTelemetryResultDto>.Blocked(stop);
 
-            if (process.Session.Device?.SerialNumber != dto.SerialNumber)
-                return GenericDto<ProcessTelemetryResultDto>.Error(403, "Qurilma bu jarayonga tegishli emas.");
+            var process = found!;
+            var session = process.Session!;
 
             // Hot path — tracker SaveChanges chaqirilmaydi, hammasi atomic SQL bilan.
             // (ExecuteUpdateAsync xmin'ni siljitganidan keyin tracker'dagi entity stale bo'lib qoladi,
@@ -286,13 +325,13 @@ namespace Application.Services
                 });
 
             // Sessiya idle-timer'ini atomik yangilash (TouchAsync ExecuteUpdateAsync, SaveChanges chaqirmaydi).
-            await _sessionRepo.TouchAsync(process.Session.Id);
+            await _sessionRepo.TouchAsync(session.Id);
 
             var totalGiven = dto.TotalGiven;
             var currentCost = totalGiven * process.PricePerUnit;
-            var sessionToken = process.Session.SessionToken;
-            var serial = process.Session.Device?.SerialNumber;
-            var userId = process.Session.UserId;
+            var sessionToken = session.SessionToken;
+            var serial = session.Device?.SerialNumber;
+            var userId = session.UserId;
 
             if (totalGiven >= process.RequestedAmount && process.RequestedAmount > 0)
             {
@@ -352,15 +391,14 @@ namespace Application.Services
 
         public async Task<GenericDto<DeviceProcessReportResultDto>> ReportDeviceFinishedAsync(DeviceProcessReportDto dto)
         {
-            var process = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
-            if (process is null)
-                return GenericDto<DeviceProcessReportResultDto>.Error(404, "Jarayon topilmadi.");
+            var found = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
 
-            if (process.Session?.SessionToken != dto.SessionToken)
-                return GenericDto<DeviceProcessReportResultDto>.Error(403, "Sessiya tokeni mos kelmadi.");
+            var stop = DeviceReportCheck(found, dto.SessionToken, dto.SerialNumber);
+            if (stop is not null)
+                return GenericDto<DeviceProcessReportResultDto>.Blocked(stop);
 
-            if (process.Session.Device?.SerialNumber != dto.SerialNumber)
-                return GenericDto<DeviceProcessReportResultDto>.Error(403, "Qurilma bu jarayonga tegishli emas.");
+            var process = found!;
+            var session = process.Session!;
 
             // Idempotency — agar jarayon allaqachon yakunlangan bo'lsa, balansni qayta yechmaymiz.
             if (process.Status == ProcessStatus.Ended)
@@ -385,13 +423,13 @@ namespace Application.Services
                 return await _settlement.SettleAsync(process.Id);
             });
 
-            var serial = process.Session.Device?.SerialNumber;
+            var serial = session.Device?.SerialNumber;
             if (!string.IsNullOrWhiteSpace(serial))
-                await _deviceLock.UnlockDeviceAsync(serial!, process.Session.UserId);
+                await _deviceLock.UnlockDeviceAsync(serial!, session.UserId);
 
-            await TouchSessionAsync(process.Session);
+            await TouchSessionAsync(session);
 
-            await _notifier.NotifyProcessEndedAsync(process.Session.SessionToken, new
+            await _notifier.NotifyProcessEndedAsync(session.SessionToken, new
             {
                 process_id = process.Id,
                 end_reason = dto.EndReason.ToString(),
@@ -414,19 +452,18 @@ namespace Application.Services
 
         public async Task<GenericDto<ProcessControlResultDto>> ReportDevicePausedAsync(DeviceProcessPausedDto dto)
         {
-            var process = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
-            if (process is null)
-                return GenericDto<ProcessControlResultDto>.Error(404, "Jarayon topilmadi.");
+            var found = await _processRepo.GetByIdWithSessionAsync(dto.ProcessId);
 
-            if (process.Session?.SessionToken != dto.SessionToken)
-                return GenericDto<ProcessControlResultDto>.Error(403, "Sessiya tokeni mos kelmadi.");
+            var stop = DeviceReportCheck(found, dto.SessionToken, dto.SerialNumber);
+            if (stop is not null)
+                return GenericDto<ProcessControlResultDto>.Blocked(stop);
 
-            if (process.Session.Device?.SerialNumber != dto.SerialNumber)
-                return GenericDto<ProcessControlResultDto>.Error(403, "Qurilma bu jarayonga tegishli emas.");
+            var process = found!;
+            var session = process.Session!;
 
             // Idempotent — allaqachon yakunlangan yoki pauza qilingan bo'lsa qayta o'zgartirmaymiz.
             if (process.Status == ProcessStatus.Ended)
-                return GenericDto<ProcessControlResultDto>.Error(400, "Jarayon allaqachon yakunlangan.");
+                return GenericDto<ProcessControlResultDto>.Blocked(StopFactors.Process.AlreadyEnded);
 
             if (process.Status == ProcessStatus.Paused)
                 return GenericDto<ProcessControlResultDto>.Success(new ProcessControlResultDto
@@ -444,10 +481,10 @@ namespace Application.Services
             process.PausedAt = DateTime.Now;
             await _processRepo.UpdateAsync(process);
 
-            await TouchSessionAsync(process.Session);
+            await TouchSessionAsync(session);
 
             // Balans yechilmaydi — process tugamadi, resume qilinishi mumkin.
-            await _notifier.NotifyProcessUpdatedAsync(process.Session.SessionToken, new
+            await _notifier.NotifyProcessUpdatedAsync(session.SessionToken, new
             {
                 process_id = process.Id,
                 status = process.Status.ToString(),
@@ -512,16 +549,25 @@ namespace Application.Services
 
         // ── Yordamchi ─────────────────────────────────────────────────
 
-        private static GenericDto<ProcessControlResultDto>? ValidateProcessOwner(ProductProcessEntity? process, long userId)
-        {
-            if (process is null)
-                return GenericDto<ProcessControlResultDto>.Error(404, "Jarayon topilmadi.");
+        /// <summary>Har uchala boshqaruv amali uchun umumiy birinchi ikki to'siq (mavjudlik + egalik).</summary>
+        private static StopFactorCheck OwnershipCheck(string action, ProductProcessEntity? process, long userId)
+            => StopFactorCheck.For(action)
+                .StopIf(process is null, StopFactors.Process.NotFound)
+                .StopIf(() => process!.Session is null || process.Session.UserId != userId,
+                        StopFactors.Process.NotOwned);
 
-            if (process.Session is null || process.Session.UserId != userId)
-                return GenericDto<ProcessControlResultDto>.Error(403, "Bu jarayon sizga tegishli emas.");
+        /// <summary>Qurilmadan kelgan hisobotlar uchun umumiy to'siqlar (mavjudlik + token + serial mosligi).</summary>
+        private static StopFactor? DeviceReportCheck(
+            ProductProcessEntity? process, string? sessionToken, string? serialNumber)
+            => StopFactorCheck.For("Process.DeviceReport")
+                .StopIf(process is null, StopFactors.Process.NotFound)
+                .StopIf(() => process!.Session?.SessionToken != sessionToken, StopFactors.Session.TokenMismatch)
+                .StopIf(() => process!.Session!.Device?.SerialNumber != serialNumber,
+                        StopFactors.Device.NotBoundToProcess)
+                .Result();
 
-            return null;
-        }
+        /// <summary>Jarayon bog'langan qurilma (yo'q bo'lishi mumkin).</summary>
+        private static DeviceEntity? DeviceOf(ProductProcessEntity? process) => process?.Session?.Device;
 
         private async Task TouchSessionAsync(SessionEntity? session)
         {

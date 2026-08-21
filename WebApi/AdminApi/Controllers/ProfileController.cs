@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using AdminApi.Extensions;
 using AdminApi.Models.Requests;
 using CommonConfiguration.Attributes;
@@ -43,7 +44,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Me()
         {
             var result = await _service.GetMeAsync(User.GetUserId());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -63,7 +64,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> UpdateEmail([FromBody] UpdateEmailRequest request)
         {
             var result = await _service.UpdateEmailAsync(User.GetUserId(), request.Mail);
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>
@@ -87,7 +88,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
             var result = await _service.ChangePasswordAsync(User.GetUserId(), request.CurrentPassword, request.NewPassword);
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
     }
 }

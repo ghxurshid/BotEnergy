@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using CommonConfiguration.Attributes;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -30,7 +31,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> Create([FromBody] CreateOrgRoleRequest request)
         {
             var result = await _service.CreateRoleAsync(request.ToDto(), User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>O'z tashkiloti rollari ro'yxati.</summary>
@@ -39,7 +40,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> GetAll()
         {
             var result = await _service.GetRolesAsync(User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Rolni ID bo'yicha olish.</summary>
@@ -48,7 +49,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> GetById(long id)
         {
             var result = await _service.GetRoleByIdAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Rolni yangilash.</summary>
@@ -57,7 +58,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> Update(long id, [FromBody] UpdateOrgRoleRequest request)
         {
             var result = await _service.UpdateRoleAsync(id, request.ToDto(), User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Rolni o'chirish.</summary>
@@ -66,7 +67,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> Delete(long id)
         {
             var result = await _service.DeleteRoleAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Rolga biriktirilgan permissionlar ro'yxati.</summary>
@@ -75,7 +76,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> GetPermissions(long id)
         {
             var result = await _service.GetRolePermissionsAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Corporate rolga biriktirish mumkin bo'lgan permissionlar katalogi.</summary>
@@ -84,7 +85,7 @@ namespace UserApi.Controllers
         public async Task<IActionResult> AllowedPermissions()
         {
             var result = await _service.GetAllowedPermissionsAsync();
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
     }
 }

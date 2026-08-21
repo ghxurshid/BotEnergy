@@ -1,9 +1,10 @@
-﻿using Domain.Helpers;
+using Domain.Helpers;
 using Domain.Auth;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Enums;
+using Domain.Guards;
 using Domain.Interfaces;
 using Domain.Repositories;
 
@@ -15,42 +16,41 @@ namespace Application.Services
         private readonly ICustomerRoleRepository _roleRepo;
         private readonly IOrganizationRepository _orgRepo;
         private readonly IPlatformUserRepository _platformUserRepo;
+        private readonly IUsageProbeRepository _usageProbe;
 
         public CustomerAdminService(
             ICustomerUserRepository userRepo,
             ICustomerRoleRepository roleRepo,
             IOrganizationRepository orgRepo,
-            IPlatformUserRepository platformUserRepo)
+            IPlatformUserRepository platformUserRepo,
+            IUsageProbeRepository usageProbe)
         {
             _userRepo = userRepo;
             _roleRepo = roleRepo;
             _orgRepo = orgRepo;
             _platformUserRepo = platformUserRepo;
+            _usageProbe = usageProbe;
         }
 
         public async Task<GenericDto<UserAdminResultDto>> CreateAsync(CreateCorporateUserDto dto, AccessScope scope)
         {
-            if (!scope.CanAccessOrganization(dto.OrganizationId))
-                return GenericDto<UserAdminResultDto>.Error(403, "Bu tashkilot uchun foydalanuvchi yaratish huquqingiz yo'q.");
-
-            var existingUser = await _userRepo.GetByPhoneNumberAsync(dto.PhoneNumber);
-            if (existingUser is not null)
-                return GenericDto<UserAdminResultDto>.Error(409, "Bu telefon raqam bilan foydalanuvchi allaqachon mavjud.");
-
-            if (await _userRepo.ExistsByMailAsync(dto.Mail))
-                return GenericDto<UserAdminResultDto>.Error(409, "Bu elektron pochta bilan foydalanuvchi allaqachon mavjud.");
-
             var org = await _orgRepo.GetByIdAsync(dto.OrganizationId);
-            if (org is null)
-                return GenericDto<UserAdminResultDto>.Error(404, "Tashkilot topilmadi.");
-            if (!org.IsActive)
-                return GenericDto<UserAdminResultDto>.Error(400, "Tashkilot faol emas.");
-
             var role = await _roleRepo.GetByIdAsync(dto.RoleId);
-            if (role is null)
-                return GenericDto<UserAdminResultDto>.Error(404, "Rol topilmadi.");
-            if (role.OrganizationId != dto.OrganizationId)
-                return GenericDto<UserAdminResultDto>.Error(400, "Tanlangan rol ushbu tashkilotga tegishli bo'lishi kerak.");
+
+            var stop = await StopFactorCheck.For(StopActions.UserCreate)
+                .StopIf(!scope.CanAccessOrganization(dto.OrganizationId), StopFactors.Organization.OutOfScope)
+                .StopIfAsync(async () => await _userRepo.GetByPhoneNumberAsync(dto.PhoneNumber) is not null,
+                             StopFactors.User.PhoneTaken("foydalanuvchi"))
+                .StopIfAsync(() => _userRepo.ExistsByMailAsync(dto.Mail),
+                             StopFactors.User.MailTaken("foydalanuvchi"))
+                .StopIf(org is null, StopFactors.Organization.NotFound)
+                .StopIf(() => !org!.IsActive, StopFactors.Organization.Inactive)
+                .StopIf(role is null, StopFactors.Role.NotFound)
+                .StopIf(() => role!.OrganizationId != dto.OrganizationId, StopFactors.Role.OrganizationMismatch)
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<UserAdminResultDto>.Blocked(stop);
 
             var newUser = new CustomerUserEntity
             {
@@ -76,7 +76,7 @@ namespace Application.Services
         public async Task<GenericDto<PagedResult<CustomerUserItemDto>>> GetByOrganizationAsync(long organizationId, PaginationParams param, AccessScope scope)
         {
             if (!scope.CanAccessOrganization(organizationId))
-                return GenericDto<PagedResult<CustomerUserItemDto>>.Error(403, "Bu tashkilot sizning doirangizga tegishli emas.");
+                return GenericDto<PagedResult<CustomerUserItemDto>>.Blocked(StopFactors.Organization.OutOfScope);
 
             // Caller Customer guruhida bo'lsa (corporate bosh-admin), o'zini ro'yxatda ko'rmaydi.
             // Manage (platform) caller uchun ro'yxatga aloqasi yo'q — chiqarilmaydi (ID'lar boshqa jadvalda).
@@ -98,10 +98,10 @@ namespace Application.Services
         {
             var user = await _userRepo.GetByIdAsync(userId);
             if (user is null)
-                return GenericDto<CustomerUserItemDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<CustomerUserItemDto>.Blocked(StopFactors.User.NotFound);
 
             if (!CanManage(user, scope))
-                return GenericDto<CustomerUserItemDto>.Error(403, "Bu foydalanuvchi sizning doirangizga tegishli emas.");
+                return GenericDto<CustomerUserItemDto>.Blocked(StopFactors.User.OutOfScope);
 
             return GenericDto<CustomerUserItemDto>.Success(ToItem(user));
         }
@@ -110,9 +110,9 @@ namespace Application.Services
         {
             var user = await _userRepo.GetByIdAsync(dto.UserId);
             if (user is null)
-                return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<UserAdminResultDto>.Blocked(StopFactors.User.NotFound);
             if (!CanManage(user, scope))
-                return GenericDto<UserAdminResultDto>.Error(403, "Ruxsat yo'q.");
+                return GenericDto<UserAdminResultDto>.Blocked(StopFactors.User.OutOfScope);
 
             // Boshqa userga parol o'rnatishdan oldin admin o'z joriy parolini tasdiqlaydi.
             var actorCheck = await VerifyActorPasswordAsync(scope, dto.CurrentPassword);
@@ -120,7 +120,7 @@ namespace Application.Services
                 return actorCheck;
 
             if (user.IsVerified)
-                return GenericDto<UserAdminResultDto>.Error(400, "Parol allaqachon o'rnatilgan.");
+                return GenericDto<UserAdminResultDto>.Blocked(StopFactors.User.PasswordAlreadySet);
 
             var (hash, salt) = PasswordHelper.CreatePassword(dto.Password);
             user.PasswordHash = hash;
@@ -139,9 +139,9 @@ namespace Application.Services
         {
             var user = await _userRepo.GetByIdAsync(dto.UserId);
             if (user is null)
-                return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<UserAdminResultDto>.Blocked(StopFactors.User.NotFound);
             if (!CanManage(user, scope))
-                return GenericDto<UserAdminResultDto>.Error(403, "Ruxsat yo'q.");
+                return GenericDto<UserAdminResultDto>.Blocked(StopFactors.User.OutOfScope);
 
             // Boshqa userning parolini reset qilishdan oldin admin o'z joriy parolini tasdiqlaydi.
             var actorCheck = await VerifyActorPasswordAsync(scope, dto.CurrentPassword);
@@ -149,7 +149,7 @@ namespace Application.Services
                 return actorCheck;
 
             if (!user.IsVerified)
-                return GenericDto<UserAdminResultDto>.Error(400, "Foydalanuvchi hali ro'yxatdan to'liq o'tmagan.");
+                return GenericDto<UserAdminResultDto>.Blocked(StopFactors.User.RegistrationIncomplete);
 
             var (hash, salt) = PasswordHelper.CreatePassword(dto.NewPassword);
             user.PasswordHash = hash;
@@ -171,12 +171,24 @@ namespace Application.Services
 
         private async Task<GenericDto<UserAdminResultDto>> SetBlockedAsync(long userId, AccessScope scope, bool blocked)
         {
-            var user = await _userRepo.GetByIdAsync(userId);
-            if (user is null)
-                return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
-            if (!CanManage(user, scope))
-                return GenericDto<UserAdminResultDto>.Error(403, "Ruxsat yo'q.");
+            var found = await _userRepo.GetByIdAsync(userId);
 
+            var stop = await StopFactorCheck.For(blocked ? StopActions.UserBlock : StopActions.UserUnblock)
+                .StopIf(found is null, StopFactors.User.NotFound)
+                .StopIf(() => !CanManage(found!, scope), StopFactors.User.OutOfScope)
+                .StopIf(() => blocked && userId == scope.UserId, StopFactors.User.SelfAction)
+                .StopIf(() => found!.IsBlocked == blocked,
+                        blocked ? StopFactors.User.AlreadyBlocked : StopFactors.User.NotBlocked)
+                // Bloklash sessiyani to'xtatmaydi: xizmat ketayotgan bo'lsa, avval u yakunlansin —
+                // aks holda mijoz bloklangani uchun jarayonni yopa olmay qolardi.
+                .StopIfAsync(async () => blocked && await _usageProbe.CustomerUserHasActiveSessionAsync(userId),
+                             StopFactors.User.HasActiveSession)
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<UserAdminResultDto>.Blocked(stop);
+
+            var user = found!;
             user.IsBlocked = blocked;
             await _userRepo.UpdateAsync(user);
 
@@ -190,10 +202,19 @@ namespace Application.Services
         public async Task<GenericDto<UserAdminResultDto>> DeleteAsync(long userId, AccessScope scope)
         {
             var user = await _userRepo.GetByIdAsync(userId);
-            if (user is null)
-                return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
-            if (!CanManage(user, scope))
-                return GenericDto<UserAdminResultDto>.Error(403, "Ruxsat yo'q.");
+
+            var stop = await StopFactorCheck.For(StopActions.UserDelete)
+                .StopIf(user is null, StopFactors.User.NotFound)
+                .StopIf(() => !CanManage(user!, scope), StopFactors.User.OutOfScope)
+                .StopIf(userId == scope.UserId, StopFactors.User.SelfAction)
+                // Yopilmagan sessiyada hisob-kitob tugamagan — foydalanuvchini o'chirsak
+                // pul harakati egasiz qolardi.
+                .StopIfAsync(() => _usageProbe.CustomerUserHasActiveSessionAsync(userId),
+                             StopFactors.User.HasActiveSession)
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<UserAdminResultDto>.Blocked(stop);
 
             await _userRepo.DeleteAsync(userId);
 

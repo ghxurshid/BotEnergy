@@ -75,6 +75,42 @@ In `CommonConfiguration/ConfigurationExtensions/ConfigurationAddExtensions.cs`:
 
 If you put a service into `RegisterServices` that depends on `ISessionService`, every API except SessionApi will fail at `ValidateOnBuild` (DI graph is validated on build in Development).
 
+### Stop-factor qoidasi — har amal oldindan tekshiriladi
+
+Holat o'zgartiruvchi HAR QANDAY amal birinchi DB yozuvidan oldin o'zining barcha
+to'sqinlik omillarini tekshiradi; bittasi bo'lsa amal boshlanmaydi va sabab qaytariladi.
+Mexanizm `Core/Domain/Guards/` da: `StopFactor` (kod+matn+status), `StopFactors`
+(yagona katalog — matn servis ichida yozilmaydi), `StopFactorCheck` (qisqa-tutashuvli
+zanjir), `StopActions` (amal nomlari), `DeviceAvailability.IsReachable()` (qurilma
+buyruqni eshitadimi: `IsActive && IsOnline && LastSeenAt` 90s dan yangi).
+
+"Band-mi?" tipidagi tekshiruvlar (o'chirish/nofaollashtirish uchun) `IUsageProbeRepository`
+da to'plangan — har repozitoriyga tarqatilmagan.
+
+```csharp
+var stop = await StopFactorCheck.For(StopActions.ProcessStart)
+    .StopIf(session is null, StopFactors.Session.NotFound)
+    .StopIf(() => !session!.Device!.IsReachable(),
+            () => StopFactors.Device.Offline(session!.Device!.SerialNumber, session.Device.LastSeenAt))
+    .StopIfAsync(() => _processRepo.HasActiveProcessAsync(session!.Id), StopFactors.Process.AlreadyActive)
+    .ResultAsync();
+
+if (stop is not null) return GenericDto<T>.Blocked(stop);
+```
+
+Qoidalar:
+- Zanjir qisqa-tutashuvli — null tekshiruvidan keyingi shartlar `() => ...` bo'lishi SHART.
+- `GenericDto<T>.Blocked(stop)` status, matn va `reason` kodini birdaniga to'g'ri qo'yadi.
+- Controller'da `result.ToErrorResponse()` (`CommonConfiguration.Extensions`) — javob shakli
+  `{ success, message, reason }`, `reason` mijoz uchun barqaror kod.
+- MQTT tomonda `CashResultCodes.FromResult(result)` `reason` dan qurilma kodini oladi
+  (HTTP statusdan taxmin qilmaydi).
+- Yangi to'siq matnini servis ichida yozmang — `StopFactors` katalogiga qo'shing.
+- Qurilmaga buyruq yuboriladigan joyda **oflayn tekshiruvi majburiy**: MQTT publish
+  broker'ga muvaffaqiyatli ketadi, qurilma o'chgan bo'lsa ham.
+
+To'liq amal↔to'siq jadvali `README.md` dagi "To'sqinlik omillari (stop factor)" bo'limida.
+
 ### Permission system uses string convention `{Controller}.{Action}`
 
 `PermissionFilter` (Order=1000, runs AFTER ValidationFilters at Order=0):
@@ -172,7 +208,8 @@ Currently applied to `Session.Create` and `Process.Start`. Apply to other state-
 - **Don't put new shared services into `RegisterServices` if they need `ISessionService`/`IProcessService`** — those are SessionApi-only and `ValidateOnBuild` will fail other APIs.
 - **Don't write `appsettings.json` for new config** — add to `Infrastructure/CommonConfiguration/ConfigurationFile/Configuration.{env}.json`.
 - **Don't switch `DateTime.Now` → `DateTime.UtcNow`** in isolation — the whole stack is local-time and PostgreSQL columns are `timestamp without time zone`. User has explicitly declined this change.
-- **Don't call `DELETE FROM`** — soft delete only (`IsDeleted = true`).
+- **Don't call `DELETE FROM`** — soft delete only (`IsDeleted = true`). Soft delete kaskad qilmaydi: o'chirish amaliga bog'liq yozuvlar uchun `IUsageProbeRepository` orqali stop-factor qo'shing.
+- **Don't send a device command without `DeviceAvailability.IsReachable()`** — publish broker'ga o'tadi, qurilma o'chgan bo'lsa ham; foydalanuvchi "yuborildi" degan yolg'on javob olmasligi kerak.
 - **Production secrets never go into config files as real values.** `Configuration.Production.json` holds `Env_<EnvVarName>` placeholders; real values come from env vars at service start (`ConnectionStrings__DefaultConnection`, `Jwt__Secret`, `Mqtt__Password`, `InternalApi__SharedSecret`, `Seed__AdminPassword`, ...). `GetJwtSecret` throws in Production if `Jwt:Secret` is missing/placeholder; Development falls back to a dev-only constant. Signing (`TokenService` via `JwtSettings`) and validation (`AddJwtAuthentication`) read the same value.
 - **JWT audience is per user group** (`JwtAudiences.Customer` / `.Platform`): AdminApi/BillingApi accept platform-only, UserApi/SessionApi customer-only. New APIs must pass `acceptedAudiences` to `AddJwtAuthentication`.
 - **OTP test code `"123456"`** works only when `Otp:AllowTestCode` is true (set in `Configuration.Development.json`, NOT in prod). OTP has TTL (3 min) + attempt limit (5); service is in-memory and resets on restart.

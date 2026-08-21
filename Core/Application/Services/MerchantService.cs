@@ -1,7 +1,8 @@
-﻿using Domain.Auth;
+using Domain.Auth;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
+using Domain.Guards;
 using Domain.Interfaces;
 using Domain.Repositories;
 
@@ -10,19 +11,25 @@ namespace Application.Services
     public class MerchantService : IMerchantService
     {
         private readonly IMerchantRepository _repo;
+        private readonly IUsageProbeRepository _usageProbe;
 
-        public MerchantService(IMerchantRepository repo)
-            => _repo = repo;
+        public MerchantService(IMerchantRepository repo, IUsageProbeRepository usageProbe)
+        {
+            _repo = repo;
+            _usageProbe = usageProbe;
+        }
 
         public async Task<GenericDto<MerchantResultDto>> CreateAsync(CreateMerchantDto dto)
         {
-            var existing = await _repo.GetByPhoneNumberAsync(dto.PhoneNumber);
-            if (existing is not null)
-                return GenericDto<MerchantResultDto>.Error(409, "Bu telefon raqam bilan merchant allaqachon mavjud.");
+            var stop = await StopFactorCheck.For(StopActions.MerchantCreate)
+                .StopIfAsync(async () => await _repo.GetByPhoneNumberAsync(dto.PhoneNumber) is not null,
+                             StopFactors.Merchant.PhoneTaken)
+                // inn ustunida ham unique indeks bor — telefon kabi oldindan tekshiramiz.
+                .StopIfAsync(() => _repo.ExistsByInnAsync(dto.Inn), StopFactors.Merchant.InnTaken)
+                .ResultAsync();
 
-            // inn ustunida ham unique indeks bor — telefon kabi oldindan tekshiramiz.
-            if (await _repo.ExistsByInnAsync(dto.Inn))
-                return GenericDto<MerchantResultDto>.Error(409, "Bu INN bilan merchant allaqachon mavjud.");
+            if (stop is not null)
+                return GenericDto<MerchantResultDto>.Blocked(stop);
 
             var merchant = new MerchantEntity
             {
@@ -55,23 +62,33 @@ namespace Application.Services
         public async Task<GenericDto<MerchantItemDto>> GetByIdAsync(long id, AccessScope scope)
         {
             if (!scope.CanAccessMerchant(id))
-                return GenericDto<MerchantItemDto>.Error(403, "Bu merchant sizning doirangizga tegishli emas.");
+                return GenericDto<MerchantItemDto>.Blocked(StopFactors.Merchant.OutOfScope);
 
             var merchant = await _repo.GetByIdAsync(id);
             if (merchant is null)
-                return GenericDto<MerchantItemDto>.Error(404, "Merchant topilmadi.");
+                return GenericDto<MerchantItemDto>.Blocked(StopFactors.Merchant.NotFound);
 
             return GenericDto<MerchantItemDto>.Success(ToItem(merchant));
         }
 
         public async Task<GenericDto<MerchantResultDto>> UpdateAsync(long id, UpdateMerchantDto dto, AccessScope scope)
         {
-            if (!scope.CanAccessMerchant(id))
-                return GenericDto<MerchantResultDto>.Error(403, "Bu merchant sizning doirangizga tegishli emas.");
+            var found = await _repo.GetByIdAsync(id);
 
-            var merchant = await _repo.GetByIdAsync(id);
-            if (merchant is null)
-                return GenericDto<MerchantResultDto>.Error(404, "Merchant topilmadi.");
+            var stop = await StopFactorCheck.For(StopActions.MerchantUpdate)
+                .StopIf(!scope.CanAccessMerchant(id), StopFactors.Merchant.OutOfScope)
+                .StopIf(found is null, StopFactors.Merchant.NotFound)
+                // Merchantni nofaollashtirish uning barcha stansiya/qurilmalarini biznesdan
+                // chiqaradi — ketayotgan sessiyalar tugamay qolardi.
+                .StopIfAsync(async () => dto.IsActive == false && found!.IsActive
+                                         && await _usageProbe.MerchantHasActiveSessionAsync(id),
+                             StopFactors.Merchant.HasActiveSession)
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<MerchantResultDto>.Blocked(stop);
+
+            var merchant = found!;
 
             if (!string.IsNullOrWhiteSpace(dto.PhoneNumber)) merchant.PhoneNumber = dto.PhoneNumber;
             if (dto.IsActive.HasValue) merchant.IsActive = dto.IsActive.Value;
@@ -87,12 +104,20 @@ namespace Application.Services
 
         public async Task<GenericDto<MerchantResultDto>> DeleteAsync(long id, AccessScope scope)
         {
-            if (!scope.CanAccessMerchant(id))
-                return GenericDto<MerchantResultDto>.Error(403, "Bu merchant sizning doirangizga tegishli emas.");
-
             var merchant = await _repo.GetByIdAsync(id);
-            if (merchant is null)
-                return GenericDto<MerchantResultDto>.Error(404, "Merchant topilmadi.");
+
+            var stop = await StopFactorCheck.For(StopActions.MerchantDelete)
+                .StopIf(!scope.CanAccessMerchant(id), StopFactors.Merchant.OutOfScope)
+                .StopIf(merchant is null, StopFactors.Merchant.NotFound)
+                // Soft-delete kaskad qilmaydi — bog'liq yozuvlar egasiz qolib ketardi.
+                .StopIfCountAsync(() => _usageProbe.MerchantStationCountAsync(id),
+                                  StopFactors.Merchant.HasStations)
+                .StopIfCountAsync(() => _usageProbe.MerchantOperatorCountAsync(id),
+                                  StopFactors.Merchant.HasUsers)
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<MerchantResultDto>.Blocked(stop);
 
             await _repo.DeleteAsync(id);
 
@@ -105,15 +130,21 @@ namespace Application.Services
 
         public async Task<GenericDto<MerchantResultDto>> SetPaymeCredentialsAsync(long id, SetPaymeCredentialsDto dto, AccessScope scope)
         {
-            if (!scope.CanAccessMerchant(id))
-                return GenericDto<MerchantResultDto>.Error(403, "Bu merchant sizning doirangizga tegishli emas.");
+            var found = await _repo.GetByIdAsync(id);
 
-            if (string.IsNullOrWhiteSpace(dto.CashboxId) || string.IsNullOrWhiteSpace(dto.Key))
-                return GenericDto<MerchantResultDto>.Error(400, "CashboxId va Key majburiy.");
+            var stop = StopFactorCheck.For(StopActions.MerchantSetPayme)
+                .StopIf(!scope.CanAccessMerchant(id), StopFactors.Merchant.OutOfScope)
+                .StopIf(string.IsNullOrWhiteSpace(dto.CashboxId) || string.IsNullOrWhiteSpace(dto.Key),
+                        new StopFactor("MERCHANT_PAYME_INCOMPLETE", "CashboxId va Key majburiy.", 400))
+                .StopIf(found is null, StopFactors.Merchant.NotFound)
+                // Nofaol merchant nomidan invoice yaratilmaydi — credential yozish ma'nosiz.
+                .StopIf(() => !found!.IsActive, StopFactors.Merchant.Inactive)
+                .Result();
 
-            var merchant = await _repo.GetByIdAsync(id);
-            if (merchant is null)
-                return GenericDto<MerchantResultDto>.Error(404, "Merchant topilmadi.");
+            if (stop is not null)
+                return GenericDto<MerchantResultDto>.Blocked(stop);
+
+            var merchant = found!;
 
             merchant.PaymeCashboxId = dto.CashboxId.Trim();
             merchant.PaymeKey = dto.Key.Trim();

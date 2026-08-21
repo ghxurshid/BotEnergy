@@ -41,11 +41,10 @@ namespace SessionApi.Mqtt.Handlers
 
             if (!result.IsSuccess)
             {
-                var code = result.ErrorObj!.Code == 409
-                    ? CashResultCodes.SessionExists
-                    : CashResultCodes.FromHttpCode(result.ErrorObj.Code);
-
-                return MqttResponseEnvelope.Fail<Ack>(code, result.ErrorObj.ErrorMessage);
+                // Kod to'sqinlik omilidan olinadi — qurilma qaysi ekranni ko'rsatishini
+                // HTTP statusdan taxmin qilmaydi.
+                return MqttResponseEnvelope.Fail<Ack>(
+                    CashResultCodes.FromResult(result), result.ErrorObj!.ErrorMessage);
             }
 
             var opened = result.Result!;

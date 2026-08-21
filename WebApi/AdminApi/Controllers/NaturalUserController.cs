@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using AdminApi.Extensions;
 using CommonConfiguration.Attributes;
 using Domain.Dtos;
@@ -40,7 +41,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> GetAll([FromQuery] PaginationParams param)
         {
             var result = await _service.GetNaturalAsync(param, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Jismoniy shaxsni ID bo'yicha olish.</summary>
@@ -52,7 +53,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> GetById(long id)
         {
             var result = await _service.GetByIdAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Jismoniy shaxsni bloklash (tizimga kira olmaydi).</summary>
@@ -64,7 +65,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Block(long id)
         {
             var result = await _service.BlockAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Jismoniy shaxsni blokdan chiqarish.</summary>
@@ -76,7 +77,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Unblock(long id)
         {
             var result = await _service.UnblockAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>Jismoniy shaxsni o'chirish (soft delete).</summary>
@@ -88,7 +89,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Delete(long id)
         {
             var result = await _service.DeleteAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
     }
 }

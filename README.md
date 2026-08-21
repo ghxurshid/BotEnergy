@@ -1740,6 +1740,127 @@ IoT Device
 
 ---
 
+## To'sqinlik omillari (stop factor) — global qoida
+
+**Qoida:** holat o'zgartiradigan har qanday amal avval o'zining barcha to'sqinlik omillarini
+tekshiradi. Bittasi ham mavjud bo'lsa — amal **boshlanmaydi** va chaqiruvchiga aynan nima
+to'sqinlik qilayotgani aytiladi. "Yozuvni yaratib qo'yib, keyin buyruq yiqilsa uni Failed
+qilamiz" — bu qoidaning buzilishi.
+
+Klassik misol: kassir boxni ochish tugmasini bosdi, qurilma esa o'chgan. MQTT publish
+brokerga muvaffaqiyatli ketadi (qurilma uni olmasa ham), shuning uchun "buyruq yuborildi"
+degan javob yolg'on bo'lardi. Endi buyruq umuman yuborilmaydi:
+
+```json
+HTTP 503
+{ "success": false,
+  "reason": "DEVICE_OFFLINE",
+  "message": "Qurilma FUEL-001 oflayn (oxirgi aloqa: 21.08.2026 09:14) — buyruqni bajarib bo'lmaydi." }
+```
+
+### Mexanizm
+
+| Qism | Fayl | Vazifasi |
+|---|---|---|
+| `StopFactor` | `Core/Domain/Guards/StopFactor.cs` | `(Code, Message, HttpStatus)` uchligi |
+| `StopFactors` | `Core/Domain/Guards/StopFactors.cs` | Barcha to'siqlarning **yagona katalogi** |
+| `StopFactorCheck` | `Core/Domain/Guards/StopFactorCheck.cs` | Qisqa-tutashuvli tekshiruv zanjiri |
+| `StopActions` | `Core/Domain/Guards/StopActions.cs` | Amal nomlari (log/diagnostika) |
+| `DeviceAvailability` | `Core/Domain/Guards/DeviceAvailability.cs` | "Qurilma buyruqni eshitadimi?" — yagona javob |
+| `IUsageProbeRepository` | `Core/Domain/Repositories/` | "Bu obyekt band-mi?" so'rovlari (o'chirish/nofaollashtirish uchun) |
+
+Servis qatlamida:
+
+```csharp
+var stop = await StopFactorCheck.For(StopActions.CashBoxOpen)
+    .StopIf(!scope.IsManage,              StopFactors.Incassation.NotManage)
+    .StopIf(device is null,               StopFactors.Device.NotFound)
+    .StopIf(() => !device!.IsActive,      StopFactors.Device.Inactive)
+    .StopIf(() => !device!.IsReachable(), () => StopFactors.Device.Offline(device!.SerialNumber, device.LastSeenAt))
+    .StopIfAsync(() => _usageProbe.DeviceHasOpenCollectionAsync(deviceId), StopFactors.Device.HasOpenCollection)
+    .ResultAsync();
+
+if (stop is not null)
+    return GenericDto<CashCollectionDto>.Blocked(stop);
+```
+
+Zanjir **qisqa-tutashuvli**: birinchi to'siqdan keyingi shartlar (va ular ichidagi DB
+so'rovlari) umuman bajarilmaydi. Shu sabab null tekshiruvidan keyingi barcha shartlar
+`() => ...` shaklida yoziladi.
+
+`DeviceAvailability.IsReachable()` — `IsActive && IsOnline && LastSeenAt` 90 soniyadan
+yangi. Faqat `IsOnline` yetarli emas: uni oflaynga o'tkazadigan fon servisi 30 soniyada
+bir ishlaydi, ya'ni bayroq 90–120 soniya "online" bo'lib turishi mumkin.
+
+### Qamrab olingan amallar va ularning to'siqlari
+
+**Qurilmaga buyruq yuborish (eng muhim guruh)**
+
+| Amal | To'siqlar |
+|---|---|
+| `Incassation.RequestOpen` (box ochish) | Manage emas · qurilma yo'q · stansiyasiz · nofaol · **oflayn** · ochiq inkassatsiya bor · ochiq naqd sessiya bor |
+| `Process.Start` | Sessiya yo'q/begona · user bloklangan · sessiya Paused/Settling/ulanmagan · qurilma biriktirilmagan/nofaol/**oflayn** · tugamagan jarayon bor · mahsulot yo'q/nofaol/boshqa qurilmaniki · Hold yo'q · Hold yetarli emas · qurilma boshqa userda band |
+| `Process.Stop` | Jarayon yo'q/begona · allaqachon yakunlangan · qurilma yo'q/**oflayn** |
+| `Process.Pause` | Jarayon yo'q/begona · mos holatda emas · qurilma yo'q/**oflayn** |
+| `Process.Resume` | Jarayon yo'q/begona · pauzada emas · qurilma yo'q/**oflayn** |
+
+**Naqd pul (qurilma interfeysi)**
+
+| Amal | To'siqlar |
+|---|---|
+| `Cash.SessionOpen` | Karta formati · qurilma yo'q/nofaol · stansiya nofaol · ochiq naqd sessiya bor · **box inkassatsiya uchun ochiq** · bank rad etdi · bank javob bermadi |
+| `Cash.BillAdd` | Sessiya yo'q · qabul holatida emas · nominal ro'yxatda yo'q · limit oshdi · `bill_seq` noto'g'ri |
+| `Cash.Commit` | Sessiya yo'q · yakunlangan · pul solinmagan |
+| `Cash.Cancel` | Sessiya yo'q · qabul holatida emas · **pul solingan** (bill acceptor qaytara olmaydi) |
+| `Cash.RetryPayout` | Sessiya yo'q · qayta urinishga muhtoj emas |
+| `Incassation.Confirm` / `Cancel` | Manage emas · manfiy summa · dalolatnoma yo'q · allaqachon yakunlangan |
+
+**Sessiya**
+
+| Amal | To'siqlar |
+|---|---|
+| `Session.Create` | User yo'q · bloklangan · allaqachon faol sessiya bor |
+| `Session.Connect` (QR) | Pending yo'q · token mos emas · qurilma yo'q · **stansiya nofaol** · **user bloklangan** · faol sessiya bor |
+| `Session.Close` | Sessiya yo'q/begona · yopilgan · hisob-kitobda · tugamagan jarayon bor |
+| `Session.Heartbeat` | Sessiya yo'q/begona · yopilgan |
+
+**O'chirish va nofaollashtirish** (soft-delete kaskad qilmaydi — bog'liq yozuvlar egasiz qolmasin)
+
+| Amal | To'siqlar |
+|---|---|
+| `Device.Delete` | Doiradan tashqari · faol sessiya · ochiq naqd sessiya · ochiq inkassatsiya · **boxda naqd pul bor** |
+| `Device.Update` (nofaollashtirish) | Faol sessiya · ochiq naqd sessiya |
+| `Station.Delete` | Biriktirilgan qurilmalar bor |
+| `Station.Update` (nofaollashtirish) | Qurilmalarida faol sessiya bor |
+| `Merchant.Delete` | Stansiyalari bor · operatorlari bor |
+| `Merchant.Update` (nofaollashtirish) | Qurilmalarida faol sessiya bor |
+| `Merchant.SetPaymeCredentials` | Doiradan tashqari · CashboxId/Key bo'sh · merchant nofaol |
+| `Organization.Delete` | Foydalanuvchilari bor · **balansida pul bor** |
+| `Product.Delete` | Tugamagan jarayonda ishlatilmoqda |
+| `Product.Update` (narx/nofaollashtirish) | Tugamagan jarayonda ishlatilmoqda |
+| `Role.Delete` (platform va customer) | Rol foydalanuvchilarga biriktirilgan |
+| `User.Delete` (platform) | Doiradan tashqari · **o'zini o'chirish** · **oxirgi Manage admin** |
+| `User.Block` (platform) | Doiradan tashqari · **o'zini bloklash** · allaqachon bloklangan · **oxirgi Manage admin** |
+| `User.Delete` / `Block` (customer) | Doiradan tashqari · o'zini · faol sessiyasi bor |
+
+**Pul harakati**
+
+| Amal | To'siqlar |
+|---|---|
+| `Balance.TopUp` | Summa ≤ 0 · user yo'q · **bloklangan** · corporate tashkilotsiz · tashkilot nofaol |
+| `HoldInvoice.Create` | Summa ≤ 0 · sessiya yo'q/begona · Paused/Settling/yopilgan · qurilma ulanmagan · stansiyasiz · to'lov konteksti yopilgan · invoice limiti · Payme sozlanmagan |
+| `HoldInvoice.Cancel` | Invoice yo'q/begona · **qisman ishlatilgan** · holat ruxsat bermaydi |
+| Operator `ForceCapture`/`Refund`/`Cancel`/`Retry` | Invoice yo'q · to'lov konteksti yo'q · doiradan tashqari · holat o'tishga ruxsat bermaydi |
+
+### Yangi amal qo'shganda
+
+1. To'siqlarni sanab chiqing: obyekt bormi, holati ruxsat beradimi, tashqi bog'liqlik
+   (qurilma/bank/Payme) javob beradimi, bog'liq yozuvlar bandmi.
+2. Mos `StopFactor` ni **katalogdan** oling; yo'q bo'lsa katalogga qo'shing (matnni
+   servis ichida yozmang).
+3. `StopFactorCheck.For(StopActions.X)` zanjirini **birinchi DB yozuvidan oldin** qo'ying.
+4. `GenericDto<T>.Blocked(stop)` bilan qaytaring — status, matn va kod avtomatik to'g'ri bo'ladi.
+
 ## Error Response formati
 
 Barcha API lar yagona format qaytaradi:
@@ -1752,16 +1873,30 @@ Barcha API lar yagona format qaytaradi:
 }
 ```
 
-**Xato:**
+**Xato (servis qatlami — `GenericDto`):**
 ```json
 {
   "isSuccess": false,
   "errorObj": {
     "code": 404,
-    "errorMessage": "Stansiya topilmadi."
+    "errorMessage": "Stansiya topilmadi.",
+    "reason": "STATION_NOT_FOUND"
   }
 }
 ```
+
+**Xato (HTTP javob — controller `ToErrorResponse()`):**
+```json
+{
+  "success": false,
+  "message": "Qurilma FUEL-001 oflayn — buyruqni bajarib bo'lmaydi.",
+  "reason": "DEVICE_OFFLINE"
+}
+```
+
+`reason` — to'sqinlik omilining barqaror kodi (`StopFactor.Code`). Mijoz ilova matnga
+emas, shu kodga qarab ekran tanlaydi; matn o'zgarsa ham integratsiya buzilmaydi.
+Katalogga hali ko'chirilmagan eski xatolarda `reason` `null` bo'ladi.
 
 **HTTP status kodlari:**
 
@@ -1772,4 +1907,7 @@ Barcha API lar yagona format qaytaradi:
 | 401 | JWT token yo'q yoki yaroqsiz |
 | 403 | Permission yo'q yoki boshqa foydalanuvchining resursi |
 | 404 | Entity topilmadi yoki o'chirilgan |
-| 409 | Dublikat (telefon, serial number va h.k.) |
+| 409 | Dublikat yoki obyekt holati amalga yo'l bermaydi (to'sqinlik omili) |
+| 422 | Tashqi tomon (bank/Payme) rad etdi |
+| 502 | To'lov provayderi bilan aloqa yo'q |
+| 503 | Qurilma oflayn yoki buyruq yetkazilmadi |

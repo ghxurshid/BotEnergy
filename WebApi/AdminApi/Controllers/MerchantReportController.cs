@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using CommonConfiguration.Attributes;
 using Domain.Dtos.Base;
 using Domain.Dtos.Report;
@@ -65,7 +66,7 @@ namespace AdminApi.Controllers
             var result = await _service.GetPagedAsync(scope, filter, cancellationToken);
             return result.IsSuccess
                 ? Ok(result.Result)
-                : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                : result.ToErrorResponse();
         }
 
         /// <summary>

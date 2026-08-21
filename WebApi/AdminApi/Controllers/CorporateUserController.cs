@@ -1,3 +1,4 @@
+using CommonConfiguration.Extensions;
 using AdminApi.Extensions;
 using AdminApi.Filters.ValidationFilters;
 using AdminApi.Models.Requests;
@@ -30,7 +31,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Create([FromBody] CreateCorporateUserRequest request)
         {
             var result = await _service.CreateAsync(request.ToDto(), User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         [HttpGet("{organizationId}")]
@@ -38,7 +39,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> GetByOrganization(long organizationId, [FromQuery] PaginationParams param)
         {
             var result = await _service.GetByOrganizationAsync(organizationId, param, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         [HttpGet("{id}")]
@@ -46,7 +47,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> GetById(long id)
         {
             var result = await _service.GetByIdAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         [HttpPut("{id}")]
@@ -55,7 +56,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> SetPassword(long id, [FromBody] SetPasswordRequest request)
         {
             var result = await _service.SetPasswordAsync(request.ToDto(id), User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         [HttpPut("{id}")]
@@ -63,7 +64,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> ResetPassword(long id, [FromBody] ResetPasswordRequest request)
         {
             var result = await _service.ResetPasswordAsync(request.ToDto(id), User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         [HttpPut("{id}")]
@@ -71,7 +72,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Block(long id)
         {
             var result = await _service.BlockAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         [HttpPut("{id}")]
@@ -79,7 +80,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Unblock(long id)
         {
             var result = await _service.UnblockAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         [HttpDelete("{id}")]
@@ -87,7 +88,7 @@ namespace AdminApi.Controllers
         public async Task<IActionResult> Delete(long id)
         {
             var result = await _service.DeleteAsync(id, User.GetScope());
-            return result.IsSuccess ? Ok(result.Result) : StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
     }
 }

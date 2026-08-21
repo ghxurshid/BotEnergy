@@ -1,9 +1,10 @@
-﻿using Domain.Dtos;
+using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Helpers;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Domain.Guards;
 
 namespace Application.Services
 {
@@ -22,7 +23,7 @@ namespace Application.Services
         {
             var user = await _userRepo.GetByIdAsync(userId);
             if (user is null)
-                return GenericDto<MyProfileDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<MyProfileDto>.Blocked(StopFactors.User.NotFound);
 
             return GenericDto<MyProfileDto>.Success(ToDto(user));
         }
@@ -37,7 +38,7 @@ namespace Application.Services
 
             var user = await _userRepo.GetByIdAsync(userId);
             if (user is null)
-                return GenericDto<MyProfileDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<MyProfileDto>.Blocked(StopFactors.User.NotFound);
 
             // O'z qiymatini dublikat deb hisoblamaymiz (excludeUserId).
             if (await _userRepo.ExistsByMailAsync(mail, excludeUserId: user.Id))
@@ -58,7 +59,7 @@ namespace Application.Services
 
             var user = await _userRepo.GetByIdAsync(userId);
             if (user is null)
-                return GenericDto<UserAdminResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<UserAdminResultDto>.Blocked(StopFactors.User.NotFound);
             if (user.PasswordHash is null || user.PasswordSalt is null)
                 return GenericDto<UserAdminResultDto>.Error(400, "Parol hali o'rnatilmagan.");
 

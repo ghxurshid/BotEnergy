@@ -1,4 +1,5 @@
-﻿using CommonConfiguration.Attributes;
+using CommonConfiguration.Extensions;
+using CommonConfiguration.Attributes;
 using Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -48,7 +49,7 @@ namespace SessionApi.Controllers
 
             var result = await _processService.StartAsync(request.ToDto(userId));
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -70,7 +71,7 @@ namespace SessionApi.Controllers
 
             var result = await _processService.StopByUserAsync(RequestToDtoExtensions.ToControlDto(processId, userId));
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -88,7 +89,7 @@ namespace SessionApi.Controllers
 
             var result = await _processService.StopByUserAsync(RequestToDtoExtensions.ToControlDto(processId, userId));
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -108,7 +109,7 @@ namespace SessionApi.Controllers
 
             var result = await _processService.PauseAsync(RequestToDtoExtensions.ToControlDto(processId, userId));
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -128,7 +129,7 @@ namespace SessionApi.Controllers
 
             var result = await _processService.ResumeAsync(RequestToDtoExtensions.ToControlDto(processId, userId));
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }

@@ -1,9 +1,10 @@
-﻿using Domain.Dtos;
+using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Domain.Guards;
 
 namespace Application.Services
 {
@@ -18,7 +19,7 @@ namespace Application.Services
         {
             var user = await _userRepository.GetByIdAsync(userId);
             if (user is null)
-                return GenericDto<GetUserDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<GetUserDto>.Blocked(StopFactors.User.NotFound);
 
             return GenericDto<GetUserDto>.Success(MapToDto(user));
         }
@@ -43,7 +44,7 @@ namespace Application.Services
         {
             var user = await _userRepository.GetByIdAsync(userId);
             if (user is null)
-                return GenericDto<GetBalanceResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<GetBalanceResultDto>.Blocked(StopFactors.User.NotFound);
 
             return GenericDto<GetBalanceResultDto>.Success(new GetBalanceResultDto
             {
@@ -56,7 +57,7 @@ namespace Application.Services
         {
             var user = await _userRepository.GetByIdAsync(userId);
             if (user is null)
-                return GenericDto<UpdateUserResultDto>.Error(404, "Foydalanuvchi topilmadi.");
+                return GenericDto<UpdateUserResultDto>.Blocked(StopFactors.User.NotFound);
 
             if (!string.IsNullOrEmpty(dto.Mail))
             {

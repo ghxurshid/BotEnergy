@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using Domain.Entities;
 using Domain.Enums;
@@ -11,6 +11,7 @@ namespace SessionApi.Services
     public sealed class DeviceSessionService : IDeviceSessionService
     {
         private readonly IDeviceRepository _deviceRepo;
+        private readonly ICustomerUserRepository _userRepo;
         private readonly ISessionRepository _sessionRepo;
         private readonly IPendingSessionStore _pendingStore;
         private readonly ISessionService _sessionService;
@@ -19,6 +20,7 @@ namespace SessionApi.Services
 
         public DeviceSessionService(
             IDeviceRepository deviceRepo,
+            ICustomerUserRepository userRepo,
             ISessionRepository sessionRepo,
             IPendingSessionStore pendingStore,
             ISessionService sessionService,
@@ -26,6 +28,7 @@ namespace SessionApi.Services
             ILogger<DeviceSessionService> logger)
         {
             _deviceRepo = deviceRepo;
+            _userRepo = userRepo;
             _sessionRepo = sessionRepo;
             _pendingStore = pendingStore;
             _sessionService = sessionService;
@@ -97,6 +100,33 @@ namespace SessionApi.Services
                 _logger.LogInformation(
                     "[CONNECT] Step 3 — qurilma topildi deviceId={DeviceId} type={Type}",
                     device.Id, device.DeviceType);
+
+                // ── Step 3b: Stansiya faolligi ──
+                // Nofaol stansiyaning qurilmasi xizmat ko'rsatmasligi kerak: sessiya ochilsa
+                // mijoz to'lovni bloklab, keyin hech narsa ololmasdi.
+                if (device.Station is { IsActive: false })
+                {
+                    _logger.LogWarning(
+                        "[CONNECT] Step 3b — stansiya nofaol serial={Serial} stationId={StationId}",
+                        serialNumber, device.StationId);
+                    return Fail(ConnectResultCodes.StationInactive);
+                }
+
+                // ── Step 3c: Foydalanuvchi holati ──
+                // Pending token bloklanishdan oldin yaratilgan bo'lishi mumkin — bloklangan
+                // mijoz QR orqali sessiya ochib yubormasin.
+                var user = await _userRepo.GetByIdAsync(userId);
+                if (user is null)
+                {
+                    _logger.LogWarning("[CONNECT] Step 3c — foydalanuvchi topilmadi userId={UserId}", userId);
+                    return Fail(ConnectResultCodes.InvalidPayload);
+                }
+
+                if (user.IsBlocked)
+                {
+                    _logger.LogWarning("[CONNECT] Step 3c — foydalanuvchi bloklangan userId={UserId}", userId);
+                    return Fail(ConnectResultCodes.UserBlocked);
+                }
 
                 // ── Step 4: Race condition guard ──
                 _logger.LogInformation("[CONNECT] Step 4 — HasActiveAsync tekshiruvi userId={UserId}", userId);

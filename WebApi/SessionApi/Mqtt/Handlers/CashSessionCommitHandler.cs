@@ -48,7 +48,7 @@ namespace SessionApi.Mqtt.Handlers
             if (!result.IsSuccess)
             {
                 return MqttResponseEnvelope.Fail<Ack>(
-                    CashResultCodes.FromHttpCode(result.ErrorObj!.Code), result.ErrorObj.ErrorMessage);
+                    CashResultCodes.FromResult(result), result.ErrorObj!.ErrorMessage);
             }
 
             var dto = result.Result!;

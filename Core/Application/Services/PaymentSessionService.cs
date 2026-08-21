@@ -4,6 +4,7 @@ using Domain.Entities;
 using Domain.Helpers;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Domain.Guards;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Services
@@ -55,13 +56,13 @@ namespace Application.Services
         {
             var session = await _sessionRepo.GetByIdAsync(sessionId);
             if (session is null)
-                return GenericDto<PaymentSessionDto>.Error(404, "Sessiya topilmadi.");
+                return GenericDto<PaymentSessionDto>.Blocked(StopFactors.Session.NotFound);
             if (session.UserId != userId)
-                return GenericDto<PaymentSessionDto>.Error(403, "Bu sessiya sizga tegishli emas.");
+                return GenericDto<PaymentSessionDto>.Blocked(StopFactors.Session.NotOwned);
 
             var paymentSession = await _paymentSessionRepo.GetBySessionIdAsync(sessionId);
             if (paymentSession is null)
-                return GenericDto<PaymentSessionDto>.Error(404, "Sessiyada to'lov konteksti yo'q.");
+                return GenericDto<PaymentSessionDto>.Blocked(StopFactors.Session.NoPaymentContext);
 
             var invoices = await _invoiceRepo.GetByPaymentSessionAsync(paymentSession.Id);
             var available = paymentSession.HoldBalanceTiyin - paymentSession.ConsumedTiyin;

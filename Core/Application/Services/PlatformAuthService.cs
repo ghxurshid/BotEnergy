@@ -3,6 +3,7 @@ using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Interfaces;
 using Domain.Repositories;
+using Domain.Guards;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Services
@@ -53,10 +54,10 @@ namespace Application.Services
             }
 
             if (!user.IsVerified)
-                return GenericDto<LoginResultDto>.Error(403, "Akkaunt tasdiqlanmagan.");
+                return GenericDto<LoginResultDto>.Blocked(StopFactors.User.NotVerified);
 
             if (user.IsBlocked)
-                return GenericDto<LoginResultDto>.Error(403, "Akkaunt bloklangan.");
+                return GenericDto<LoginResultDto>.Blocked(StopFactors.User.Blocked);
 
             // Legacy SHA256 hash bo'lsa — parol to'g'ri kelgan paytda PBKDF2 ga ko'chiramiz.
             if (PasswordHelper.NeedsRehash(user.PasswordHash))
@@ -93,13 +94,13 @@ namespace Application.Services
 
             var user = await _userRepository.GetByIdAsync(userId.Value);
             if (user is null)
-                return GenericDto<RefreshTokenResultDto>.Error(401, "Foydalanuvchi topilmadi.");
+                return GenericDto<RefreshTokenResultDto>.Blocked(StopFactors.User.NotFound);
 
             if (user.IsBlocked)
-                return GenericDto<RefreshTokenResultDto>.Error(403, "Akkaunt bloklangan.");
+                return GenericDto<RefreshTokenResultDto>.Blocked(StopFactors.User.Blocked);
 
             if (user.IsDeleted)
-                return GenericDto<RefreshTokenResultDto>.Error(403, "Akkaunt o'chirilgan.");
+                return GenericDto<RefreshTokenResultDto>.Blocked(StopFactors.User.Deleted);
 
             await _refreshTokenStore.RevokeAsync(request.RefreshToken);
 

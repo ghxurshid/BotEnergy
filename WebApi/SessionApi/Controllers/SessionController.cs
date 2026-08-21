@@ -1,4 +1,5 @@
-﻿using CommonConfiguration.Attributes;
+using CommonConfiguration.Extensions;
+using CommonConfiguration.Attributes;
 using Domain.Dtos.Base;
 using Domain.Dtos.Session;
 using Domain.Interfaces;
@@ -59,7 +60,7 @@ namespace SessionApi.Controllers
 
             var result = await _bootstrapService.GetAsync(userId);
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result);
         }
@@ -88,7 +89,7 @@ namespace SessionApi.Controllers
 
             var result = await _sessionService.CreateSessionAsync(new CreateSessionDto { UserId = userId });
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -113,7 +114,7 @@ namespace SessionApi.Controllers
 
             var result = await _sessionService.CloseSessionByUserAsync(request.ToDto(userId));
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -135,7 +136,7 @@ namespace SessionApi.Controllers
                 UserId = userId
             });
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result!.ToResponse());
         }
@@ -155,7 +156,7 @@ namespace SessionApi.Controllers
 
             var result = await _sessionService.GetCurrentAsync(userId);
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(new { activeSession = result.Result });
         }
@@ -176,7 +177,7 @@ namespace SessionApi.Controllers
 
             var result = await _sessionService.GetByIdAsync(sessionId, userId);
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result);
         }
@@ -196,7 +197,7 @@ namespace SessionApi.Controllers
             var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
             var result = await _sessionService.GetHistoryAsync(userId, pagination, from, to);
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result);
         }
@@ -219,7 +220,7 @@ namespace SessionApi.Controllers
 
             var result = await _sessionService.HeartbeatAsync(sessionId, userId);
             if (!result.IsSuccess)
-                return StatusCode(result.ErrorObj!.Code, new { message = result.ErrorObj.ErrorMessage });
+                return result.ToErrorResponse();
 
             return Ok(result.Result);
         }

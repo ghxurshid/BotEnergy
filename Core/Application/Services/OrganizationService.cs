@@ -2,6 +2,7 @@ using Domain.Auth;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
+using Domain.Guards;
 using Domain.Interfaces;
 using Domain.Repositories;
 
@@ -10,9 +11,13 @@ namespace Application.Services
     public class OrganizationService : IOrganizationService
     {
         private readonly IOrganizationRepository _repo;
+        private readonly IUsageProbeRepository _usageProbe;
 
-        public OrganizationService(IOrganizationRepository repo)
-            => _repo = repo;
+        public OrganizationService(IOrganizationRepository repo, IUsageProbeRepository usageProbe)
+        {
+            _repo = repo;
+            _usageProbe = usageProbe;
+        }
 
         public async Task<GenericDto<OrganizationResultDto>> CreateAsync(CreateOrganizationDto dto)
         {
@@ -48,11 +53,11 @@ namespace Application.Services
         public async Task<GenericDto<OrganizationItemDto>> GetByIdAsync(long id, AccessScope scope)
         {
             if (!scope.CanAccessOrganization(id))
-                return GenericDto<OrganizationItemDto>.Error(403, "Bu tashkilot sizning doirangizga tegishli emas.");
+                return GenericDto<OrganizationItemDto>.Blocked(StopFactors.Organization.OutOfScope);
 
             var org = await _repo.GetByIdAsync(id);
             if (org is null)
-                return GenericDto<OrganizationItemDto>.Error(404, "Tashkilot topilmadi.");
+                return GenericDto<OrganizationItemDto>.Blocked(StopFactors.Organization.NotFound);
 
             return GenericDto<OrganizationItemDto>.Success(ToItem(org));
         }
@@ -60,11 +65,11 @@ namespace Application.Services
         public async Task<GenericDto<OrganizationResultDto>> UpdateAsync(long id, UpdateOrganizationDto dto, AccessScope scope)
         {
             if (!scope.CanAccessOrganization(id))
-                return GenericDto<OrganizationResultDto>.Error(403, "Bu tashkilot sizning doirangizga tegishli emas.");
+                return GenericDto<OrganizationResultDto>.Blocked(StopFactors.Organization.OutOfScope);
 
             var org = await _repo.GetByIdAsync(id);
             if (org is null)
-                return GenericDto<OrganizationResultDto>.Error(404, "Tashkilot topilmadi.");
+                return GenericDto<OrganizationResultDto>.Blocked(StopFactors.Organization.NotFound);
 
             if (!string.IsNullOrWhiteSpace(dto.Address)) org.Address = dto.Address;
             if (!string.IsNullOrWhiteSpace(dto.PhoneNumber)) org.PhoneNumber = dto.PhoneNumber;
@@ -81,12 +86,21 @@ namespace Application.Services
 
         public async Task<GenericDto<OrganizationResultDto>> DeleteAsync(long id, AccessScope scope)
         {
-            if (!scope.CanAccessOrganization(id))
-                return GenericDto<OrganizationResultDto>.Error(403, "Bu tashkilot sizning doirangizga tegishli emas.");
-
             var org = await _repo.GetByIdAsync(id);
-            if (org is null)
-                return GenericDto<OrganizationResultDto>.Error(404, "Tashkilot topilmadi.");
+
+            var stop = await StopFactorCheck.For(StopActions.OrganizationDelete)
+                .StopIf(!scope.CanAccessOrganization(id), StopFactors.Organization.OutOfScope)
+                .StopIf(org is null, StopFactors.Organization.NotFound)
+                // Xodimlar tashkilot balansidan to'laydi — tashkilot o'chsa ular
+                // balanssiz qolib, sessiya ocholmay qolardi.
+                .StopIfCountAsync(() => _usageProbe.OrganizationUserCountAsync(id),
+                                  StopFactors.Organization.HasUsers)
+                // Qoldiq pul hisobdan yo'qolmasligi kerak.
+                .StopIf(() => org!.Balance > 0, () => StopFactors.Organization.HasBalance(org!.Balance))
+                .ResultAsync();
+
+            if (stop is not null)
+                return GenericDto<OrganizationResultDto>.Blocked(stop);
 
             await _repo.DeleteAsync(id);
 
