@@ -13,7 +13,7 @@ namespace Domain.Dtos.Device
 
     /// <summary>
     /// Real-time "DeviceStatusChanged" event payloadi. Edge-triggered (faqat holat haqiqatan o'zgarganda).
-    /// SignalR guruhlari: <c>device:{DeviceId}</c>, <c>merchant:{MerchantId}</c>.
+    /// SignalR guruhlari: <c>device:{DeviceId}</c>, <c>station:{StationId}</c>, <c>merchant:{MerchantId}</c>.
     /// </summary>
     public sealed record DeviceStatusChangedDto(
         long DeviceId,

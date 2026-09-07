@@ -1,3 +1,4 @@
+using Domain.Dtos.Device;
 using Domain.Entities;
 
 namespace Domain.Guards
@@ -28,6 +29,16 @@ namespace Domain.Guards
                && device.IsOnline
                && device.LastSeenAt.HasValue
                && DateTime.Now - device.LastSeenAt.Value <= OfflineThreshold;
+
+        /// <summary>
+        /// Yengil proyeksiya uchun ayni tekshiruv (entity yuklamasdan). Snapshot yuborishda
+        /// kerak: DB dagi <c>IsOnline</c> bayrog'i fon servisi ishlagunga qadar eskirgan
+        /// bo'lishi mumkin, LastSeenAt esa har doim haqiqatni ko'rsatadi.
+        /// </summary>
+        public static bool IsReachable(this DeviceStatusInfo info)
+            => info.IsOnline
+               && info.LastSeenAt.HasValue
+               && DateTime.Now - info.LastSeenAt.Value <= OfflineThreshold;
 
         /// <summary>Qurilma buyruq qabul qila olmasa — sababini qaytaradi, aks holda <c>null</c>.</summary>
         public static StopFactor? ReachabilityStopFactor(this DeviceEntity? device)

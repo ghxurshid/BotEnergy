@@ -131,6 +131,26 @@ namespace Persistence.Repositories
                 .Select(StatusProjection)
                 .ToListAsync();
 
+        public async Task<List<DeviceStatusInfo>> GetStatusInfoByIdsAsync(IReadOnlyCollection<long> deviceIds)
+        {
+            if (deviceIds.Count == 0)
+                return new List<DeviceStatusInfo>();
+
+            // Massivga o'tkazamiz — EF Core IN (...) ga shu ko'rinishda ishonchli tarjima qiladi.
+            var ids = deviceIds as long[] ?? deviceIds.ToArray();
+
+            return await _context.Devices
+                .Where(d => d.IsActive && ids.Contains(d.Id))
+                .Select(StatusProjection)
+                .ToListAsync();
+        }
+
+        public async Task<List<DeviceStatusInfo>> GetStatusInfoByStationAsync(long stationId)
+            => await _context.Devices
+                .Where(d => d.IsActive && d.StationId == stationId)
+                .Select(StatusProjection)
+                .ToListAsync();
+
         public async Task<decimal> AddCashAsync(long deviceId, decimal amount)
         {
             if (amount <= 0)

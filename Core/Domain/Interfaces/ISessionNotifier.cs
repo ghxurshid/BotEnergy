@@ -7,6 +7,8 @@ namespace Domain.Interfaces
     /// Group sxemasi:
     ///   - sessionToken — sessiyaga ulangan barcha klientlar uchun (planshet+telefon)
     ///   - "user:{userId}" — foydalanuvchining hamma device lari uchun (sessionToken bilmasdan ham keladi)
+    ///   - "device:{deviceId}" / "station:{stationId}" / "merchant:{merchantId}" — qurilma
+    ///     online/offline holatini kuzatuvchilar (mijoz ilovasi, inkassator ilovasi, admin paneli)
     /// </summary>
     public interface ISessionNotifier
     {
@@ -41,8 +43,13 @@ namespace Domain.Interfaces
 
         /// <summary>
         /// Qurilma holati o'zgarganini (online/offline/lost) tracking qilayotgan guruhlarga yuboradi:
-        /// <c>device:{DeviceId}</c> (app session ekrani, admin device sahifasi) va
-        /// <c>merchant:{MerchantId}</c> (admin device ro'yxati). Event nomi: <c>DeviceStatusChanged</c>.
+        /// <c>device:{DeviceId}</c> (mijoz ilovasi, inkassator ilovasi, admin qurilma sahifasi),
+        /// <c>station:{StationId}</c> (stansiya ekrani) va <c>merchant:{MerchantId}</c>
+        /// (admin qurilma ro'yxati). Event nomi: <c>DeviceStatusChanged</c>.
+        ///
+        /// Watcher qaysi guruhda bo'lishidan qat'i nazar payload bir xil — snapshot
+        /// (<c>DeviceStatusSnapshot</c>) ham xuddi shu shaklda keladi, shuning uchun klientda
+        /// bitta handler yetadi.
         /// </summary>
         Task NotifyDeviceStatusAsync(Domain.Dtos.Device.DeviceStatusChangedDto e);
     }

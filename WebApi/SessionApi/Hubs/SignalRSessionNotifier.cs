@@ -51,9 +51,15 @@ namespace SessionApi.Hubs
                 _hubContext.Clients.Group(sessionToken).SendAsync("SessionBalanceChanged", e),
                 _hubContext.Clients.Group(SessionHub.UserGroup(userId)).SendAsync("SessionBalanceChanged", e));
 
+        /// <summary>
+        /// Qurilma holati uch guruhga ketadi: qurilmaning o'zi, stansiyasi va merchanti.
+        /// Bir klient bir nechta guruhda bo'lsa xabarni bir necha marta olishi mumkin —
+        /// payload bir xil va handler idempotent (indikatorni chizadi), shuning uchun zararsiz.
+        /// </summary>
         public Task NotifyDeviceStatusAsync(Domain.Dtos.Device.DeviceStatusChangedDto e)
             => Task.WhenAll(
                 _hubContext.Clients.Group(SessionHub.DeviceGroup(e.DeviceId)).SendAsync("DeviceStatusChanged", e),
+                _hubContext.Clients.Group(SessionHub.StationGroup(e.StationId)).SendAsync("DeviceStatusChanged", e),
                 _hubContext.Clients.Group(SessionHub.MerchantGroup(e.MerchantId)).SendAsync("DeviceStatusChanged", e));
     }
 }

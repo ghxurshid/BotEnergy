@@ -138,6 +138,8 @@ The user/role domain is split into two independent groups, each with its own tab
 
 `AccessScope` (`Core/Domain/Auth/AccessScope.cs`, built from JWT claims `UserGroup`/`UserSubType`/`MerchantId`/`OrganizationId`): `IsManage` = full access, `IsMerchant`/`IsCorporate` = scoped, `CanAccessMerchant/Organization`. Scope-aware services (Station/Device/Product/Merchant/Organization/User/Role/Corporate) use it — `IsManage` means "no scope limit" (NOT old `IsPlatform`). Sessions/payments FK to `customer_users` only.
 
+Scope is built from claims in ONE place for every API: `User.GetScope()` in `Infrastructure/CommonConfiguration/Extensions/ClaimsPrincipalExtensions.cs` (namespace `CommonConfiguration.Extensions`). Don't re-add a per-API copy — this is a security surface, and a fix in one copy would not reach the others. It takes `ClaimsPrincipal?` (SignalR `Context.User` is nullable) and never throws on a missing/garbled claim: the scope simply comes out empty, so `IsManage`/`CanAccess*` return false.
+
 Refresh tokens are namespaced by group prefix in the token value: `c:` (customer) / `p:` (platform), so each auth service only accepts its own.
 
 ### Two-layer service split inside a session
@@ -176,9 +178,12 @@ Envelope security: every device message is `{id, type, timestamp, payload, hmac}
 
 All pieces — REST controllers, MQTT transport+pipeline, handlers, ProcessService, SignalR hub — live in the SessionApi process.
 
-SignalR hub path: `/hubs/session`. Two group schemes:
+SignalR hub path: `/hubs/session`. Group schemes:
 - `sessionToken` — tablet+phone watching same session.
-- `user:{userId}` — auto-joined in `SessionHub.OnConnectedAsync` from JWT, used by `NotifyUserAsync` for cross-device pushes that don't depend on having a session token.
+- `user:{userId}` — auto-joined in `SessionHub.OnConnectedAsync` from JWT, used by `NotifyUserAsync` for cross-device pushes that don't depend on having a session token. Customer-only: platform users are deliberately NOT added (ids collide across the two user tables).
+- `device:{deviceId}` / `station:{stationId}` / `merchant:{merchantId}` — qurilma online/offline watcher'lari. Bitta qurilmani kim kuzatsa (mijoz ilovasi, inkassator, admin) hammasi bitta guruhda; `DeviceStatusService` edge-triggered event chiqaradi, `ISessionNotifier.NotifyDeviceStatusAsync` uchala guruhga yuboradi. Klient `SubscribeDevices(long[])` bilan butun ro'yxatga bitta chaqiruvda obuna bo'ladi va darhol `DeviceStatusSnapshot` oladi; keyingi o'zgarishlar `DeviceStatusChanged` bilan keladi. Obuna ulanishga bog'langan — reconnect'da klient qayta obuna bo'lishi shart.
+
+Hub REST'dan farqli — ikkala audience'ni ham qabul qiladi: default `Bearer` (Customer) + qo'shimcha `JwtSchemes.Platform` sxemasi (`AddJwtBearerScheme`), chunki admin/inkassator ilovalari ham qurilma statusini kuzatadi. SessionApi REST controllerlari customer-only bo'lib qoladi.
 
 ### Soft delete + auto-timestamps
 

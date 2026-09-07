@@ -1428,18 +1428,74 @@ Payload: { "session_token": "...", "process_id": 12, "total_given": 100.0, "type
 3. Balans yechiladi
 4. SignalR: `SessionCompleted`
 
-#### SignalR real-time control (SessionHub)
+#### SignalR real-time (SessionHub — `/hubs/session`)
 
-Foydalanuvchi sessiya davomida qo'shimcha buyruqlar yuborishi mumkin:
+Hub faqat **server → klient** push uchun. Holat o'zgartiruvchi buyruq hub'da yo'q —
+start/stop/pause REST orqali ketadi; hub'da faqat guruhlarga obuna bo'lish bor.
+
+**Autentifikatsiya:** SessionApi REST sirti Customer-audience'li, lekin hub qo'shimcha
+`PlatformBearer` sxemasini ham qabul qiladi — admin paneli va inkassator ilovasi
+(Platform tokeni) qurilma holatini kuzata olishi uchun:
+`[Authorize(AuthenticationSchemes = "Bearer,PlatformBearer")]`.
+Gateway ortida hub PREFIKSSIZ marshrutda: `{gateway}/hubs/session`.
+
+**Guruhlar**
+
+| Guruh | Kim qo'shiladi | Nima keladi |
+|---|---|---|
+| `{sessionToken}` | `JoinSession(token)` — planshet + telefon | sessiya/process eventlari |
+| `user:{userId}` | ulanishda avtomatik (faqat Customer) | sessiyaga bog'liq bo'lmagan push |
+| `device:{deviceId}` | `SubscribeDevices([id...])` | shu qurilma online/offline |
+| `station:{stationId}` | `SubscribeStation(id)` | stansiyaning barcha qurilmalari |
+| `merchant:{merchantId}` | `SubscribeMerchant(id)` — faqat Platform | merchant qurilmalari ro'yxati |
+
+**Qurilma holatini kuzatish (yashil/qizil indikator)**
+
+Har qurilma uchun serverda BITTA guruh bor. Uni kim kuzatsa — mijoz ilovasi, inkassator
+ilovasi, admin paneli — hammasi shu guruhda; holat o'zgarganda server bitta xabar
+yuboradi va barcha watcher'lar eshitadi. Poll qilish shart emas.
 
 ```javascript
-// SignalR connection
-connection.invoke("JoinSession", sessionToken);
-connection.invoke("PauseSession", deviceSerialNumber);  // → MQTT pause
-connection.invoke("ResumeSession", deviceSerialNumber); // → MQTT resume
-connection.invoke("StopSession", deviceSerialNumber);   // → MQTT stop
-connection.invoke("LeaveSession", sessionToken);
+// 1) Ekrandagi butun ro'yxatga BITTA chaqiruvda obuna (maks. 200 ta id)
+await hub.invoke("SubscribeDevices", [12, 13, 14]);
+
+// 2) Obuna paytidagi joriy holat — ro'yxat darhol to'g'ri chiziladi
+hub.on("DeviceStatusSnapshot", list => list.forEach(applyStatus));
+
+// 3) Keyin faqat O'ZGARISH keladi (edge-triggered, storm yo'q)
+hub.on("DeviceStatusChanged", applyStatus);
+
+// 4) Uzilib qayta ulanganda 1-qadam takrorlanadi — obuna ulanishga bog'langan
+hub.onreconnected(() => hub.invoke("SubscribeDevices", visibleIds));
+
+hub.invoke("UnsubscribeDevices", [12]);        // ekrandan chiqqanda
+hub.invoke("SubscribeStation", 4);             // stansiya ekrani (kelajakdagi qurilmalar ham)
 ```
+
+`DeviceStatusChanged` va `DeviceStatusSnapshot` elementi bir xil shaklda — klientda
+bitta handler yetadi:
+
+```json
+{
+  "deviceId": 12, "serial": "DEV-001", "stationId": 4, "merchantId": 2,
+  "status": "Online", "isOnline": true,
+  "lastSeenAt": "2026-08-21T14:02:11", "sessionId": null,
+  "timestamp": "2026-08-21T14:02:11"
+}
+```
+
+`status`: `Online` | `Offline` | `Lost` (`Lost` — aktiv sessiya davomida uzilgan).
+
+**Ruxsat doirasi (scope):** `Manage` — hamma qurilma; Platform/`Merchant` — faqat o'z
+merchanti (ruxsatsiz id'lar jimgina tashlab ketiladi, `SubscribeStation`/`SubscribeMerchant`
+esa `HubException` beradi); Customer — qurilma va stansiya bo'yicha obuna bo'la oladi
+(kolonka ishlayaptimi — mijoz uchun operatsion ma'lumot), merchant bo'yicha — yo'q.
+
+**Holat qayerdan keladi:** har inbound MQTT xabarida `MarkSeenAsync` `LastSeenAt` ni
+yangilaydi va offline→online o'tishida event chiqaradi; teskari tomonini `IdleSessionCleanerService`
+(30 s) 90 soniyalik jimlik chegarasi bo'yicha aniqlaydi. Snapshot'dagi `isOnline` DB
+bayrog'idan emas, `LastSeenAt` bilan birga hisoblanadi — fon servisi hali ishlamagan
+bo'lishi mumkin.
 
 #### Sessiya timeout (Avtomatik)
 

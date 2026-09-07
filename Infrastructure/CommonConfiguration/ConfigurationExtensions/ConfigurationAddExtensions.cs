@@ -156,50 +156,97 @@ namespace CommonConfiguration.ConfigurationExtensions
                 ? acceptedAudiences
                 : Domain.Auth.JwtAudiences.All;
 
-            // Issuer tekshiruvi: Jwt:ValidateIssuer true bo'lsa Jwt:Issuer majburiy.
-            // Boshqa tizim bir xil secret bilan token yasab yuborishining oldini oladi.
+            ReadIssuerSettings(config);   // fail-fast: konfiguratsiya xatosi ishga tushishda bilinsin
+
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options => ConfigureJwtBearer(options, config, audiences, signalRHubPath));
+
+            return services;
+        }
+
+        /// <summary>
+        /// Qo'shimcha nomlangan JWT sxemasi — default sxema qabul qilmaydigan audience uchun.
+        /// Faqat ayrim endpointlarda yoqiladi:
+        /// <c>[Authorize(AuthenticationSchemes = "Bearer,PlatformBearer")]</c>.
+        ///
+        /// Ishlatilishi: SessionApi REST sirti customer-only bo'lib qoladi, lekin SignalR
+        /// hub'i platforma tokenini ham qabul qiladi (admin/inkassator ilovalari qurilma
+        /// online/offline holatini kuzatadi).
+        /// </summary>
+        public static IServiceCollection AddJwtBearerScheme(
+            this IServiceCollection services,
+            IConfiguration config,
+            string schemeName,
+            string[] audiences,
+            string? signalRHubPath = null)
+        {
+            ReadIssuerSettings(config);
+
+            services.AddAuthentication()
+                .AddJwtBearer(schemeName, options => ConfigureJwtBearer(options, config, audiences, signalRHubPath));
+
+            return services;
+        }
+
+        /// <summary>
+        /// JWT Bearer optionslarining yagona qurilish nuqtasi — default va qo'shimcha
+        /// sxemalar bir xil secret/issuer/clock-skew qoidalarida ishlashi uchun.
+        /// </summary>
+        private static void ConfigureJwtBearer(
+            JwtBearerOptions options,
+            IConfiguration config,
+            string[] audiences,
+            string? signalRHubPath)
+        {
+            var (validateIssuer, issuer) = ReadIssuerSettings(config);
+            var clockSkewSeconds = config.GetValue("Jwt:ClockSkewSeconds", 30);
+
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = validateIssuer,
+                ValidIssuer = issuer,
+                ValidateAudience = true,
+                ValidAudiences = audiences,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                // Default 5 daqiqa juda keng — muddati tugagan token shuncha vaqt qabul qilinadi.
+                ClockSkew = TimeSpan.FromSeconds(clockSkewSeconds),
+                IssuerSigningKey = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(GetJwtSecret(config)))
+            };
+
+            if (signalRHubPath is null)
+                return;
+
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    var path = context.HttpContext.Request.Path;
+                    if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments(signalRHubPath))
+                        context.Token = accessToken;
+                    return Task.CompletedTask;
+                }
+            };
+        }
+
+        /// <summary>
+        /// Issuer tekshiruvi: <c>Jwt:ValidateIssuer</c> true bo'lsa <c>Jwt:Issuer</c> majburiy.
+        /// Boshqa tizim bir xil secret bilan token yasab yuborishining oldini oladi.
+        /// Ro'yxatdan o'tkazishda ham chaqiriladi — noto'g'ri konfiguratsiya birinchi so'rovda
+        /// emas, ishga tushishda bilinsin.
+        /// </summary>
+        private static (bool ValidateIssuer, string? Issuer) ReadIssuerSettings(IConfiguration config)
+        {
             var validateIssuer = config.GetValue("Jwt:ValidateIssuer", false);
             var issuer = config["Jwt:Issuer"];
+
             if (validateIssuer && string.IsNullOrWhiteSpace(issuer))
                 throw new InvalidOperationException(
                     "Jwt:ValidateIssuer true, lekin Jwt:Issuer berilmagan. Konfiguratsiyaga Jwt:Issuer qo'shing.");
 
-            var clockSkewSeconds = config.GetValue("Jwt:ClockSkewSeconds", 30);
-
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
-                {
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = validateIssuer,
-                        ValidIssuer = issuer,
-                        ValidateAudience = true,
-                        ValidAudiences = audiences,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        // Default 5 daqiqa juda keng — muddati tugagan token shuncha vaqt qabul qilinadi.
-                        ClockSkew = TimeSpan.FromSeconds(clockSkewSeconds),
-                        IssuerSigningKey = new SymmetricSecurityKey(
-                            Encoding.UTF8.GetBytes(GetJwtSecret(config)))
-                    };
-
-                    if (signalRHubPath is not null)
-                    {
-                        options.Events = new JwtBearerEvents
-                        {
-                            OnMessageReceived = context =>
-                            {
-                                var accessToken = context.Request.Query["access_token"];
-                                var path = context.HttpContext.Request.Path;
-                                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments(signalRHubPath))
-                                    context.Token = accessToken;
-                                return Task.CompletedTask;
-                            }
-                        };
-                    }
-                });
-
-            return services;
+            return (validateIssuer, issuer);
         }
 
         /// <summary>

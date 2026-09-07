@@ -45,6 +45,15 @@ namespace Domain.Repositories
         Task<List<DeviceStatusInfo>> GetStatusInfoByMerchantAsync(long merchantId);
 
         /// <summary>
+        /// Bir nechta qurilma holati bitta so'rovda — watcher (ilova ro'yxati) obuna
+        /// bo'lganda snapshot yuborish uchun. Topilmaganlari qaytmaydi.
+        /// </summary>
+        Task<List<DeviceStatusInfo>> GetStatusInfoByIdsAsync(IReadOnlyCollection<long> deviceIds);
+
+        /// <summary>Stansiyaning barcha aktiv qurilmalari holati (stansiya ekrani uchun).</summary>
+        Task<List<DeviceStatusInfo>> GetStatusInfoByStationAsync(long stationId);
+
+        /// <summary>
         /// Naqd sessiya muvaffaqiyatli yakunlanganda qurilma box qoldig'ini oshiradi.
         /// <c>FOR UPDATE</c> lock + relative UPDATE — parallel sessiyalar bir-birini bosmaydi.
         /// </summary>

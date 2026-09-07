@@ -82,6 +82,16 @@ builder.Services.AddMqttPipeline(typeof(Program).Assembly);
 
 builder.Services.AddJwtAuthentication(builder.Configuration, signalRHubPath: "/hubs", acceptedAudiences: Domain.Auth.JwtAudiences.Customer);
 
+// REST sirti customer-only bo'lib qoladi, lekin SignalR hub'i platforma tokenini ham qabul
+// qiladi: admin paneli va inkassator ilovasi qurilmalar online/offline holatini shu yerdan
+// kuzatadi (device:/station:/merchant: guruhlari). Faqat SessionHub'da yoqilgan —
+// [Authorize(AuthenticationSchemes = "Bearer,PlatformBearer")].
+builder.Services.AddJwtBearerScheme(
+    builder.Configuration,
+    Domain.Auth.JwtSchemes.Platform,
+    new[] { Domain.Auth.JwtAudiences.Platform },
+    signalRHubPath: "/hubs");
+
 builder.Services.AddSimulatorCors(builder.Configuration);
 builder.Services.AddProxyForwardedHeaders();
 builder.Services.AddBotEnergyObservability(builder.Configuration, "SessionApi");
