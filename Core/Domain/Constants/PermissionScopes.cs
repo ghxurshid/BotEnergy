@@ -70,6 +70,11 @@ namespace Domain.Constants
 
             Permissions.PaymentHoldCreate, Permissions.PaymentHoldRead,
             Permissions.PaymentHoldCancel,
+
+            // Saqlangan kartalar — Subscribe usulida to'lov shular bilan qilinadi.
+            Permissions.PaymentCardAdd, Permissions.PaymentCardVerify,
+            Permissions.PaymentCardList, Permissions.PaymentCardSetDefault,
+            Permissions.PaymentCardDelete,
         };
 
         /// <summary>
