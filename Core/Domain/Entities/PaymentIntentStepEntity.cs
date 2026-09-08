@@ -4,14 +4,14 @@ using Domain.Enums;
 namespace Domain.Entities
 {
     /// <summary>
-    /// Hold invoice audit trail qadami — append-only, hech qachon UPDATE qilinmaydi.
+    /// Payment intent audit trail qadami — append-only, hech qachon UPDATE qilinmaydi.
     /// Merchant/Device/Session/User maydonlari ataylab denormalizatsiya qilingan —
     /// audit so'rovlari join'siz filtrlanadi (spec talabi).
     /// </summary>
-    public class HoldInvoiceStepEntity : Entity
+    public class PaymentIntentStepEntity : Entity
     {
-        public long HoldInvoiceId { get; set; }
-        public HoldInvoiceEntity? HoldInvoice { get; set; }
+        public long PaymentIntentId { get; set; }
+        public PaymentIntentEntity? PaymentIntent { get; set; }
 
         // Denormalized audit bog'lamlari
         public long PaymentSessionId { get; set; }
@@ -20,7 +20,7 @@ namespace Domain.Entities
         public long DeviceId { get; set; }
         public long UserId { get; set; }
 
-        public HoldInvoiceStepType StepType { get; set; }
+        public PaymentIntentStepType StepType { get; set; }
         public PaymentStepStatus Status { get; set; } = PaymentStepStatus.Info;
 
         /// <summary>Provider'ga yuborilgan request payload (JSON). Auth header'larsiz!</summary>

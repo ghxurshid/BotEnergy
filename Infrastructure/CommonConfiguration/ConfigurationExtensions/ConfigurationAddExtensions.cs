@@ -7,6 +7,7 @@ using CommonConfiguration.Redis;
 using CommonConfiguration.Reporting;
 using Domain.Enums;
 using Domain.Interfaces;
+using Domain.Payments;
 using Domain.Interfaces.Bank;
 using Domain.Interfaces.Payme;
 using Domain.Options;
@@ -420,9 +421,11 @@ namespace CommonConfiguration.ConfigurationExtensions
 
             // Hold invoice repo'lari — faqat DbContext'ga bog'liq, AdminApi ham ishlatadi.
             services.AddScoped<IPaymentSessionRepository, PaymentSessionRepository>();
-            services.AddScoped<IHoldInvoiceRepository, HoldInvoiceRepository>();
+            services.AddScoped<IPaymentIntentRepository, PaymentIntentRepository>();
+            // Saqlangan karta tokenlari — faqat DbContext'ga bog'liq.
+            services.AddScoped<ICustomerCardRepository, CustomerCardRepository>();
             // Operator hold boshqaruvi — Payme'ni chaqirmaydi, faqat repo'lar (AdminApi'da ishlatiladi).
-            services.AddScoped<IHoldInvoiceAdminService, HoldInvoiceAdminService>();
+            services.AddScoped<IPaymentIntentAdminService, PaymentIntentAdminService>();
 
             // Naqd → karta va inkassatsiya repo'lari — faqat DbContext'ga bog'liq.
             // Servis qatlami (CashTopUpService / IncassationService) alohida extension'larda:
@@ -606,26 +609,41 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddHttpClient<IPaymeClient, PaymeClient>();
             services.AddScoped<IPaymentService, PaymentService>();
             services.AddScoped<IPaymeCredentialResolver, PaymeCredentialResolver>();
+            // Saqlangan kartalar — IPaymeClient'ga bog'liq, shuning uchun shu extension ichida.
+            services.AddScoped<ICustomerCardService, Application.Payments.CustomerCardService>();
 
             return services;
         }
 
         /// <summary>
-        /// Hold invoice (Payme pre-authorization) oqimi — FAQAT SessionApi.
-        /// Servislar ISessionNotifier/IDeviceCommandPublisher'ga bog'liq bo'lgani uchun
+        /// Sessiya to'lov oqimi (strategiyalar + watcher) — FAQAT SessionApi.
+        /// Strategiyalar ISessionNotifier/IDeviceCommandPublisher'ga bog'liq bo'lgani uchun
         /// boshqa API'larga qo'shilsa ValidateOnBuild yiqiladi.
         /// <see cref="AddPaymeClient"/> dan keyin chaqirilishi kerak.
         /// </summary>
-        public static IServiceCollection RegisterHoldInvoiceServices(this IServiceCollection services, IConfiguration config)
+        public static IServiceCollection RegisterSessionPaymentServices(this IServiceCollection services, IConfiguration config)
         {
-            services.Configure<Domain.Options.HoldInvoiceOptions>(config.GetSection("HoldInvoices"));
+            services.Configure<Domain.Options.PaymentOptions>(config.GetSection("Payments"));
 
-            services.AddScoped<IPaymentSessionService, PaymentSessionService>();
-            services.AddScoped<IHoldInvoiceService, HoldInvoiceService>();
-            services.AddScoped<IHoldSettlementService, HoldSettlementService>();
+            // Strategiyalar uchun umumiy bog'liqliklar to'plami.
+            services.AddScoped<Application.Payments.PaymentStrategyDependencies>();
+
+            // ── To'lov strategiyalari ───────────────────────────────
+            // Yangi usul qo'shish = shu yerga bitta AddScoped<ISessionPaymentStrategy, X>() qatori.
+            // Qaysi biri ishlashini merchant o'z sozlamasida runtime'da tanlaydi.
+            services.AddScoped<ISessionPaymentStrategy, Application.Payments.SubscribePaymentStrategy>();
+            services.AddScoped<ISessionPaymentStrategy, Application.Payments.InvoicePaymentStrategy>();
+            services.AddScoped<ISessionPaymentStrategy, Application.Payments.MerchantPaymentStrategy>();
+
+            // Payme Merchant API callback'i (provider bizga qo'ng'iroq qiladi).
+            services.AddScoped<IPaymeMerchantGateway, Application.Payments.PaymeMerchantGateway>();
+
+            services.AddScoped<ISessionPaymentStrategyResolver, Application.Payments.SessionPaymentStrategyResolver>();
+            services.AddScoped<ISessionPaymentService, Application.Payments.SessionPaymentService>();
+            services.AddScoped<IPaymentSessionService, Application.Payments.PaymentSessionService>();
             services.AddScoped<IProcessSettlementService, ProcessSettlementService>();
 
-            services.AddHostedService<Application.BackgroundServices.HoldInvoiceWatcherService>();
+            services.AddHostedService<Application.BackgroundServices.PaymentIntentWatcherService>();
 
             return services;
         }

@@ -18,7 +18,7 @@ namespace Domain.Repositories
         Task<bool> TryTransitionAsync(long id, PaymentSessionStatus to, params PaymentSessionStatus[] from);
 
         /// <summary>Hold balansini atomik oshiradi (invoice Hold'ga o'tganda).</summary>
-        Task TryAddHoldBalanceAsync(long id, long deltaTiyin);
+        Task TryAddFundedBalanceAsync(long id, long deltaTiyin);
 
         /// <summary>
         /// Consumed'ni atomik oshiradi — faqat yetarli available (hold - consumed) bo'lsa.
@@ -28,6 +28,13 @@ namespace Domain.Repositories
 
         /// <summary>Settling holatidagi payment session'lar (watcher finalize uchun).</summary>
         Task<List<PaymentSessionEntity>> GetSettlingAsync(int take);
+
+        /// <summary>
+        /// UpdatedDate'ni yangilaydi (entity tracking'siz). Watcher navbati UpdatedDate bo'yicha
+        /// saralanadi — operator hal qilishini kutayotgan sessiya navbat boshini band qilib,
+        /// yangilarini yakunlanmay qoldirmasligi uchun ishlatiladi.
+        /// </summary>
+        Task TouchAsync(long id);
 
         Task UpdateAsync(PaymentSessionEntity paymentSession);
     }

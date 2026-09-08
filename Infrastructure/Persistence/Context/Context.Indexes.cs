@@ -61,8 +61,9 @@ namespace Persistence.Context
             ConfigurePaymentTransaction(modelBuilder);
             ConfigurePaymentTransactionStep(modelBuilder);
             ConfigurePaymentSession(modelBuilder);
-            ConfigureHoldInvoice(modelBuilder);
-            ConfigureHoldInvoiceStep(modelBuilder);
+            ConfigureCustomerCard(modelBuilder);
+            ConfigurePaymentIntent(modelBuilder);
+            ConfigurePaymentIntentStep(modelBuilder);
             ConfigureCashSession(modelBuilder);
             ConfigureCashSessionBill(modelBuilder);
             ConfigureCashCollection(modelBuilder);
@@ -581,6 +582,19 @@ namespace Persistence.Context
                 b.Property(x => x.PaymeKey).HasColumnName("payme_key").HasMaxLength(128);
                 b.Property(x => x.PaymeEnabled).HasColumnName("payme_enabled").HasDefaultValue(false);
 
+                // Merchant API (provider bizga callback qiladi) — kassadan alohida credential.
+                b.Property(x => x.PaymeMerchantId).HasColumnName("payme_merchant_id").HasMaxLength(64);
+                b.Property(x => x.PaymeMerchantKey).HasColumnName("payme_merchant_key").HasMaxLength(128);
+
+                // To'lov strategiyasi — merchant runtime'da almashtiradi.
+                b.Property(x => x.DefaultPaymentMethod).HasColumnName("default_payment_method")
+                    .HasConversion<int>().HasDefaultValue(Domain.Enums.PaymentMethod.Subscribe)
+                    .HasSentinel((Domain.Enums.PaymentMethod)(-1));
+                b.Property(x => x.EnabledPaymentMethods).HasColumnName("enabled_payment_methods")
+                    .HasConversion<int>().HasDefaultValue(Domain.Enums.PaymentMethodFlags.Subscribe)
+                    .HasSentinel((Domain.Enums.PaymentMethodFlags)(-1));
+                b.Property(x => x.RefundUnusedFunds).HasColumnName("refund_unused_funds").HasDefaultValue(true);
+
                 b.Property(x => x.CreatedDate).HasColumnName("created_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.UpdatedDate).HasColumnName("updated_date").HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
@@ -700,9 +714,13 @@ namespace Persistence.Context
                 b.Property(x => x.DeviceId).HasColumnName("device_id").IsRequired();
                 b.Property(x => x.MerchantId).HasColumnName("merchant_id").IsRequired();
 
+                b.Property(x => x.Method).HasColumnName("method")
+                    .HasConversion<int>().HasDefaultValue(Domain.Enums.PaymentMethod.Subscribe)
+                    .HasSentinel((Domain.Enums.PaymentMethod)(-1));
+
                 b.Property(x => x.Status).HasColumnName("status").HasConversion<int>().IsRequired();
 
-                b.Property(x => x.HoldBalanceTiyin).HasColumnName("hold_balance_tiyin").HasDefaultValue(0L);
+                b.Property(x => x.FundedTiyin).HasColumnName("funded_tiyin").HasDefaultValue(0L);
                 b.Property(x => x.ConsumedTiyin).HasColumnName("consumed_tiyin").HasDefaultValue(0L);
 
                 b.Property(x => x.CorrelationId).HasColumnName("correlation_id").IsRequired();
@@ -732,20 +750,76 @@ namespace Persistence.Context
                 b.HasIndex(x => x.SessionId).IsUnique();
                 b.HasIndex(x => x.Status);
                 b.HasIndex(x => x.MerchantId);
+                // Watcher FinalizeSettledAsync: Settling sessiyalarni usul bo'yicha ajratadi.
+                b.HasIndex(x => new { x.Status, x.Method });
                 b.HasIndex(x => x.CorrelationId);
             });
         }
 
-        private static void ConfigureHoldInvoice(ModelBuilder modelBuilder)
+        private static void ConfigureCustomerCard(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<HoldInvoiceEntity>(b =>
+            modelBuilder.Entity<CustomerCardEntity>(b =>
             {
-                b.ToTable("hold_invoices", AppSchema);
+                b.ToTable("customer_cards", AppSchema);
+
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+
+                b.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
+                b.Property(x => x.MerchantId).HasColumnName("merchant_id").IsRequired();
+                b.Property(x => x.Provider).HasColumnName("provider").HasConversion<int>().IsRequired();
+
+                b.Property(x => x.Token).HasColumnName("token").HasMaxLength(512).IsRequired();
+                b.Property(x => x.MaskedNumber).HasColumnName("masked_number").HasMaxLength(32).IsRequired();
+                b.Property(x => x.Expire).HasColumnName("expire").HasMaxLength(8);
+                b.Property(x => x.CardType).HasColumnName("card_type").HasMaxLength(32);
+
+                b.Property(x => x.IsVerified).HasColumnName("is_verified").HasDefaultValue(false);
+                b.Property(x => x.VerifiedAt).HasColumnName("verified_at").HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.IsDefault).HasColumnName("is_default").HasDefaultValue(false);
+                b.Property(x => x.LastUsedAt).HasColumnName("last_used_at").HasColumnType(TimestampWithoutTimeZone);
+
+                b.Property(x => x.CreatedDate).HasColumnName("created_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.UpdatedDate).HasColumnName("updated_date")
+                    .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
+                b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
+
+                b.HasOne(x => x.User)
+                    .WithMany()
+                    .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasOne(x => x.Merchant)
+                    .WithMany()
+                    .HasForeignKey(x => x.MerchantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Intent yaratishda (user, merchant) bo'yicha asosiy karta topiladi.
+                b.HasIndex(x => new { x.UserId, x.MerchantId, x.IsDefault });
+                // Bitta token bir marta (soft-delete'dan keyin qayta qo'shsa bo'ladi).
+                b.HasIndex(x => new { x.MerchantId, x.Token }).IsUnique().HasFilter(SoftDeleteUniqueFilter);
+            });
+        }
+
+        private static void ConfigurePaymentIntent(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<PaymentIntentEntity>(b =>
+            {
+                b.ToTable("payment_intents", AppSchema);
 
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
 
                 b.Property(x => x.PaymentSessionId).HasColumnName("payment_session_id").IsRequired();
+
+                b.Property(x => x.Method).HasColumnName("method")
+                    .HasConversion<int>().HasDefaultValue(Domain.Enums.PaymentMethod.Subscribe)
+                    .HasSentinel((Domain.Enums.PaymentMethod)(-1));
+                b.Property(x => x.Kind).HasColumnName("kind")
+                    .HasConversion<int>().HasDefaultValue(Domain.Enums.PaymentIntentKind.Hold)
+                    .HasSentinel((Domain.Enums.PaymentIntentKind)(-1));
+
                 b.Property(x => x.SequenceNo).HasColumnName("sequence_no").IsRequired();
 
                 b.Property(x => x.AmountTiyin).HasColumnName("amount_tiyin").IsRequired();
@@ -758,6 +832,17 @@ namespace Persistence.Context
                 b.Property(x => x.ProviderOrderId).HasColumnName("provider_order_id").HasMaxLength(64).IsRequired();
                 b.Property(x => x.ProviderState).HasColumnName("provider_state");
 
+                // Merchant API (Payme bizga callback qiladi) uchun tranzaksiya maydonlari.
+                b.Property(x => x.ProviderTransactionId).HasColumnName("provider_transaction_id").HasMaxLength(64);
+                b.Property(x => x.ProviderTransactionTime).HasColumnName("provider_transaction_time");
+                b.Property(x => x.ProviderCreatedAt).HasColumnName("provider_created_at").HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.ProviderPerformedAt).HasColumnName("provider_performed_at").HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.ProviderCancelledAt).HasColumnName("provider_cancelled_at").HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.ProviderCancelReason).HasColumnName("provider_cancel_reason");
+
+                b.Property(x => x.CustomerCardId).HasColumnName("customer_card_id");
+                b.Property(x => x.CheckoutUrl).HasColumnName("checkout_url").HasMaxLength(512);
+
                 b.Property(x => x.IdempotencyKey).HasColumnName("idempotency_key").HasMaxLength(128);
                 b.Property(x => x.CreatedByUserId).HasColumnName("created_by_user_id").IsRequired();
                 b.Property(x => x.FailureReason).HasColumnName("failure_reason");
@@ -767,7 +852,7 @@ namespace Persistence.Context
                 b.Property(x => x.LockedBy).HasColumnName("locked_by").HasMaxLength(128);
                 b.Property(x => x.LeaseUntil).HasColumnName("lease_until").HasColumnType(TimestampWithoutTimeZone);
 
-                b.Property(x => x.HoldAt).HasColumnName("hold_at").HasColumnType(TimestampWithoutTimeZone);
+                b.Property(x => x.FundedAt).HasColumnName("funded_at").HasColumnType(TimestampWithoutTimeZone);
                 b.Property(x => x.SettledAt).HasColumnName("settled_at").HasColumnType(TimestampWithoutTimeZone);
 
                 b.Property(x => x.RowVersion).HasColumnName("xmin")
@@ -782,30 +867,36 @@ namespace Persistence.Context
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
                 b.HasOne(x => x.PaymentSession)
-                    .WithMany(x => x.Invoices)
+                    .WithMany(x => x.Intents)
                     .HasForeignKey(x => x.PaymentSessionId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                b.HasOne(x => x.CustomerCard)
+                    .WithMany()
+                    .HasForeignKey(x => x.CustomerCardId)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 b.HasIndex(x => new { x.PaymentSessionId, x.SequenceNo }).IsUnique();
                 b.HasIndex(x => x.ProviderOrderId).IsUnique();
                 b.HasIndex(x => x.ProviderReceiptId);
-                // Watcher hot-path: navbatdagi invoice'larni topish.
-                b.HasIndex(x => new { x.Status, x.NextAttemptAt });
+                // Watcher hot-path: har strategiya o'z usulidagi navbatdagi intent'larni topadi.
+                b.HasIndex(x => new { x.Method, x.Status, x.NextAttemptAt });
+                b.HasIndex(x => x.ProviderTransactionId);
                 b.HasIndex(x => x.IdempotencyKey).IsUnique()
                     .HasFilter("idempotency_key IS NOT NULL");
             });
         }
 
-        private static void ConfigureHoldInvoiceStep(ModelBuilder modelBuilder)
+        private static void ConfigurePaymentIntentStep(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<HoldInvoiceStepEntity>(b =>
+            modelBuilder.Entity<PaymentIntentStepEntity>(b =>
             {
-                b.ToTable("hold_invoice_steps", AppSchema);
+                b.ToTable("payment_intent_steps", AppSchema);
 
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
 
-                b.Property(x => x.HoldInvoiceId).HasColumnName("hold_invoice_id").IsRequired();
+                b.Property(x => x.PaymentIntentId).HasColumnName("payment_intent_id").IsRequired();
                 b.Property(x => x.PaymentSessionId).HasColumnName("payment_session_id").IsRequired();
                 b.Property(x => x.SessionId).HasColumnName("session_id").IsRequired();
                 b.Property(x => x.MerchantId).HasColumnName("merchant_id").IsRequired();
@@ -829,12 +920,12 @@ namespace Persistence.Context
                     .HasColumnType(TimestampWithoutTimeZone).HasDefaultValueSql(LocalTimestampDefaultSql);
                 b.Property(x => x.IsDeleted).HasColumnName("is_deleted").IsRequired();
 
-                b.HasOne(x => x.HoldInvoice)
+                b.HasOne(x => x.PaymentIntent)
                     .WithMany(x => x.Steps)
-                    .HasForeignKey(x => x.HoldInvoiceId)
+                    .HasForeignKey(x => x.PaymentIntentId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                b.HasIndex(x => new { x.HoldInvoiceId, x.OccurredAt });
+                b.HasIndex(x => new { x.PaymentIntentId, x.OccurredAt });
                 b.HasIndex(x => x.CorrelationId);
                 b.HasIndex(x => new { x.MerchantId, x.OccurredAt });
             });

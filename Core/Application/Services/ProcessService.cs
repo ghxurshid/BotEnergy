@@ -5,6 +5,7 @@ using Domain.Enums;
 using Domain.Guards;
 using Domain.Helpers;
 using Domain.Interfaces;
+using Domain.Payments;
 using Domain.Repositories;
 using Microsoft.Extensions.Logging;
 
@@ -22,7 +23,7 @@ namespace Application.Services
         private readonly IDeviceCommandPublisher _commandPublisher;
         private readonly IDeviceLockService _deviceLock;
         private readonly IProcessSettlementService _settlement;
-        private readonly IHoldSettlementService _holdSettlement;
+        private readonly ISessionPaymentService _payments;
         private readonly ISessionNotifier _notifier;
         private readonly ITransactionRunner _tx;
         private readonly ILogger<ProcessService> _logger;
@@ -40,7 +41,7 @@ namespace Application.Services
             IDeviceCommandPublisher commandPublisher,
             IDeviceLockService deviceLock,
             IProcessSettlementService settlement,
-            IHoldSettlementService holdSettlement,
+            ISessionPaymentService payments,
             ISessionNotifier notifier,
             ITransactionRunner tx,
             ILogger<ProcessService> logger)
@@ -51,7 +52,7 @@ namespace Application.Services
             _commandPublisher = commandPublisher;
             _deviceLock = deviceLock;
             _settlement = settlement;
-            _holdSettlement = holdSettlement;
+            _payments = payments;
             _notifier = notifier;
             _tx = tx;
             _logger = logger;
@@ -62,10 +63,10 @@ namespace Application.Services
             var foundSession = await _sessionRepo.GetByIdAsync(dto.SessionId);
             var foundProduct = await _productRepo.GetByIdAsync(dto.ProductId);
 
-            // Funding FAQAT tasdiqlangan Hold balansidan. Internal balance biznes mantig'ida
-            // ishlatilmaydi (faqat entity + GET). "No hold = no fuel": tasdiqlangan Hold bo'lmasa
-            // jarayon boshlanmaydi — ichki balansga fallback yo'q.
-            long holdTiyin = 0;
+            // Funding FAQAT sessiya to'lov kontekstidan (qaysi strategiya ekani bu yerda
+            // ahamiyatsiz — ISessionPaymentService o'zi tanlaydi). Internal balance biznes
+            // mantig'ida ishlatilmaydi: "no funding = no fuel", fallback yo'q.
+            long availableTiyin = 0;
             decimal limit = 0;
 
             var stop = await StopFactorCheck.For(StopActions.ProcessStart)
@@ -91,12 +92,12 @@ namespace Application.Services
                 .StopIf(() => foundProduct!.DeviceId != foundSession!.DeviceId, StopFactors.Product.DeviceMismatch)
                 .StopIfAsync(async () =>
                 {
-                    holdTiyin = await _holdSettlement.GetAvailableHoldTiyinAsync(foundSession!.Id);
-                    return holdTiyin <= 0;
+                    availableTiyin = await _payments.GetAvailableTiyinAsync(foundSession!.Id);
+                    return availableTiyin <= 0;
                 }, StopFactors.Process.NoFunding)
                 .StopIf(() =>
                 {
-                    var maxAmount = foundProduct!.Price > 0 ? Money.ToUzs(holdTiyin) / foundProduct.Price : 0;
+                    var maxAmount = foundProduct!.Price > 0 ? Money.ToUzs(availableTiyin) / foundProduct.Price : 0;
                     limit = dto.RequestedAmount.HasValue
                         ? Math.Min(dto.RequestedAmount.Value, maxAmount)
                         : maxAmount;
@@ -125,8 +126,6 @@ namespace Application.Services
             var session = foundSession!;
             var product = foundProduct!;
             var device = session.Device!;
-            var fundingSource = ProcessFundingSource.HoldBalance;
-
             var process = new ProductProcessEntity
             {
                 SessionId = session.Id,
@@ -137,7 +136,7 @@ namespace Application.Services
                 RequestedAmount = limit,
                 Status = ProcessStatus.Started,
                 StartedAt = DateTime.Now,
-                FundingSource = fundingSource
+                FundingSource = ProcessFundingSource.SessionPayment
             };
 
             await _processRepo.CreateAsync(process);

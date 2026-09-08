@@ -66,6 +66,7 @@ In `CommonConfiguration/ConfigurationExtensions/ConfigurationAddExtensions.cs`:
 - `RegisterServices()` — shared by all APIs. Includes the split user/role layer: `IPlatformUserRepository`+`ICustomerUserRepository`, `IPlatformRoleRepository`+`ICustomerRoleRepository`, `IPermissionRepository`; services `IUserService`, `IUserAdminService` (platform), `ICustomerAdminService` (corporate), `IRoleService` (platform), `ICustomerRoleService`, plus Device/Product/Merchant/Organization/Billing.
 - `RegisterAuthServices(config)` — AuthApi: `IAuthService` (customer) + `IPlatformAuthService` + `ITokenService` + `IOtpService` (singleton) + `JwtSettings`/`OtpSettings` singletonlari.
 - `RegisterSessionServices()` — SessionApi-only (`ISessionService`, `IProcessService`, `IBootstrapService`, `IPushNotificationService`, `IdleSessionCleanerService` HostedService).
+- `RegisterSessionPaymentServices(config)` — SessionApi-only: to'lov strategiyalari (`ISessionPaymentStrategy` implementatsiyalari), `ISessionPaymentStrategyResolver`, `ISessionPaymentService`, `IPaymentSessionService`, `IProcessSettlementService` va `PaymentIntentWatcherService`. Strategiyalar `ISessionNotifier`/`IDeviceCommandPublisher`ga bog'liq — boshqa API'ga qo'shilsa `ValidateOnBuild` yiqiladi.
 - `RegisterDeviceServices()` — DeviceApi-only (legacy; DeviceApi no longer carries live traffic).
 - `AddRedisServices()` — Redis multiplexer + `IRefreshTokenStore` (resilient: Redis primary, in-memory fallback) + `IIdempotencyStore` + `IdempotencyFilter`.
 - `AddIpRateLimiting()` — IP-based fixed window limiter (AuthApi'da yoqilgan).
@@ -153,6 +154,84 @@ Sessions and processes are separate services with distinct responsibilities:
 
 `SessionService` keeps `LastActivityAt` as a sliding idle timeout (30 min). Background `IdleSessionCleanerService` invokes `CloseTimedOutSessionsAsync` and `CloseOfflineDeviceSessionsAsync`. Anything that mutates a session should also touch `LastActivityAt` (use `ISessionRepository.TouchAsync(sessionId)` for the heartbeat hot-path — it's a single SQL UPDATE without entity tracking).
 
+### Sessiya to'lovi — strategiya (usul almashtiriladi)
+
+To'lov usuli qattiq bog'lanmagan: sessiya va jarayon servislari faqat
+`ISessionPaymentService` fasadi bilan gaplashadi, konkret usulni bilmaydi.
+
+- **Kontraktlar** `Core/Domain/Payments/`: `ISessionPaymentStrategy` (bitta usulning to'liq
+  hayot davri), `ISessionPaymentService` (yagona kirish nuqtasi), `ISessionPaymentStrategyResolver`
+  (kim ishlashini tanlaydi), `PaymentStrategyProfile` (`PaymentMethod` + `PaymentIntentKind` +
+  `PaymentCapabilities` + `SettlementMode`), `ProviderCall`/`ProviderFunding`/`ProviderPoll`
+  (provider natijasining neytral shakli).
+- **Umumiy yadro** `Core/Application/Payments/PaymentStrategyBase.cs`: intent yozuvi, FIFO consume,
+  audit step'lar, lease/backoff bilan watcher tick'i, sessiya settlement'i, balans eventi.
+  Strategiya faqat 4 ta provider ilgagini yozadi: `RequestFundingAsync`, `PollFundingAsync`,
+  `CaptureAsync`, `RefundAsync` (+ ixtiyoriy `ValidateCreateAsync`, `ResolveSettlementModeAsync`).
+- **Usullar** (`PaymentMethod`), uchalasi ham yozilgan:
+  - `Subscribe` — `receipts.create(hold:true)` + saqlangan karta bo'lsa `receipts.pay(token)`
+    (mijoz ilovaga o'tmaydi), yopilishda `confirm_hold(consumed)`. **Hold faqat shu yerda.**
+  - `Invoice` — `receipts.create` + `receipts.send(phone)`, mijoz Payme ilovasida to'laydi;
+    pul darhol yechiladi, yopilishda ishlatilmagani `receipts.cancel` bilan qaytariladi.
+  - `Merchant` — checkout havolasi (`m=...;ac.order_id=...;a=...` base64), **chiquvchi chaqiruv yo'q**:
+    Payme bizga JSON-RPC qiladi (`PaymeMerchantGateway`), pul `PerformTransaction` da yechiladi.
+    Qaytarishni ham Payme boshlaydi → `PaymentCapabilities.Refund` YO'Q, `SettlementMode.None`.
+- **Hold vs Charge** (`PaymentIntentKind`): Hold — pul ushlanadi, yopilishda `confirm_hold(consumed)`;
+  Charge — pul darhol yechiladi, yopilishda ishlatilmagan qism qaytariladi
+  (`SettlementMode.RefundRemainderOnClose`, merchant `RefundUnusedFunds=false` qilsa — `None`).
+
+**Usulni kim tanlaydi (runtime):** merchant o'z sozlamasida —
+`POST /api/Merchant/SetPaymentMethods/{id}` (AdminApi, `MerchantAdmin.SetPaymentMethods`);
+merchant-scoped operator ham o'z merchantini o'zgartira oladi. Deploy/restart kerak emas.
+Zanjir: `PaymentSession.Method` (sessiya ochilganda QOTIRILADI) → mijoz so'ragan usul (merchant
+ruxsat etsa) → `Merchant.DefaultPaymentMethod` → `Payments:DefaultMethod` config.
+**Ochiq sessiya usuli o'zgarmaydi** — FIFO consume va hisob-kitob bir xil semantikada tugashi uchun.
+Credential'i to'liq bo'lmagan usulni yoqib bo'lmaydi (`PaymentMethodRequirements`).
+
+**Saqlangan kartalar** (`Subscribe`): `customer_cards` — token **merchant kassasiga bog'langan**,
+shuning uchun yozuv (user, merchant) juftligiga tegishli va barcha amallar `merchantId` bilan.
+Sirt: UserApi `/api/Card/{Add,Verify,ResendCode,My,SetDefault,Delete}`
+(`ICustomerCardService`, `AddPaymeClient` ichida ro'yxatga olinadi). PAN/CVV saqlanmaydi,
+token javoblarda qaytmaydi. Karta metodlari X-Auth sifatida **faqat kassa id**'sini oladi
+(kalitsiz) — `receipts.*` esa `{cashbox}:{key}`.
+
+**Merchant API callback'i:** SessionApi `POST /api/PaymeMerchant/Callback/{merchantId}`,
+`[AllowAnonymous]` + `Basic Paycom:<merchant_key>` (doimiy vaqtda solishtiriladi, kalit URL'dagi
+merchantniki). Gateway'da alohida `session-payme-merchant` route'i bor (`Order=-1`, auth
+policy'siz) — aks holda `/session/*` route'i 401 qaytarardi. Barcha metodlar idempotent va
+har doim HTTP 200 + JSON-RPC `result`/`error` qaytaradi. Balans faqat
+`ConfirmFundingFromProviderAsync`/`ReverseFundingFromProviderAsync` orqali o'zgaradi —
+polling oqimi bilan bir xil yo'l.
+
+**Balans invariantlari (buzilmasin):**
+- Sessiya balansi (`funded_tiyin`) intent **Funded** bo'lganda oshadi va **qaytarish maqsadi
+  qo'yilganda** (RefundPending) kamayadi — watcher refund'ni bajarganda EMAS. Sabab: aks holda
+  RefundPending oynasida pul hali "mavjud" ko'rinib, yangi jarayonga sarflanib ketardi.
+  Yagona nuqta — `PaymentStrategyBase.AssignRefundPendingAsync`.
+- Yakuniy yechish summasi `Math.Max(CaptureAmountTiyin, ConsumedTiyin)`: maqsad summa sessiya
+  yopilayotganda yozilgan, qurilmadan kelgan oxirgi consume esa keyinroq commit bo'lishi mumkin.
+- `Failed` intent operator aralashuvini kutadi va o'zi yechilmaydi. U qurilma sessiyasini
+  Settling'da abadiy ushlab turmasligi uchun `Payments:SettlingGraceMinutes` (default 15)
+  o'tgach sessiya yopiladi, to'lov konteksti esa Settling'da qoladi (operator ro'yxatida ko'rinadi).
+
+**Bilib qo'yish kerak bo'lgan cheklov:** Payme chekni **qisman qaytarmaydi**. Shuning uchun
+prepaid usullarda (Invoice/Merchant) qisman ishlatilgan intent qoldig'i mijozga qaytarilmaydi —
+u `SettlementTargetAssigned` step'ida yoziladi va admin ro'yxatida `unrefundedRemainderTiyin`
+sifatida ko'rinadi. Kafolatlangan qoldiq qaytarish kerak bo'lsa `Subscribe` (hold) tanlanadi.
+
+**Yangi usul qo'shish:** `PaymentStrategyBase` dan meros → `Profile` ni e'lon qilish → 4 ilgakni
+yozish → `RegisterSessionPaymentServices` ga bitta `AddScoped<ISessionPaymentStrategy, X>()`.
+Boshqa hech qayerda `if (method == ...)` yozilmaydi.
+
+Jadvallar: `payment_sessions` (usul + `funded_tiyin`/`consumed_tiyin`), `payment_intents`
+(har bir to'lov niyati, `method`+`kind` + Merchant API tranzaksiya maydonlari),
+`payment_intent_steps` (append-only audit), `customer_cards` (user+merchant tokenlari). Watcher — `PaymentIntentWatcherService`, ro'yxatga
+olingan har bir strategiya bo'ylab aylanadi va har biri faqat o'z usulidagi intent'larni
+`ClaimDueAsync(method, ...)` bilan claim qiladi.
+
+API sirti: `/api/SessionPayment/{CreateIntent,CancelIntent,BySession,Balance}` (SessionApi).
+Eski `/api/HoldInvoice/*` bir reliz alias bo'lib qoladi (`HoldInvoiceLegacyController`).
+
 ### Message flow (mobile ↔ device) — single broker (MQTT), no RabbitMQ
 
 RabbitMQ has been removed — commands publish straight to MQTT (`MqttDeviceCommandPublisher`), inbound MQTT messages run through an in-process middleware pipeline (`WebApi/SessionApi/Mqtt/`).
@@ -210,7 +289,9 @@ Currently applied to `Session.Create` and `Process.Start`. Apply to other state-
 
 ## Things to avoid
 
-- **Don't put new shared services into `RegisterServices` if they need `ISessionService`/`IProcessService`** — those are SessionApi-only and `ValidateOnBuild` will fail other APIs.
+- **Don't put new shared services into `RegisterServices` if they need `ISessionService`/`IProcessService`/`ISessionPaymentService`** — those are SessionApi-only and `ValidateOnBuild` will fail other APIs.
+- **To'lov usuliga qarab `if`/`switch` yozmang** — yangi xatti-harakat `ISessionPaymentStrategy` implementatsiyasiga yoki `PaymentStrategyBase` ilgagiga tushadi. Sessiya/jarayon servislari usulni bilmasligi kerak.
+- **Hold faqat `Subscribe` usulida** — `PaymentCapabilities.Hold` bilan tekshiring, usul nomini qattiq yozmang.
 - **Don't write `appsettings.json` for new config** — add to `Infrastructure/CommonConfiguration/ConfigurationFile/Configuration.{env}.json`.
 - **Don't switch `DateTime.Now` → `DateTime.UtcNow`** in isolation — the whole stack is local-time and PostgreSQL columns are `timestamp without time zone`. User has explicitly declined this change.
 - **Don't call `DELETE FROM`** — soft delete only (`IsDeleted = true`). Soft delete kaskad qilmaydi: o'chirish amaliga bog'liq yozuvlar uchun `IUsageProbeRepository` orqali stop-factor qo'shing.

@@ -20,6 +20,8 @@ builder.Services.AddSwaggerWithJwtAuth(
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
+// Saqlangan kartalar (Subscribe usuli) — IPaymeClient + ICustomerCardService shu yerdan keladi.
+builder.Services.AddPaymeClient(builder.Configuration);
 
 builder.Services.AddJwtAuthentication(builder.Configuration, acceptedAudiences: Domain.Auth.JwtAudiences.Customer);
 

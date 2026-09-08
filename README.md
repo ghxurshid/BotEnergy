@@ -1636,16 +1636,130 @@ Qurilma quyidagi topic larga subscribe bo'ladi:
 
 ---
 
-## 6. PaymentApi — To'lov tizimi
+## 6. Sessiya to'lovi — strategiya (SessionApi)
 
-**Port:** `5005` | **Full Base URL:** `http://localhost:5005/api/Payment`
+**Port:** `5007` | **Base URL:** `http://localhost:5007/api/SessionPayment`
 
-> **Status: STUB** — hozircha placeholder endpoint lar. Payme integratsiyasi rejalashtirilgan.
+Sessiya uchun to'lov usuli **almashtiriladigan strategiya**. Mijoz sirti usuldan qat'i nazar
+bir xil — qaysi strategiya ishlashini **merchant o'z sozlamasida runtime'da** tanlaydi.
+
+### Usullar
+
+| Usul (`PaymentMethod`) | Pul qachon bizniki | Sessiya yopilganda | Hold |
+|---|---|---|---|
+| `Subscribe` (2) | Saqlangan karta bilan hold: pul mijoz kartasida **bloklanadi** | `confirm_hold(ishlatilgan)` — qolgani avtomatik bo'shaydi | ✅ |
+| `Invoice` (1) | Chek mijozga yuboriladi, u Payme ilovasida to'laydi — pul **yechiladi** | Ishlatilmagan qism qaytariladi (merchant sozlamasiga qarab) | ❌ |
+| `Merchant` (0) | Checkout havola/QR, Payme **bizga callback** qiladi — pul **yechiladi** | Ishlatilmagan qism qaytariladi (merchant sozlamasiga qarab) | ❌ |
+
+> **Hold faqat `Subscribe`da.** Boshqa usullarda pul darhol yechiladi, shuning uchun yakunda
+> capture emas, **qoldiqni qaytarish** ishlaydi.
+
+### Usulni almashtirish (merchant, runtime)
+
+```http
+POST /api/Merchant/SetPaymentMethods/{merchantId}     # AdminApi (5001)
+Authorization: Bearer <platform-token>
+
+{
+  "defaultMethod": 2,               // Subscribe
+  "enabledMethods": [1, 2],         // Invoice + Subscribe
+  "refundUnusedFunds": true
+}
+```
+
+- **Permission:** `MerchantAdmin.SetPaymentMethods` (merchant-scoped operator o'z merchantini o'zgartira oladi).
+- Deploy/restart **kerak emas** — keyingi sessiyalar yangi usul bilan ochiladi.
+- **Ochiq sessiya usuli o'zgarmaydi**: usul `payment_sessions.method` da qotirilgan, sessiya
+  o'zi ochilgan usul bilan yakunlanadi (FIFO consume va hisob-kitob bir xil semantikada tugashi uchun).
+- Credential'i to'liq bo'lmagan usulni yoqib bo'lmaydi → `409 MERCHANT_PAYMENT_METHOD_NOT_CONFIGURED`.
+  `Subscribe`/`Invoice` → Payme kassasi (`SetPaymeCredentials`), `Merchant` → Merchant API
+  (`SetPaymeMerchantCredentials`).
+
+### Saqlangan kartalar (Subscribe usuli) — UserApi
+
+Token **merchant kassasiga bog'langan**: bir karta har bir merchant uchun alohida tokenlanadi,
+shuning uchun barcha chaqiruvlar `merchantId` bilan (uni `SessionPayment/Balance` javobidan olasiz).
+
+```http
+POST   /api/Card/Add            { "merchantId": 3, "number": "8600...", "expire": "0329" }
+POST   /api/Card/Verify         { "cardId": 12, "code": "123456" }
+POST   /api/Card/ResendCode/{cardId}
+GET    /api/Card/My?merchantId=3
+POST   /api/Card/SetDefault/{cardId}
+DELETE /api/Card/Delete/{cardId}
+```
+
+PAN va CVV serverda **saqlanmaydi**, token API javoblarida hech qachon qaytarilmaydi.
+Tasdiqlanmagan karta to'lovga ishlatilmaydi. Birinchi tasdiqlangan karta avtomatik asosiy bo'ladi.
+
+### Payme Merchant API callback'i (Merchant usuli)
+
+Payme **bizga** JSON-RPC qiladi. Har bir merchant Payme kabinetida o'z URL'ini ko'rsatadi:
 
 ```
-POST /api/Payment/create   → { "qrCode": "..." }
-POST /api/Payment/verify   → { "paid": true }
+https://<host>/session/api/PaymeMerchant/Callback/{merchantId}
 ```
+
+- Auth: `Authorization: Basic base64("Paycom:<merchant_key>")` — kalit
+  `MerchantAdmin.SetPaymeMerchantCredentials` bilan o'rnatiladi va doimiy vaqtda solishtiriladi.
+- Metodlar: `CheckPerformTransaction`, `CreateTransaction`, `PerformTransaction`,
+  `CancelTransaction`, `CheckTransaction`, `GetStatement`.
+- Javob **har doim HTTP 200**; nosozlik JSON-RPC `error` obyektida (`-32504`, `-31001`,
+  `-31003`, `-31007`, `-31008`, `-31050`, `-31051`).
+- Tranzaksiya 12 soat ichida yakunlanmasa merchant uni bekor qiladi (`reason=4`).
+- Buyurtma mablag'i xizmatga ketgan bo'lsa `CancelTransaction` → `-31007` (bekor qilib bo'lmaydi).
+
+### Mobil endpointlar (SessionApi)
+
+```http
+POST /api/SessionPayment/CreateIntent        # Idempotency-Key MAJBURIY
+{ "sessionId": 12, "amountUzs": 300000, "phone": "998901234567", "cardId": null }
+
+→ 200 {
+    "intentId": 45, "sequenceNo": 1, "status": 1, "method": 2, "kind": 0,
+    "amountTiyin": 30000000, "amountUzs": 300000,
+    "checkoutUrl": null, "requiresUserAction": true,
+    "resultMessage": "Hold yaratildi — Payme ilovasida to'lovni tasdiqlang."
+  }
+
+POST /api/SessionPayment/CancelIntent/{intentId}
+GET  /api/SessionPayment/BySession/{sessionId}    # intent'lar FIFO tartibda
+GET  /api/SessionPayment/Balance/{sessionId}      # { method, fundedTiyin, consumedTiyin, availableTiyin, intents[] }
+```
+
+Klient uchun muhim ikkita maydon: `requiresUserAction` (mijoz hali biror amal qilishi kerakmi)
+va `checkoutUrl` (ochilishi kerak bo'lgan havola — Merchant usulida). `cardId` faqat Subscribe
+usulida ishlaydi: berilmasa shu merchant uchun asosiy karta olinadi, karta umuman bo'lmasa
+mijoz chekni Payme ilovasida o'zi tasdiqlaydi.
+
+> **Cheklov:** Payme chekni qisman qaytarmaydi. Prepaid usullarda (Invoice/Merchant) qisman
+> ishlatilgan to'lov qoldig'i mijozga qaytarilmaydi — u audit step'ida qayd etiladi va admin
+> ro'yxatida `unrefundedRemainderTiyin` bo'lib ko'rinadi. Ishlatilmagan mablag' to'liq
+> qaytarilishi kerak bo'lsa merchant `Subscribe` (hold) usulini tanlashi lozim.
+
+> Eski `/api/HoldInvoice/*` sirti **bir reliz** alias bo'lib ishlaydi va o'sha yangi javob
+> shaklini qaytaradi. Real-time eventda (`SessionBalanceChanged` / MQTT `balance.update`)
+> eski kalitlar (`invoiceId`, `holdBalanceTiyin`) yangilari bilan yonma-yon yuboriladi.
+
+### Holatlar (`PaymentIntentStatus`)
+
+```
+Created → WaitingForConfirmation → Funded → PartiallyConsumed → FullyConsumed
+                                      ↓            ↓                 ↓
+                                 RefundPending  SettlePending  SettlePending
+                                      ↓            ↓                 ↓
+                                  Refunded      Settled           Settled
+```
+
+O'tishlar faqat `PaymentIntentStateMachine` ruxsat jadvali bo'yicha, yagona yozish nuqtasi —
+`IPaymentIntentRepository.TryTransitionAsync`. Har qadam `payment_intent_steps` ga append-only
+audit sifatida yoziladi (AdminApi: `/api/PaymentIntentAdmin/*`).
+
+### PaymentApi (5005) — balans to'ldirish
+
+**Port:** `5005` | **Base URL:** `http://localhost:5005/api/Payment`
+
+> Sessiya to'lovidan alohida: QR orqali balans to'ldirish oqimi (`PaymentTransaction` audit'i bilan).
 
 ---
 
@@ -1672,6 +1786,9 @@ POST /api/Payment/verify   → { "paid": true }
 | `MerchantAdmin.GetById` | Merchantni ko'rish |
 | `MerchantAdmin.Update` | Merchantni tahrirlash |
 | `MerchantAdmin.Delete` | Merchantni o'chirish |
+| `MerchantAdmin.SetPaymeCredentials` | Payme kassa credential'lari (Receipts/Subscribe API) |
+| `MerchantAdmin.SetPaymeMerchantCredentials` | Payme Merchant API credential'lari (callback) |
+| `MerchantAdmin.SetPaymentMethods` | **To'lov strategiyasini almashtirish (runtime)** |
 | `StationAdmin.Create` | Stansiya yaratish |
 | `StationAdmin.GetAll` | Barcha stansiyalarni ko'rish |
 | `StationAdmin.GetById` | Stansiyani ko'rish |
@@ -1705,6 +1822,9 @@ POST /api/Payment/verify   → { "paid": true }
 | `User.Me` / `User.UpdateMe` / `User.Bootstrap` | Profil |
 | `Report.MyUsage` / `Report.MyUsageExport` | O'z hisoboti |
 | `Payment.TopUpSelf` / `Payment.GetMyTransactions` | Self to'lov (Natural) |
+| `Payment.HoldCreate` / `Payment.HoldRead` / `Payment.HoldCancel` | Sessiya to'lovi (usul merchant sozlamasidan) |
+| `Payment.CardAdd` / `Payment.CardVerify` / `Payment.CardList` | Saqlangan kartalar (Subscribe) |
+| `Payment.CardSetDefault` / `Payment.CardDelete` | Asosiy kartani tanlash / o'chirish |
 | `Payment.TopUpOrganization` / `Payment.GetOrganizationTransactions` / `OrganizationReport.Usage*` | Corporate qo'shimcha |
 | `Balance.TopUp` | Admin balans to'ldirish (BillingApi, ManageOnly) |
 
@@ -1855,7 +1975,7 @@ bir ishlaydi, ya'ni bayroq 90–120 soniya "online" bo'lib turishi mumkin.
 | Amal | To'siqlar |
 |---|---|
 | `Incassation.RequestOpen` (box ochish) | Manage emas · qurilma yo'q · stansiyasiz · nofaol · **oflayn** · ochiq inkassatsiya bor · ochiq naqd sessiya bor |
-| `Process.Start` | Sessiya yo'q/begona · user bloklangan · sessiya Paused/Settling/ulanmagan · qurilma biriktirilmagan/nofaol/**oflayn** · tugamagan jarayon bor · mahsulot yo'q/nofaol/boshqa qurilmaniki · Hold yo'q · Hold yetarli emas · qurilma boshqa userda band |
+| `Process.Start` | Sessiya yo'q/begona · user bloklangan · sessiya Paused/Settling/ulanmagan · qurilma biriktirilmagan/nofaol/**oflayn** · tugamagan jarayon bor · mahsulot yo'q/nofaol/boshqa qurilmaniki · **to'lov yo'q** · to'lov summasi yetarli emas · qurilma boshqa userda band |
 | `Process.Stop` | Jarayon yo'q/begona · allaqachon yakunlangan · qurilma yo'q/**oflayn** |
 | `Process.Pause` | Jarayon yo'q/begona · mos holatda emas · qurilma yo'q/**oflayn** |
 | `Process.Resume` | Jarayon yo'q/begona · pauzada emas · qurilma yo'q/**oflayn** |
@@ -1904,8 +2024,13 @@ bir ishlaydi, ya'ni bayroq 90–120 soniya "online" bo'lib turishi mumkin.
 | Amal | To'siqlar |
 |---|---|
 | `Balance.TopUp` | Summa ≤ 0 · user yo'q · **bloklangan** · corporate tashkilotsiz · tashkilot nofaol |
-| `HoldInvoice.Create` | Summa ≤ 0 · sessiya yo'q/begona · Paused/Settling/yopilgan · qurilma ulanmagan · stansiyasiz · to'lov konteksti yopilgan · invoice limiti · Payme sozlanmagan |
-| `HoldInvoice.Cancel` | Invoice yo'q/begona · **qisman ishlatilgan** · holat ruxsat bermaydi |
+| `PaymentIntent.Create` | Summa ≤ 0 · sessiya yo'q/begona · Paused/Settling/yopilgan · qurilma ulanmagan · stansiyasiz · to'lov konteksti yopilgan · aktiv to'lovlar limiti · usul mavjud emas/sozlanmagan |
+| `PaymentIntent.Cancel` | To'lov yo'q/begona · **qisman ishlatilgan** · holat ruxsat bermaydi · usul qaytarishni qo'llamaydi (Merchant) |
+| `Card.Add` | Karta raqami/muddati noto'g'ri · merchant Payme kassasi sozlanmagan · provider rad etdi |
+| `Card.Verify` | Kod bo'sh · karta yo'q/begona · allaqachon tasdiqlangan · provider kodni rad etdi |
+| `Card.SetDefault` | Karta yo'q/begona · **tasdiqlanmagan** |
+| `Card.Delete` | Karta yo'q/begona |
+| `Merchant.SetPaymentMethods` | Doiradan tashqarida · ro'yxat bo'sh · sukut usul ro'yxatda yo'q · merchant yo'q/nofaol · usul credential'lari sozlanmagan |
 | Operator `ForceCapture`/`Refund`/`Cancel`/`Retry` | Invoice yo'q · to'lov konteksti yo'q · doiradan tashqari · holat o'tishga ruxsat bermaydi |
 
 ### Yangi amal qo'shganda

@@ -18,14 +18,14 @@ namespace AdminApi.Controllers
     [Route("api/[controller]/[action]")]
     [ApiController]
     [Authorize]
-    public class HoldInvoiceAdminController : ControllerBase
+    public class PaymentIntentAdminController : ControllerBase
     {
-        private readonly IHoldInvoiceAdminService _service;
+        private readonly IPaymentIntentAdminService _service;
 
-        public HoldInvoiceAdminController(IHoldInvoiceAdminService service)
+        public PaymentIntentAdminController(IPaymentIntentAdminService service)
             => _service = service;
 
-        /// <summary>Hold invoice'lar ro'yxati (filter: merchant/session/status/sana).</summary>
+        /// <summary>To'lovlar ro'yxati (filter: merchant/session/status/usul/sana).</summary>
         [HttpGet]
         [RequirePermission(Permissions.HoldAdminGetAll)]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -34,81 +34,83 @@ namespace AdminApi.Controllers
             [FromQuery] int pageSize = 50,
             [FromQuery] long? merchantId = null,
             [FromQuery] long? sessionId = null,
-            [FromQuery] HoldInvoiceStatus? status = null,
+            [FromQuery] PaymentIntentStatus? status = null,
+            [FromQuery] PaymentMethod? method = null,
             [FromQuery] DateTime? from = null,
             [FromQuery] DateTime? to = null)
         {
             var skip = (Math.Max(pageNumber, 1) - 1) * pageSize;
-            var result = await _service.ListAsync(skip, pageSize, merchantId, sessionId, status, from, to, User.GetScope());
+            var result = await _service.ListAsync(
+                skip, pageSize, merchantId, sessionId, status, method, from, to, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
-        /// <summary>Bitta invoice tafsilotlari.</summary>
-        [HttpGet("{invoiceId:long}")]
+        /// <summary>Bitta to'lov tafsilotlari.</summary>
+        [HttpGet("{intentId:long}")]
         [RequirePermission(Permissions.HoldAdminGetById)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> ById(long invoiceId)
+        public async Task<IActionResult> ById(long intentId)
         {
-            var result = await _service.GetByIdAsync(invoiceId, User.GetScope());
+            var result = await _service.GetByIdAsync(intentId, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
-        /// <summary>Invoice audit step'lari (to'liq jsonb izi).</summary>
-        [HttpGet("{invoiceId:long}")]
+        /// <summary>To'lov audit step'lari (to'liq jsonb izi).</summary>
+        [HttpGet("{intentId:long}")]
         [RequirePermission(Permissions.HoldAdminGetSteps)]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<IActionResult> Steps(long invoiceId)
+        public async Task<IActionResult> Steps(long intentId)
         {
-            var result = await _service.GetStepsAsync(invoiceId, User.GetScope());
+            var result = await _service.GetStepsAsync(intentId, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>[EXPERT] Majburiy capture (ishlatilgan summa yoki berilgan amount).</summary>
-        [HttpPost("{invoiceId:long}")]
+        [HttpPost("{intentId:long}")]
         [RequirePermission(Permissions.HoldAdminCapture)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> Capture(long invoiceId, [FromBody] HoldInvoiceOperatorActionDto request)
+        public async Task<IActionResult> Capture(long intentId, [FromBody] PaymentIntentOperatorActionDto request)
         {
             if (!TryGetUserId(out var adminUserId)) return Unauthorized();
-            var result = await _service.ForceCaptureAsync(invoiceId, request, adminUserId, User.GetScope());
+            var result = await _service.ForceCaptureAsync(intentId, request, adminUserId, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>[EXPERT] Majburiy refund (hold'ni qaytarish).</summary>
-        [HttpPost("{invoiceId:long}")]
+        [HttpPost("{intentId:long}")]
         [RequirePermission(Permissions.HoldAdminRefund)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> Refund(long invoiceId, [FromBody] HoldInvoiceOperatorActionDto request)
+        public async Task<IActionResult> Refund(long intentId, [FromBody] PaymentIntentOperatorActionDto request)
         {
             if (!TryGetUserId(out var adminUserId)) return Unauthorized();
-            var result = await _service.ForceRefundAsync(invoiceId, request, adminUserId, User.GetScope());
+            var result = await _service.ForceRefundAsync(intentId, request, adminUserId, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>[EXPERT] To'lovgacha bekor qilish (Created/WaitingForConfirmation).</summary>
-        [HttpPost("{invoiceId:long}")]
+        [HttpPost("{intentId:long}")]
         [RequirePermission(Permissions.HoldAdminCancel)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> Cancel(long invoiceId, [FromBody] HoldInvoiceOperatorActionDto request)
+        public async Task<IActionResult> Cancel(long intentId, [FromBody] PaymentIntentOperatorActionDto request)
         {
             if (!TryGetUserId(out var adminUserId)) return Unauthorized();
-            var result = await _service.ForceCancelAsync(invoiceId, request, adminUserId, User.GetScope());
+            var result = await _service.ForceCancelAsync(intentId, request, adminUserId, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>[EXPERT] Failed invoice'ni qayta navbatga qo'yish.</summary>
-        [HttpPost("{invoiceId:long}")]
+        [HttpPost("{intentId:long}")]
         [RequirePermission(Permissions.HoldAdminRetry)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> Retry(long invoiceId, [FromBody] HoldInvoiceOperatorActionDto request)
+        public async Task<IActionResult> Retry(long intentId, [FromBody] PaymentIntentOperatorActionDto request)
         {
             if (!TryGetUserId(out var adminUserId)) return Unauthorized();
-            var result = await _service.RetryAsync(invoiceId, request, adminUserId, User.GetScope());
+            var result = await _service.RetryAsync(intentId, request, adminUserId, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 

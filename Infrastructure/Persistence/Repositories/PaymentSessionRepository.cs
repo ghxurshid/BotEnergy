@@ -27,7 +27,7 @@ namespace Persistence.Repositories
         {
             var query = _context.PaymentSessions.AsQueryable();
             if (includeInvoices)
-                query = query.Include(p => p.Invoices!.OrderBy(i => i.SequenceNo));
+                query = query.Include(p => p.Intents!.OrderBy(i => i.SequenceNo));
             return query.FirstOrDefaultAsync(p => p.SessionId == sessionId);
         }
 
@@ -43,13 +43,13 @@ namespace Persistence.Repositories
             return affected > 0;
         }
 
-        public Task TryAddHoldBalanceAsync(long id, long deltaTiyin)
+        public Task TryAddFundedBalanceAsync(long id, long deltaTiyin)
         {
             var now = DateTime.Now;
             return _context.PaymentSessions
                 .Where(p => p.Id == id)
                 .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(p => p.HoldBalanceTiyin, p => p.HoldBalanceTiyin + deltaTiyin)
+                    .SetProperty(p => p.FundedTiyin, p => p.FundedTiyin + deltaTiyin)
                     .SetProperty(p => p.UpdatedDate, now));
         }
 
@@ -57,7 +57,7 @@ namespace Persistence.Repositories
         {
             var now = DateTime.Now;
             var affected = await _context.PaymentSessions
-                .Where(p => p.Id == id && p.HoldBalanceTiyin - p.ConsumedTiyin >= deltaTiyin)
+                .Where(p => p.Id == id && p.FundedTiyin - p.ConsumedTiyin >= deltaTiyin)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(p => p.ConsumedTiyin, p => p.ConsumedTiyin + deltaTiyin)
                     .SetProperty(p => p.UpdatedDate, now));
@@ -70,6 +70,11 @@ namespace Persistence.Repositories
                 .OrderBy(p => p.UpdatedDate)
                 .Take(take)
                 .ToListAsync();
+
+        public Task TouchAsync(long id)
+            => _context.PaymentSessions
+                .Where(p => p.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.UpdatedDate, DateTime.Now));
 
         public async Task UpdateAsync(PaymentSessionEntity paymentSession)
         {

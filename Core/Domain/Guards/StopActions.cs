@@ -45,6 +45,7 @@ namespace Domain.Guards
         public const string MerchantUpdate = "Merchant.Update";
         public const string MerchantDelete = "Merchant.Delete";
         public const string MerchantSetPayme = "Merchant.SetPaymeCredentials";
+        public const string MerchantSetPaymentMethods = "Merchant.SetPaymentMethods";
         public const string OrganizationUpdate = "Organization.Update";
         public const string OrganizationDelete = "Organization.Delete";
 
@@ -61,8 +62,15 @@ namespace Domain.Guards
 
         // Pul harakati
         public const string BalanceTopUp = "Balance.TopUp";
-        public const string HoldInvoiceCreate = "HoldInvoice.Create";
-        public const string HoldInvoiceCancel = "HoldInvoice.Cancel";
+        public const string PaymentIntentCreate = "PaymentIntent.Create";
+        public const string PaymentIntentCancel = "PaymentIntent.Cancel";
         public const string PaymentPay = "Payment.Pay";
+
+        // Saqlangan kartalar (Subscribe)
+        public const string CardAdd = "Card.Add";
+        public const string CardVerify = "Card.Verify";
+        public const string CardResendCode = "Card.ResendCode";
+        public const string CardSetDefault = "Card.SetDefault";
+        public const string CardDelete = "Card.Delete";
     }
 }

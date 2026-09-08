@@ -101,7 +101,15 @@ namespace Domain.Constants
         public const string PaymentAdminGetSteps = "PaymentAdmin.GetSteps";
         public const string PaymentAdminReverse = "PaymentAdmin.Reverse";
 
-        // ── SessionApi — Hold invoice (Payme pre-authorization, mobil) ──
+        // ── UserApi — saqlangan kartalar (Subscribe usuli) ───────────
+        public const string PaymentCardAdd = "Payment.CardAdd";
+        public const string PaymentCardVerify = "Payment.CardVerify";
+        public const string PaymentCardList = "Payment.CardList";
+        public const string PaymentCardSetDefault = "Payment.CardSetDefault";
+        public const string PaymentCardDelete = "Payment.CardDelete";
+
+        // ── SessionApi — sessiya to'lovi (usul merchant sozlamasidan) ──
+        // Kodlar barqaror: eski "Hold" nomlari saqlanadi (rollarda bog'lamlar bor).
         public const string PaymentHoldCreate = "Payment.HoldCreate";
         public const string PaymentHoldRead = "Payment.HoldRead";
         public const string PaymentHoldCancel = "Payment.HoldCancel";
@@ -117,6 +125,8 @@ namespace Domain.Constants
 
         /// <summary>Merchant Payme credential'larini o'rnatish (write-only, Manage).</summary>
         public const string MerchantAdminSetPaymeCredentials = "MerchantAdmin.SetPaymeCredentials";
+        public const string MerchantAdminSetPaymeMerchantCredentials = "MerchantAdmin.SetPaymeMerchantCredentials";
+        public const string MerchantAdminSetPaymentMethods = "MerchantAdmin.SetPaymentMethods";
 
         // ── AdminApi — Inkassatsiya (naqd pulni qurilmadan olib ketish) ──
         // Inkassator ilovasi shu to'rttadan foydalanadi. Manage'ga cheklanmagan:
@@ -194,8 +204,9 @@ namespace Domain.Constants
             // Merchant
             MerchantAdminRegister, MerchantAdminGetAll, MerchantAdminGetById,
             MerchantAdminUpdate, MerchantAdminDelete, MerchantAdminSetPaymeCredentials,
+            MerchantAdminSetPaymeMerchantCredentials, MerchantAdminSetPaymentMethods,
 
-            // Hold invoice operator boshqaruvi
+            // To'lov (payment intent) operator boshqaruvi
             HoldAdminGetAll, HoldAdminGetById, HoldAdminGetSteps,
             HoldAdminCapture, HoldAdminRefund, HoldAdminCancel, HoldAdminRetry,
 
@@ -240,8 +251,12 @@ namespace Domain.Constants
             PaymentTopUpSelf, PaymentGetMyTransactions,
             PaymentTopUpOrganization, PaymentGetOrganizationTransactions,
 
-            // Hold invoice (Payme pre-authorization)
+            // Sessiya to'lovi (usul merchant sozlamasidan)
             PaymentHoldCreate, PaymentHoldRead, PaymentHoldCancel,
+
+            // Saqlangan kartalar (Subscribe)
+            PaymentCardAdd, PaymentCardVerify, PaymentCardList,
+            PaymentCardSetDefault, PaymentCardDelete,
 
             // Corporate sub-user management
             CustomerAdminCreate, CustomerAdminGetAll, CustomerAdminGetById,

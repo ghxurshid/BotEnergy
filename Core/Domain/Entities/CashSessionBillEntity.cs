@@ -10,7 +10,7 @@ namespace Domain.Entities
     /// MQTT qayta yuborilishi (device javobni olmay qolsa) normal holat.
     ///
     /// Device/Serial ataylab denormalizatsiya qilingan — audit so'rovlari join'siz filtrlanadi
-    /// (<see cref="HoldInvoiceStepEntity"/> bilan bir xil yondashuv).
+    /// (<see cref="PaymentIntentStepEntity"/> bilan bir xil yondashuv).
     /// </summary>
     public class CashSessionBillEntity : Entity
     {

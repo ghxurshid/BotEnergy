@@ -54,7 +54,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.RegisterServices();
 builder.Services.RegisterSessionServices();
 builder.Services.AddPaymeClient(builder.Configuration);
-builder.Services.RegisterHoldInvoiceServices(builder.Configuration);
+builder.Services.RegisterSessionPaymentServices(builder.Configuration);
 // Naqd → karta: qurilma interfeysidan kelgan oqim (MQTT handler'lar + payout watcher).
 builder.Services.RegisterCashTopUpServices(builder.Configuration);
 

@@ -52,7 +52,7 @@ namespace Domain.Entities
         /// <summary>Idle timeout uchun — har kupyura va har buyruqda yangilanadi.</summary>
         public DateTime LastActivityAt { get; set; } = DateTime.Now;
 
-        // ── Watcher retry (HoldInvoiceEntity bilan bir xil andoza) ──────────────
+        // ── Watcher retry (PaymentIntentEntity bilan bir xil andoza) ──────────────
         public int AttemptCount { get; set; }
         public DateTime? NextAttemptAt { get; set; }
 

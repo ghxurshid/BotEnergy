@@ -89,7 +89,7 @@
     "AllowedDenominations": [ 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000 ],
     "MaxSessionAmount": 50000000
   },
-  "HoldInvoices": {
+  "Payments": {
     "WatcherIntervalSeconds": 5,
     "PollSeconds": 3,
     "LeaseSeconds": 30,
@@ -97,9 +97,12 @@
     "MaxAttempts": 8,
     "BackoffBaseSeconds": 5,
     "BackoffMaxSeconds": 300,
-    "InvoiceTtlMinutes": 30,
-    "MaxInvoicesPerSession": 10,
-    "SendReceiptToPhone": false
+    "IntentTtlMinutes": 30,
+    "MaxIntentsPerSession": 10,
+    "SettlingGraceMinutes": 15,
+    "SendReceiptToPhone": false,
+    "DefaultMethod": 2,
+    "CheckoutBaseUrl": "https://checkout.paycom.uz"
   },
   "Observability": {
     "ConsoleJsonLogs": true,

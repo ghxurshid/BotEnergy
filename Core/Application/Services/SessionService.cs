@@ -5,6 +5,7 @@ using Domain.Entities;
 using Domain.Enums;
 using Domain.Guards;
 using Domain.Interfaces;
+using Domain.Payments;
 using Domain.Repositories;
 using Microsoft.Extensions.Logging;
 
@@ -24,7 +25,7 @@ namespace Application.Services
         private readonly IDeviceCommandPublisher _commandPublisher;
         private readonly IDeviceLockService _deviceLock;
         private readonly IProcessSettlementService _settlement;
-        private readonly IHoldSettlementService _holdSettlement;
+        private readonly ISessionPaymentService _payments;
         private readonly IPushNotificationService _push;
         private readonly IPendingSessionStore _pendingStore;
         private readonly IDeviceStatusService _deviceStatus;
@@ -50,7 +51,7 @@ namespace Application.Services
             IDeviceCommandPublisher commandPublisher,
             IDeviceLockService deviceLock,
             IProcessSettlementService settlement,
-            IHoldSettlementService holdSettlement,
+            ISessionPaymentService payments,
             IPushNotificationService push,
             IPendingSessionStore pendingStore,
             IDeviceStatusService deviceStatus,
@@ -65,7 +66,7 @@ namespace Application.Services
             _commandPublisher = commandPublisher;
             _deviceLock = deviceLock;
             _settlement = settlement;
-            _holdSettlement = holdSettlement;
+            _payments = payments;
             _push = push;
             _pendingStore = pendingStore;
             _deviceStatus = deviceStatus;
@@ -214,7 +215,7 @@ namespace Application.Services
 
             // Hold invoice'lar bor bo'lsa — capture/refund maqsadlarini qo'yib Settling qilamiz;
             // watcher yakunlab sessiyani yopadi. Aks holda darhol yopamiz (legacy oqim).
-            var needsSettlement = await _holdSettlement.BeginSessionSettlementAsync(session.Id);
+            var needsSettlement = await _payments.BeginSessionSettlementAsync(session.Id);
 
             if (needsSettlement)
             {
@@ -289,7 +290,7 @@ namespace Application.Services
                     session, ProcessEndReason.DeviceError, sendStopCommand: sendStop);
 
                 // Hold invoice'lar bo'lsa — Settling qilamiz, watcher yopadi.
-                if (await _holdSettlement.BeginSessionSettlementAsync(session.Id))
+                if (await _payments.BeginSessionSettlementAsync(session.Id))
                 {
                     session.Status = SessionStatus.Settling;
                     session.CloseReason = SessionCloseReason.Timeout;

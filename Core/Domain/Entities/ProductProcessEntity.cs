@@ -37,7 +37,8 @@ namespace Domain.Entities
         /// </summary>
         public bool IsBalanceDeducted { get; set; }
 
-        /// <summary>Start'da bir marta tanlanadi: hold balans bo'lsa HoldBalance, aks holda InternalBalance.</summary>
+        /// <summary>Start'da bir marta yoziladi. Yangi jarayonlar har doim SessionPayment —
+        /// konkret usul PaymentSession.Method da. InternalBalance faqat eski yozuvlarda.</summary>
         public ProcessFundingSource FundingSource { get; set; } = ProcessFundingSource.InternalBalance;
 
         /// <summary>Hold funding bo'lsa — qaysi payment session hisobidan (hisobot uchun).</summary>

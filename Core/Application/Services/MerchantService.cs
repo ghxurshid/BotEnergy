@@ -2,9 +2,12 @@ using Domain.Auth;
 using Domain.Dtos;
 using Domain.Dtos.Base;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Guards;
 using Domain.Interfaces;
+using Domain.Payments;
 using Domain.Repositories;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services
 {
@@ -12,11 +15,16 @@ namespace Application.Services
     {
         private readonly IMerchantRepository _repo;
         private readonly IUsageProbeRepository _usageProbe;
+        private readonly ILogger<MerchantService> _logger;
 
-        public MerchantService(IMerchantRepository repo, IUsageProbeRepository usageProbe)
+        public MerchantService(
+            IMerchantRepository repo,
+            IUsageProbeRepository usageProbe,
+            ILogger<MerchantService> logger)
         {
             _repo = repo;
             _usageProbe = usageProbe;
+            _logger = logger;
         }
 
         public async Task<GenericDto<MerchantResultDto>> CreateAsync(CreateMerchantDto dto)
@@ -158,6 +166,91 @@ namespace Application.Services
             });
         }
 
+        /// <summary>
+        /// To'lov strategiyasini almashtirish — RUNTIME sozlama (deploy/restart kerak emas).
+        /// Saqlashdan oldin har bir yoqilgan usulning credential'lari tekshiriladi, aks holda
+        /// merchant o'zini "to'lov qabul qila olmaydigan" holatga qo'yib qo'yardi.
+        /// O'zgarish KEYINGI sessiyalarga ta'sir qiladi.
+        /// </summary>
+        public async Task<GenericDto<MerchantResultDto>> SetPaymentMethodsAsync(
+            long id, SetPaymentMethodsDto dto, AccessScope scope)
+        {
+            var found = await _repo.GetByIdAsync(id);
+            var enabled = dto.EnabledMethods?.Distinct().ToList() ?? new List<PaymentMethod>();
+            PaymentMethod? unconfigured = null;
+
+            var stop = StopFactorCheck.For(StopActions.MerchantSetPaymentMethods)
+                .StopIf(!scope.CanAccessMerchant(id), StopFactors.Merchant.OutOfScope)
+                .StopIf(enabled.Count == 0,
+                        new StopFactor("MERCHANT_PAYMENT_METHODS_EMPTY",
+                            "Kamida bitta to'lov usuli yoqilishi kerak.", 400))
+                .StopIf(!enabled.Contains(dto.DefaultMethod),
+                        new StopFactor("MERCHANT_DEFAULT_METHOD_NOT_ENABLED",
+                            "Sukut usuli yoqilgan usullar ichida bo'lishi kerak.", 400))
+                .StopIf(found is null, StopFactors.Merchant.NotFound)
+                .StopIf(() => !found!.IsActive, StopFactors.Merchant.Inactive)
+                .StopIf(() =>
+                {
+                    unconfigured = enabled.FirstOrDefault(m => !PaymentMethodRequirements.IsConfigured(found!, m));
+                    return enabled.Any(m => !PaymentMethodRequirements.IsConfigured(found!, m));
+                },
+                    () => new StopFactor("MERCHANT_PAYMENT_METHOD_NOT_CONFIGURED",
+                        $"{unconfigured} usuli sozlanmagan. {PaymentMethodRequirements.MissingRequirement(unconfigured!.Value)}",
+                        409))
+                .Result();
+
+            if (stop is not null)
+                return GenericDto<MerchantResultDto>.Blocked(stop);
+
+            var merchant = found!;
+
+            merchant.DefaultPaymentMethod = dto.DefaultMethod;
+            merchant.EnabledPaymentMethods = enabled.Aggregate(
+                PaymentMethodFlags.None, (acc, m) => acc | m.ToFlag());
+            merchant.RefundUnusedFunds = dto.RefundUnusedFunds;
+            await _repo.UpdateAsync(merchant);
+
+            _logger.LogInformation(
+                "[PAY] Merchant to'lov usuli o'zgardi merchantId={MerchantId} default={Default} enabled={Enabled}",
+                merchant.Id, merchant.DefaultPaymentMethod, merchant.EnabledPaymentMethods);
+
+            return GenericDto<MerchantResultDto>.Success(new MerchantResultDto
+            {
+                Id = merchant.Id,
+                ResultMessage = $"To'lov usuli saqlandi: {dto.DefaultMethod} (keyingi sessiyalardan boshlab)."
+            });
+        }
+
+        /// <summary>Payme Merchant API credential'lari — kassa credential'laridan alohida.</summary>
+        public async Task<GenericDto<MerchantResultDto>> SetPaymeMerchantCredentialsAsync(
+            long id, SetPaymeMerchantCredentialsDto dto, AccessScope scope)
+        {
+            var found = await _repo.GetByIdAsync(id);
+
+            var stop = StopFactorCheck.For(StopActions.MerchantSetPayme)
+                .StopIf(!scope.CanAccessMerchant(id), StopFactors.Merchant.OutOfScope)
+                .StopIf(string.IsNullOrWhiteSpace(dto.MerchantId) || string.IsNullOrWhiteSpace(dto.Key),
+                        new StopFactor("MERCHANT_PAYME_INCOMPLETE", "MerchantId va Key majburiy.", 400))
+                .StopIf(found is null, StopFactors.Merchant.NotFound)
+                .StopIf(() => !found!.IsActive, StopFactors.Merchant.Inactive)
+                .Result();
+
+            if (stop is not null)
+                return GenericDto<MerchantResultDto>.Blocked(stop);
+
+            var merchant = found!;
+
+            merchant.PaymeMerchantId = dto.MerchantId.Trim();
+            merchant.PaymeMerchantKey = dto.Key.Trim();
+            await _repo.UpdateAsync(merchant);
+
+            return GenericDto<MerchantResultDto>.Success(new MerchantResultDto
+            {
+                Id = merchant.Id,
+                ResultMessage = "Payme Merchant API credential'lari saqlandi."
+            });
+        }
+
         private static MerchantItemDto ToItem(MerchantEntity c) => new()
         {
             Id = c.Id,
@@ -169,7 +262,15 @@ namespace Application.Services
             CreatedDate = c.CreatedDate,
             PaymeCashboxId = c.PaymeCashboxId,
             PaymeKeyMasked = Mask(c.PaymeKey),
-            PaymeEnabled = c.PaymeEnabled
+            PaymeEnabled = c.PaymeEnabled,
+            PaymeMerchantId = c.PaymeMerchantId,
+            PaymeMerchantKeyMasked = Mask(c.PaymeMerchantKey),
+            DefaultPaymentMethod = c.DefaultPaymentMethod,
+            EnabledPaymentMethods = c.EnabledPaymentMethods.ToMethods().ToList(),
+            RefundUnusedFunds = c.RefundUnusedFunds,
+            ConfigurablePaymentMethods = Enum.GetValues<PaymentMethod>()
+                .Where(m => PaymentMethodRequirements.IsConfigured(c, m))
+                .ToList()
         };
 
         /// <summary>Kalitni maskalab qaytaradi — faqat oxirgi 4 belgi ko'rinadi.</summary>

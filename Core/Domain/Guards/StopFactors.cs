@@ -124,6 +124,11 @@ namespace Domain.Guards
                 new("MERCHANT_HAS_ACTIVE_SESSION",
                     "Merchant qurilmalarida faol sessiya bor — avval ular yakunlanishi kerak.", 409);
 
+            /// <summary>Merchant API (callback) credential'lari yo'q — checkout havolasi yasab bo'lmaydi.</summary>
+            public static readonly StopFactor PaymeMerchantNotConfigured =
+                new("MERCHANT_PAYME_MERCHANT_NOT_CONFIGURED",
+                    "Merchant Payme Merchant API sozlanmagan (MerchantId + Key).", 409);
+
             public static readonly StopFactor PaymeNotConfigured =
                 new("MERCHANT_PAYME_NOT_CONFIGURED",
                     "Merchant uchun Payme sozlanmagan — administratorga murojaat qiling.", 409);
@@ -251,13 +256,13 @@ namespace Domain.Guards
             public static readonly StopFactor AlreadyActive =
                 new("PROCESS_ALREADY_ACTIVE", "Sessiyada hali tugamagan jarayon mavjud.", 409);
 
-            /// <summary>"No hold = no fuel" — tasdiqlangan hold bo'lmasa jarayon boshlanmaydi.</summary>
+            /// <summary>"No funding = no fuel" — tasdiqlangan to'lov bo'lmasa jarayon boshlanmaydi.</summary>
             public static readonly StopFactor NoFunding =
                 new("PROCESS_NO_FUNDING",
-                    "Tasdiqlangan Hold mavjud emas — avval to'lovni bloklang (hold invoice yarating).", 409);
+                    "Tasdiqlangan to'lov mavjud emas — avval sessiya uchun to'lov qiling.", 409);
 
             public static readonly StopFactor FundingTooSmall =
-                new("PROCESS_FUNDING_TOO_SMALL", "Hold balansi yetarli emas — yangi invoice yarating.", 409);
+                new("PROCESS_FUNDING_TOO_SMALL", "To'lov summasi yetarli emas — yangi to'lov qo'shing.", 409);
 
             /// <summary>
             /// Jarayonni boshqarish buyrug'i (stop/pause/resume) oflayn qurilmaga yetib bormaydi.
@@ -417,7 +422,7 @@ namespace Domain.Guards
                 new("ROLE_ORGANIZATION_MISMATCH", "Tanlangan rol ushbu tashkilotga tegishli bo'lishi kerak.", 409);
         }
 
-        // ─────────────────────────── To'lov / Hold ───────────────────────────
+        // ─────────────────────────── To'lov ───────────────────────────
 
         public static class Payment
         {
@@ -430,36 +435,104 @@ namespace Domain.Guards
             public static readonly StopFactor NotFound =
                 new("PAYMENT_NOT_FOUND", "To'lov topilmadi.", 404);
 
-            public static StopFactor InvoiceLimit(int max) => new(
+            // DIQQAT: quyidagi kodlar (HOLD_INVOICE_*) mijoz uchun BARQAROR sim qiymatlari —
+            // strategiya abstraksiyasidan keyin ham o'zgartirilmaydi, faqat C# nomlari
+            // Invoice → Intent qilib umumlashtirildi.
+
+            public static StopFactor IntentLimit(int max) => new(
                 "HOLD_INVOICE_LIMIT",
-                $"Bir sessiyada ko'pi bilan {max} ta aktiv invoice bo'lishi mumkin.", 409);
+                $"Bir sessiyada ko'pi bilan {max} ta aktiv to'lov bo'lishi mumkin.", 409);
 
-            public static readonly StopFactor InvoiceNotFound =
-                new("HOLD_INVOICE_NOT_FOUND", "Invoice topilmadi.", 404);
+            public static readonly StopFactor IntentNotFound =
+                new("HOLD_INVOICE_NOT_FOUND", "To'lov topilmadi.", 404);
 
-            public static readonly StopFactor InvoiceNotOwned =
-                new("HOLD_INVOICE_NOT_OWNED", "Bu invoice sizga tegishli emas.", 403);
+            public static readonly StopFactor IntentNotOwned =
+                new("HOLD_INVOICE_NOT_OWNED", "Bu to'lov sizga tegishli emas.", 403);
 
-            public static readonly StopFactor InvoiceStateChanged =
-                new("HOLD_INVOICE_STATE_CHANGED", "Invoice holati o'zgargan — qayta urinib ko'ring.", 409);
+            public static readonly StopFactor IntentStateChanged =
+                new("HOLD_INVOICE_STATE_CHANGED", "To'lov holati o'zgargan — qayta urinib ko'ring.", 409);
+
+            /// <summary>
+            /// Idempotency-Key boshqa sessiya yoki boshqa foydalanuvchining to'loviga tegishli —
+            /// takroriy so'rov deb qaytarib bo'lmaydi (begona ma'lumot oshkor bo'lardi).
+            /// </summary>
+            public static readonly StopFactor IdempotencyKeyReused =
+                new("PAYMENT_IDEMPOTENCY_KEY_REUSED",
+                    "Bu Idempotency-Key boshqa to'lov uchun ishlatilgan — yangi kalit bilan urinib ko'ring.", 409);
 
             public static readonly StopFactor PaymentContextNotFound =
                 new("PAYMENT_CONTEXT_NOT_FOUND", "To'lov konteksti topilmadi.", 404);
 
             /// <summary>Mablag'ning bir qismi allaqachon xizmatga ketgan — bekor qilish uni qaytarmaydi.</summary>
-            public static readonly StopFactor InvoicePartiallyConsumed =
+            public static readonly StopFactor IntentPartiallyConsumed =
                 new("HOLD_INVOICE_PARTIALLY_CONSUMED",
-                    "Invoice mablag'i qisman ishlatilgan — bekor qilib bo'lmaydi, sessiyani yakunlang.", 409);
+                    "To'lov mablag'i qisman ishlatilgan — bekor qilib bo'lmaydi, sessiyani yakunlang.", 409);
 
-            /// <summary>Holat mashinasi bu o'tishga ruxsat bermaydi (masalan Hold'dan to'g'ridan Cancelled).</summary>
-            public static StopFactor InvoiceTransitionNotAllowed(object currentStatus, string target, string? hint = null) => new(
+            /// <summary>Holat mashinasi bu o'tishga ruxsat bermaydi (masalan Funded'dan to'g'ridan Cancelled).</summary>
+            public static StopFactor IntentTransitionNotAllowed(object currentStatus, string target, string? hint = null) => new(
                 "HOLD_INVOICE_TRANSITION_NOT_ALLOWED",
                 $"Joriy holat ({currentStatus}) \"{target}\" amaliga ruxsat bermaydi."
                     + (string.IsNullOrEmpty(hint) ? string.Empty : " " + hint),
                 409);
 
-            public static readonly StopFactor InvoiceRetryNotApplicable =
-                new("HOLD_INVOICE_RETRY_NOT_APPLICABLE", "Faqat Failed holatdagi invoice qayta urinishga yaroqli.", 409);
+            public static readonly StopFactor IntentRetryNotApplicable =
+                new("HOLD_INVOICE_RETRY_NOT_APPLICABLE", "Faqat Failed holatdagi to'lov qayta urinishga yaroqli.", 409);
+
+            // ── Strategiya (to'lov usuli) to'siqlari ────────────────
+
+            /// <summary>Tanlangan usul serverda ro'yxatga olinmagan (masalan hali yoqilmagan strategiya).</summary>
+            public static StopFactor MethodNotAvailable(object method) => new(
+                "PAYMENT_METHOD_NOT_AVAILABLE",
+                $"To'lov usuli ({method}) hozircha mavjud emas.", 409);
+
+            /// <summary>Merchant bu usulni yoqmagan.</summary>
+            public static StopFactor MethodNotEnabled(object method) => new(
+                "PAYMENT_METHOD_NOT_ENABLED",
+                $"Bu qurilmada {method} usuli bilan to'lash yoqilmagan.", 409);
+
+            /// <summary>Sessiya boshqa usul bilan ochilgan — o'rtada almashtirib bo'lmaydi.</summary>
+            public static StopFactor MethodMismatch(object sessionMethod) => new(
+                "PAYMENT_METHOD_MISMATCH",
+                $"Sessiya {sessionMethod} usuli bilan ochilgan — usulni sessiya o'rtasida almashtirib bo'lmaydi.",
+                409);
+
+            /// <summary>Amal strategiyaning imkoniyatidan tashqarida (masalan hold faqat Subscribe'da).</summary>
+            public static StopFactor CapabilityNotSupported(object method, string capability) => new(
+                "PAYMENT_CAPABILITY_NOT_SUPPORTED",
+                $"{method} usuli \"{capability}\" amalini qo'llamaydi.", 409);
+
+            /// <summary>Subscribe: to'lov uchun tasdiqlangan karta yo'q.</summary>
+            public static readonly StopFactor CardNotFound =
+                new("PAYMENT_CARD_NOT_FOUND", "To'lov uchun saqlangan karta topilmadi.", 404);
+
+            public static readonly StopFactor CardNotVerified =
+                new("PAYMENT_CARD_NOT_VERIFIED", "Karta tasdiqlanmagan — avval SMS kod bilan tasdiqlang.", 409);
+
+            /// <summary>Invoice usuli: chek telefonga yuboriladi — raqamsiz to'lov mumkin emas.</summary>
+            public static readonly StopFactor PhoneRequired =
+                new("PAYMENT_PHONE_REQUIRED",
+                    "Chekni yuborish uchun telefon raqami kerak — profilingizda raqamni to'ldiring.", 400);
+
+            public static readonly StopFactor CardNotOwned =
+                new("PAYMENT_CARD_NOT_OWNED", "Bu karta sizga tegishli emas.", 403);
+
+            public static readonly StopFactor CardWrongMerchant =
+                new("PAYMENT_CARD_WRONG_MERCHANT",
+                    "Karta boshqa merchant uchun saqlangan — shu stansiya uchun kartani qayta qo'shing.", 409);
+
+            public static readonly StopFactor CardDataInvalid =
+                new("PAYMENT_CARD_DATA_INVALID", "Karta raqami (16 raqam) yoki amal muddati (MMYY) noto'g'ri.", 400);
+
+            public static readonly StopFactor CardAlreadyVerified =
+                new("PAYMENT_CARD_ALREADY_VERIFIED", "Karta allaqachon tasdiqlangan.", 409);
+
+            public static readonly StopFactor VerificationCodeEmpty =
+                new("PAYMENT_CARD_CODE_EMPTY", "Tasdiqlash kodini kiriting.", 400);
+
+            /// <summary>Provider to'lovni RAD ETDI (mablag' yetarli emas, karta bloklangan va h.k.).</summary>
+            public static StopFactor ProviderRejected(string? message) => new(
+                "PAYMENT_PROVIDER_REJECTED",
+                string.IsNullOrWhiteSpace(message) ? "To'lov rad etildi." : message!, 402);
         }
 
         // ─────────────────────────── Umumiy ───────────────────────────

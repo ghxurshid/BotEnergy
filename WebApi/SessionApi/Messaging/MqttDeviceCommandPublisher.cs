@@ -47,8 +47,12 @@ namespace SessionApi.Messaging
             {
                 session_id = e.SessionId,
                 payment_session_id = e.PaymentSessionId,
-                invoice_id = e.InvoiceId,
-                hold_balance_tiyin = e.HoldBalanceTiyin,
+                intent_id = e.IntentId,
+                method = e.Method.ToString(),
+                funded_tiyin = e.FundedTiyin,
+                // Dalada ishlayotgan proshivka eski kalitlarni o'qiydi — bir reliz dublikat.
+                invoice_id = e.IntentId,
+                hold_balance_tiyin = e.FundedTiyin,
                 consumed_tiyin = e.ConsumedTiyin,
                 available_tiyin = e.AvailableTiyin,
                 available_uzs = e.AvailableUzs,

@@ -97,6 +97,21 @@
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/admin" }
         ]
       },
+      // Payme Merchant API callback'i: JWT YO'Q — Payme "Basic Paycom:<merchant_key>" bilan
+      // keladi va kalit SessionApi'da o'sha merchantniki bilan solishtiriladi. Order=-1 —
+      // umumiy "session" route'idan oldin tekshiriladi, aks holda 401 qaytardi.
+      // RateLimiterPolicy ataylab yo'q: per-user (IP fallback 60/min) Payme'ning bir nechta
+      // IP'sidan kelayotgan tranzaksiya oqimini bo'g'ib qo'yishi mumkin — global 300/min qoladi.
+      "session-payme-merchant": {
+        "ClusterId": "session",
+        "Order": -1,
+        "Match": { "Path": "/session/api/PaymeMerchant/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/session" },
+          { "X-Forwarded": "Set", "Prefix": "Off" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/session" }
+        ]
+      },
       "session": {
         "ClusterId": "session",
         "Match": { "Path": "/session/{**catch-all}" },

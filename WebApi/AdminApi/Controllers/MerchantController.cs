@@ -201,5 +201,60 @@ namespace AdminApi.Controllers
             var result = await _service.SetPaymeCredentialsAsync(id, request, User.GetScope());
             return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
+
+        /// <summary>
+        /// [EXPERT] Payme Merchant API credential'larini o'rnatish (checkout id + callback kaliti).
+        /// </summary>
+        /// <remarks>
+        /// Kassa credential'laridan (SetPaymeCredentials) ALOHIDA: Merchant usulida to'lovni
+        /// Payme bizga callback qilib tasdiqlaydi, shuning uchun boshqa kalit ishlatiladi.
+        /// Kalit write-only saqlanadi — GET'da faqat masked qaytadi.
+        /// </remarks>
+        [HttpPost("{id}")]
+        [RequirePermission(Permissions.MerchantAdminSetPaymeMerchantCredentials)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> SetPaymeMerchantCredentials(
+            long id, [FromBody] SetPaymeMerchantCredentialsDto request)
+        {
+            var result = await _service.SetPaymeMerchantCredentialsAsync(id, request, User.GetScope());
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
+        }
+
+        /// <summary>
+        /// Merchant to'lov strategiyasini almashtirish — RUNTIME sozlama (deploy/restart kerak emas).
+        /// </summary>
+        /// <remarks>
+        /// Merchant o'z sozlamasini o'zi boshqaradi (merchant-scoped operator ham chaqira oladi).
+        ///
+        /// - `defaultMethod` — yangi sessiyalar shu usul bilan ochiladi;
+        /// - `enabledMethods` — mijoz tanlashi mumkin bo'lgan usullar (default shular ichida bo'lishi shart);
+        /// - `refundUnusedFunds` — prepaid usullarda (Invoice/Merchant) ishlatilmagan mablag' qaytarilsinmi.
+        ///
+        /// O'zgarish KEYINGI sessiyalarga ta'sir qiladi: ochiq sessiya o'zi ochilgan usul bilan
+        /// yakunlanadi (FIFO consume va hisob-kitob bir xil semantikada tugashi uchun).
+        /// Credential'lari to'liq bo'lmagan usulni yoqib bo'lmaydi — 409 qaytadi.
+        ///
+        /// **Permission:** `MerchantAdmin.SetPaymentMethods`.
+        /// </remarks>
+        /// <response code="200">Saqlandi — keyingi sessiyalardan boshlab kuchga kiradi</response>
+        /// <response code="400">Ro'yxat bo'sh yoki default usul ro'yxatda yo'q</response>
+        /// <response code="403">Merchant doirangizdan tashqarida</response>
+        /// <response code="404">Merchant topilmadi</response>
+        /// <response code="409">Usul credential'lari sozlanmagan yoki merchant nofaol</response>
+        [HttpPost("{id}")]
+        [RequirePermission(Permissions.MerchantAdminSetPaymentMethods)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> SetPaymentMethods(long id, [FromBody] SetPaymentMethodsDto request)
+        {
+            var result = await _service.SetPaymentMethodsAsync(id, request, User.GetScope());
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
+        }
     }
 }

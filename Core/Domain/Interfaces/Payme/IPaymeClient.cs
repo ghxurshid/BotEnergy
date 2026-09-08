@@ -59,5 +59,41 @@ namespace Domain.Interfaces.Payme
             string receiptId,
             PaymeCredentials? creds = null,
             CancellationToken ct = default);
+
+        // ── Kartalar (Subscribe API) ────────────────────────────────
+        // DIQQAT: karta metodlari X-Auth sifatida FAQAT kassa id'sini oladi (kalitsiz),
+        // receipts.* esa "{cashbox}:{key}" — Payme Subscribe API shunday ajratadi.
+
+        /// <summary>cards.create — karta tokenini yaratadi (save=true: qayta ishlatiladigan).</summary>
+        Task<PaymeApiCall<PaymeCard>> CreateCardAsync(
+            string number,
+            string expire,
+            PaymeCredentials? creds = null,
+            CancellationToken ct = default);
+
+        /// <summary>cards.get_verify_code — karta egasining telefoniga SMS kod yuboradi.</summary>
+        Task<PaymeApiCall<PaymeVerifyCodeRequest>> GetCardVerifyCodeAsync(
+            string token,
+            PaymeCredentials? creds = null,
+            CancellationToken ct = default);
+
+        /// <summary>cards.verify — SMS kod bilan tokenni tasdiqlaydi (to'lovga yaroqli qiladi).</summary>
+        Task<PaymeApiCall<PaymeCard>> VerifyCardAsync(
+            string token,
+            string code,
+            PaymeCredentials? creds = null,
+            CancellationToken ct = default);
+
+        /// <summary>cards.check — token holati (verify/recurrent) hali kuchdami.</summary>
+        Task<PaymeApiCall<PaymeCard>> CheckCardAsync(
+            string token,
+            PaymeCredentials? creds = null,
+            CancellationToken ct = default);
+
+        /// <summary>cards.remove — tokenni provider tomonda o'chiradi.</summary>
+        Task<PaymeApiCall<PaymeCardRemoval>> RemoveCardAsync(
+            string token,
+            PaymeCredentials? creds = null,
+            CancellationToken ct = default);
     }
 }
