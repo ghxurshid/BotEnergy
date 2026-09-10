@@ -1,4 +1,4 @@
-using System.Security.Authentication;
+﻿using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -42,10 +42,18 @@ namespace SessionApi.Mqtt.Transport
             // ClientId har instansiyada unikal (EffectiveClientId) — aks holda ikkinchi
             // SessionApi replikasi birinchisini brokerdan uzib tashlaydi va ikkalasi
             // cheksiz reconnect tsikliga tushadi.
+            //
+            // CleanSession MAJBURIY true: ClientId'ga ProcessId kirgani uchun har restartda
+            // yangi identifikator chiqadi, ya'ni durable session hech qachon qayta
+            // ishlatilmaydi — u faqat brokerda to'planadi. Shared subscription bilan
+            // ($share/{group}/...) bu halokatli: har bir tashlab ketilgan session guruhda
+            // tirik obunachi sifatida navbatda turaveradi va unga round-robin bilan
+            // yuborilgan xabarlar offline queue'ga tushib yo'qoladi. N ta restartdan keyin
+            // xabarlarning taxminan 1/(N+1) qismigina ishlab turgan jarayonga yetadi.
             var opts = new MqttClientOptionsBuilder()
                 .WithTcpServer(_options.BrokerHost, _options.BrokerPort)
                 .WithClientId(_options.EffectiveClientId)
-                .WithCleanSession(false);
+                .WithCleanSession(true);
 
             if (!string.IsNullOrEmpty(_options.Username))
                 opts = opts.WithCredentials(_options.Username, _options.Password);

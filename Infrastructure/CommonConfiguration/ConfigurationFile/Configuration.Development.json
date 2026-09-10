@@ -2,7 +2,7 @@
   "_note": "Development qiymatlari. Struktura Configuration.Production.json bilan bir xil. Jwt.Secret va Seed.AdminPassword bo'sh — dev fallback'lar ishlaydi (dev const secret, Admin@123).",
 
   "ConnectionStrings": {
-    "DefaultConnection": "Host=51.38.127.221;Port=5432;Database=botenergy_db;Username=botenergy_user;Password=WsfR5sDcVfABT2F1"
+    "DefaultConnection": "Host=51.38.127.221;Port=5432;Database=botenergy_db;Username=botenergy_user;Password=Oo0wBXyyIZMqxQURbzKwaz0lsueXuKo0"
   },
   "Jwt": {
     "Secret": "",
