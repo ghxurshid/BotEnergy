@@ -16,12 +16,15 @@ namespace SessionApi.Controllers
     /// endpointlar o'zgarmaydi.
     ///
     /// **Oqim:**
-    /// 1. Sessiya ochiq holda mobil `CreateIntent` bilan summa ajratishni so'raydi
-    /// 2. Server sessiyada qotirilgan usul bo'yicha provider bilan ishlaydi:
+    /// 1. Mijoz mahsulotni tanlaydi → `Checkout` to'lov oynasini qaytaradi
+    ///    (usul, narx, qancha to'lash kerak, saqlangan kartalar, nima talab qilinadi)
+    /// 2. Mijoz kartani tanlaydi (yoki o'sha yerda yangisini qo'shib, SMS kod bilan tasdiqlaydi)
+    ///    va `CreateIntent` bilan summani ajratadi
+    /// 3. Server sessiyada qotirilgan usul bo'yicha provider bilan ishlaydi:
     ///    Subscribe → hold (pul bloklanadi), Invoice/Merchant → pul darhol yechiladi
-    /// 3. Javobdagi `requiresUserAction`/`checkoutUrl` mijoz nima qilishini aytadi
-    /// 4. Balans real-time SignalR (`SessionBalanceChanged`) + MQTT (`balance.update`) orqali keladi
-    /// 5. Dispense mablag'ni FIFO tartibda yeydi; sessiya yopilishida capture yoki refund
+    /// 4. Javobdagi `requiresUserAction`/`checkoutUrl` mijoz nima qilishini aytadi
+    /// 5. Balans real-time SignalR (`SessionBalanceChanged`) + MQTT (`balance.update`) orqali keladi
+    /// 6. Dispense mablag'ni FIFO tartibda yeydi; sessiya yopilishida capture yoki refund
     /// </summary>
     [Route("api/[controller]/[action]")]
     [ApiController]
@@ -93,6 +96,47 @@ namespace SessionApi.Controllers
                 return Unauthorized();
 
             var result = await _payments.CancelIntentAsync(intentId, userId, ct);
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
+        }
+
+        /// <summary>
+        /// Mahsulot tanlangandan keyingi TO'LOV OYNASI — ilova shu bitta javob bilan
+        /// to'lov ekranini to'liq chizadi: qotirilgan usul, mahsulot narxi, qancha to'lash
+        /// kerakligi, saqlangan kartalar va usul talab qiladigan narsalar.
+        ///
+        /// <para><b>Ilova mantiqi:</b> <c>requiresCard</c> → kartalar ro'yxati + "karta qo'shish";
+        /// <c>requiresPhone</c> → raqam maydoni; <c>requiresCheckout</c> → to'lovdan keyin
+        /// <c>checkoutUrl</c> ochiladi. Usul nomiga qarab shart yozilmaydi.</para>
+        /// </summary>
+        /// <param name="sessionId">Aktiv sessiya.</param>
+        /// <param name="productId">Mijoz tanlagan mahsulot (ixtiyoriy).</param>
+        /// <param name="requestedAmount">So'ralgan miqdor — litr/kWh/daqiqa (ixtiyoriy).</param>
+        /// <response code="200">To'lov oynasi ma'lumotlari</response>
+        /// <response code="403">Sessiya boshqa foydalanuvchiniki</response>
+        /// <response code="404">Sessiya topilmadi</response>
+        /// <response code="409">Sessiya yopilgan yoki to'lov konteksti yaratilmadi</response>
+        [HttpGet("{sessionId}")]
+        [RequirePermission(Permissions.PaymentHoldRead)]
+        [ProducesResponseType(typeof(PaymentCheckoutDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Checkout(
+            long sessionId,
+            [FromQuery] long? productId = null,
+            [FromQuery] decimal? requestedAmount = null)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var result = await _payments.GetCheckoutAsync(new PaymentCheckoutQueryDto
+            {
+                SessionId = sessionId,
+                UserId = userId,
+                ProductId = productId,
+                RequestedAmount = requestedAmount
+            });
+
             return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 

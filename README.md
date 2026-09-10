@@ -1675,6 +1675,53 @@ Authorization: Bearer <platform-token>
   `Subscribe`/`Invoice` → Payme kassasi (`SetPaymeCredentials`), `Merchant` → Merchant API
   (`SetPaymeMerchantCredentials`).
 
+### Mijoz oqimi: mahsulot → to'lov oynasi → dispense
+
+To'lov sirtining kirish nuqtasi — `Checkout`. Ilova mahsulot tanlangach uni chaqiradi va
+**bitta javob bilan** butun to'lov ekranini chizadi; usul nomiga qarab hech qanday shart yozmaydi.
+
+```http
+GET /api/SessionPayment/Checkout/{sessionId}?productId=7&requestedAmount=10
+
+→ 200 {
+    "sessionId": 12, "paymentSessionId": 8, "paymentSessionStatus": 0,
+    "method": 2, "kind": 0, "isHold": true,
+    "merchantId": 3, "merchantName": "AvtoMoyka LLC",
+    "product": { "productId": 7, "name": "Suv", "unit": "Liter",
+                 "pricePerUnit": 1500, "maxAmountByFunds": 0 },
+    "requestedAmount": 10, "estimatedCostUzs": 15000,
+    "fundedTiyin": 0, "consumedTiyin": 0, "availableTiyin": 0, "availableUzs": 0,
+    "amountToFundUzs": 15000, "suggestedAmountUzs": 15000,
+    "minAmountUzs": 5000, "maxActiveIntents": 10, "activeIntentCount": 0,
+    "canStartNow": false,
+
+    "requiresCard": true, "hasUsableCard": true, "suggestedCardId": 12,
+    "cards": [ { "cardId": 12, "maskedNumber": "8600 **** 1234", "isVerified": true, "isDefault": true } ],
+    "requiresPhone": false, "phone": null, "requiresCheckout": false,
+
+    "canCreateIntent": true, "missingRequirement": null,
+    "hint": "To'lov saqlangan kartangizdan bajariladi: summa kartada BLOKLANADI…",
+    "intents": []
+  }
+```
+
+| Maydon | Ilova nima qiladi |
+|---|---|
+| `requiresCard` | Saqlangan kartalar ro'yxatini (`cards`) va "karta qo'shish" formasini ko'rsatadi |
+| `hasUsableCard` = false | Darhol karta qo'shish formasini ochadi (`missingRequirement` matni bilan) |
+| `requiresPhone` | Telefon maydonini ko'rsatadi (`phone` — profildagi raqam) |
+| `requiresCheckout` | To'lovdan keyin `checkoutUrl` ni ochadi |
+| `amountToFundUzs` | Tanlangan miqdor uchun yana qancha to'lash kerakligi (0 — darhol boshlash mumkin) |
+| `canCreateIntent` = false | Tugmani bloklaydi va `missingRequirement` ni ko'rsatadi |
+
+Bu maydonlarni **strategiyaning o'zi** to'ldiradi (`ISessionPaymentStrategy.GetPrerequisitesAsync`),
+shuning uchun yangi usul qo'shilganda sirt ham, mobil ilova ham o'zgarmaydi.
+
+To'lov holati sessiya snapshot'ida ham keladi (`GET /api/Session/Current`, `Bootstrap`,
+SignalR `DeviceConnected`) — `payment` bloki: `{ method, kind, isHold, status, merchantId,
+fundedTiyin, consumedTiyin, availableTiyin, availableUzs, activeIntentCount, requiresUserAction,
+checkoutUrl }`. Ilova cold start'da to'lov ekranini qo'shimcha so'rovsiz tiklaydi.
+
 ### Saqlangan kartalar (Subscribe usuli) — UserApi
 
 Token **merchant kassasiga bog'langan**: bir karta har bir merchant uchun alohida tokenlanadi,
@@ -1691,6 +1738,14 @@ DELETE /api/Card/Delete/{cardId}
 
 PAN va CVV serverda **saqlanmaydi**, token API javoblarida hech qachon qaytarilmaydi.
 Tasdiqlanmagan karta to'lovga ishlatilmaydi. Birinchi tasdiqlangan karta avtomatik asosiy bo'ladi.
+
+> **`Subscribe` usuli tasdiqlangan kartani TALAB qiladi.** Karta bo'lmasa `CreateIntent`
+> `409 PAYMENT_CARD_REQUIRED` qaytaradi — ilova shu kodni ko'rib to'lov oynasidan chiqmasdan
+> karta qo'shish formasini ochadi. (Ilgari kartasiz hold cheki yaratilar, lekin bu usulda
+> checkout havolasi bo'lmagani uchun mijozda uni to'lash yo'li qolmasdi.)
+
+Kartalar ro'yxatini alohida so'rash shart emas — `SessionPayment/Checkout` javobida
+`cards[]` bo'lib keladi. `Add`/`Verify` esa UserApi'da qoladi (yagona sirt).
 
 ### Payme Merchant API callback'i (Merchant usuli)
 
@@ -1723,14 +1778,20 @@ POST /api/SessionPayment/CreateIntent        # Idempotency-Key MAJBURIY
   }
 
 POST /api/SessionPayment/CancelIntent/{intentId}
+GET  /api/SessionPayment/Checkout/{sessionId}?productId=&requestedAmount=   # to'lov oynasi (yuqoriga qarang)
 GET  /api/SessionPayment/BySession/{sessionId}    # intent'lar FIFO tartibda
 GET  /api/SessionPayment/Balance/{sessionId}      # { method, fundedTiyin, consumedTiyin, availableTiyin, intents[] }
 ```
 
 Klient uchun muhim ikkita maydon: `requiresUserAction` (mijoz hali biror amal qilishi kerakmi)
 va `checkoutUrl` (ochilishi kerak bo'lgan havola — Merchant usulida). `cardId` faqat Subscribe
-usulida ishlaydi: berilmasa shu merchant uchun asosiy karta olinadi, karta umuman bo'lmasa
-mijoz chekni Payme ilovasida o'zi tasdiqlaydi.
+usulida ishlaydi: berilmasa shu merchant uchun **asosiy karta** olinadi; tasdiqlangan karta
+umuman bo'lmasa `409 PAYMENT_CARD_REQUIRED`.
+
+**Provider rad etsa** (mablag' yetmadi, karta bloklangan) intent `Cancelled` bo'ladi va
+`402 PAYMENT_PROVIDER_REJECTED` qaytadi — pul harakatlanmagani uchun bu operator ishi emas:
+mijoz darhol boshqa karta bilan qayta urinadi, sessiya yopilishi ham kutib qolmaydi.
+`Failed` esa faqat **noma'lum** natijada (tarmoq/timeout) qo'yiladi.
 
 > **Cheklov:** Payme chekni qisman qaytarmaydi. Prepaid usullarda (Invoice/Merchant) qisman
 > ishlatilgan to'lov qoldig'i mijozga qaytarilmaydi — u audit step'ida qayd etiladi va admin

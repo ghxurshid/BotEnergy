@@ -33,8 +33,11 @@ namespace Domain.Options
         /// <summary>Bir sessiyada bir vaqtda mavjud bo'lishi mumkin aktiv intent'lar.</summary>
         public int MaxIntentsPerSession { get; set; } = 10;
 
-        /// <summary>True — chek yaratilgach mijoz telefoniga SMS yuboriladi (Invoice usuli).</summary>
-        public bool SendReceiptToPhone { get; set; } = false;
+        /// <summary>
+        /// To'lov oynasida taklif qilinadigan eng kichik summa (so'm). Provider har bir chek
+        /// uchun komissiya oladi, shuning uchun juda mayda to'lovlar taklif qilinmaydi.
+        /// </summary>
+        public decimal MinAmountUzs { get; set; } = 5000;
 
         /// <summary>
         /// Merchant sozlamasi bo'lmaganda ishlatiladigan usul. Merchant o'z sozlamasini

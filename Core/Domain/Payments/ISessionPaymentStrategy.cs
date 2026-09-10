@@ -1,5 +1,6 @@
 using Domain.Dtos.Base;
 using Domain.Dtos.PaymentSession;
+using Domain.Entities;
 using Domain.Enums;
 
 namespace Domain.Payments
@@ -19,6 +20,15 @@ namespace Domain.Payments
         PaymentStrategyProfile Profile { get; }
 
         PaymentMethod Method => Profile.Method;
+
+        // ── To'lov sirti (payment sheet) ───────────────────
+
+        /// <summary>
+        /// Mijoz shu usul bilan to'lay olishi uchun nima kerakligi: karta/telefon/checkout.
+        /// Ilova to'lov oynasini AYNAN shu javob bo'yicha chizadi — usul nomiga qarab
+        /// <c>if</c> yozmaydi.
+        /// </summary>
+        Task<PaymentPrerequisites> GetPrerequisitesAsync(PaymentSessionEntity ps, long userId);
 
         // ── Mobil oqim: mablag' ajratish ────────────────────────────
 

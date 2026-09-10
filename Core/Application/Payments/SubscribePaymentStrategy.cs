@@ -54,6 +54,30 @@ namespace Application.Payments
                 ? "To'lov tasdiqlandi — mablag' kartangizda bloklandi."
                 : "Hold yaratildi — Payme ilovasida to'lovni tasdiqlang.";
 
+        protected override string CustomerHint =>
+            "To'lov saqlangan kartangizdan bajariladi: summa kartada BLOKLANADI, "
+            + "sessiya yakunlanganda faqat ishlatilgani yechiladi, qolgani o'zi bo'shaydi.";
+
+        /// <summary>
+        /// Bu usul mijozning kartasi bilan ishlaydi — ilova aynan shu javobga qarab
+        /// kartalar ro'yxatini yoki "karta qo'shish" formasini ko'rsatadi.
+        /// </summary>
+        public override async Task<PaymentPrerequisites> GetPrerequisitesAsync(
+            PaymentSessionEntity ps, long userId)
+        {
+            var card = await _cards.GetUsableAsync(userId, ps.MerchantId);
+
+            return new PaymentPrerequisites(
+                RequiresCard: true,
+                HasUsableCard: card is not null,
+                SuggestedCardId: card?.Id,
+                IsReady: card is not null,
+                MissingRequirement: card is null
+                    ? StopFactors.Payment.CardRequired.Message
+                    : null,
+                Hint: CustomerHint);
+        }
+
         // ── To'siqlar ───────────────────────────────────────────────
 
         protected override async Task<StopFactor?> ValidateCreateAsync(
@@ -73,9 +97,14 @@ namespace Application.Payments
                 if (card.UserId != dto.UserId) return StopFactors.Payment.CardNotOwned;
                 if (card.MerchantId != ps.MerchantId) return StopFactors.Payment.CardWrongMerchant;
                 if (!card.IsVerified) return StopFactors.Payment.CardNotVerified;
+                return null;
             }
 
-            return null;
+            // Karta ko'rsatilmagan — asosiy karta bo'lishi SHART. Aks holda chek yaratilib,
+            // mijozda uni to'lash yo'li qolmasdi (bu usulda checkout havolasi yo'q):
+            // hold osilib qolib, sessiya yopilishida bekor qilinishini kutardi.
+            var fallback = await _cards.GetUsableAsync(dto.UserId, ps.MerchantId);
+            return fallback is null ? StopFactors.Payment.CardRequired : null;
         }
 
         // ── Provider chaqiruvlari ───────────────────────────────────
@@ -98,6 +127,7 @@ namespace Application.Payments
             var receiptId = create.Result!.Id;
 
             // ── Saqlangan karta bo'lsa — server o'zi to'laydi ──
+            // ValidateCreateAsync kafolatladi: shu joyda yaroqli karta MAVJUD.
             var card = dto.CardId is not null
                 ? await _cards.GetByIdAsync(dto.CardId.Value)
                 : await _cards.GetUsableAsync(dto.UserId, ps.MerchantId);
@@ -135,21 +165,14 @@ namespace Application.Payments
                     AlreadyFunded: funded);
             }
 
-            // Karta yo'q — mijoz Payme ilovasida o'zi tasdiqlaydi (watcher polling kutadi).
-            if (Options.SendReceiptToPhone && !string.IsNullOrWhiteSpace(dto.Phone))
-            {
-                var send = await _payme.SendReceiptAsync(receiptId, dto.Phone!, creds, ct);
-                await LogStepAsync(intent, ps, PaymentIntentStepType.DeliveryRequested,
-                    send.IsSuccess ? PaymentStepStatus.Success : PaymentStepStatus.Error,
-                    requestPayload: send.RequestBody, responsePayload: send.ResponseBody,
-                    message: send.FailureMessage);
-                // Yuborish xatosi kritik emas — mijoz ilovada ham to'lay oladi.
-            }
+            // Bu yerga tushish — poyga: tekshiruvdan keyin karta o'chirilgan/tasdiqi olingan.
+            // To'lanmagan chek osilib qolmasin.
+            await _payme.CancelReceiptAsync(receiptId, creds, ct);
 
             return new ProviderFunding(
-                ToCall(create),
-                ReceiptId: receiptId,
-                ProviderState: create.Result.State);
+                new ProviderCall(ProviderOutcome.Permanent,
+                    Message: StopFactors.Payment.CardRequired.Message),
+                ReceiptId: receiptId);
         }
 
         protected override async Task<ProviderPoll> PollFundingAsync(

@@ -188,7 +188,10 @@ ruxsat etsa) → `Merchant.DefaultPaymentMethod` → `Payments:DefaultMethod` co
 **Ochiq sessiya usuli o'zgarmaydi** — FIFO consume va hisob-kitob bir xil semantikada tugashi uchun.
 Credential'i to'liq bo'lmagan usulni yoqib bo'lmaydi (`PaymentMethodRequirements`).
 
-**Saqlangan kartalar** (`Subscribe`): `customer_cards` — token **merchant kassasiga bog'langan**,
+**Saqlangan kartalar** (`Subscribe`): usul tasdiqlangan kartani TALAB qiladi — karta bo'lmasa
+`CreateIntent` → `PAYMENT_CARD_REQUIRED` (ilova o'sha yerda karta qo'shish formasini ochadi).
+Provider ATAYLAB rad etsa (pul yetmadi) intent `Cancelled` bo'ladi, `Failed` emas — pul
+harakatlanmagan, mijoz boshqa karta bilan qayta urinadi. `customer_cards` — token **merchant kassasiga bog'langan**,
 shuning uchun yozuv (user, merchant) juftligiga tegishli va barcha amallar `merchantId` bilan.
 Sirt: UserApi `/api/Card/{Add,Verify,ResendCode,My,SetDefault,Delete}`
 (`ICustomerCardService`, `AddPaymeClient` ichida ro'yxatga olinadi). PAN/CVV saqlanmaydi,
@@ -229,7 +232,13 @@ Jadvallar: `payment_sessions` (usul + `funded_tiyin`/`consumed_tiyin`), `payment
 olingan har bir strategiya bo'ylab aylanadi va har biri faqat o'z usulidagi intent'larni
 `ClaimDueAsync(method, ...)` bilan claim qiladi.
 
-API sirti: `/api/SessionPayment/{CreateIntent,CancelIntent,BySession,Balance}` (SessionApi).
+API sirti: `/api/SessionPayment/{Checkout,CreateIntent,CancelIntent,BySession,Balance}` (SessionApi).
+`Checkout/{sessionId}?productId=&requestedAmount=` — mahsulot tanlangandan keyingi TO'LOV OYNASI:
+usul+kind, mahsulot narxi, `amountToFundUzs`, saqlangan kartalar va usul nima talab qilishi
+(`requiresCard`/`requiresPhone`/`requiresCheckout`, `canCreateIntent`+`missingRequirement`).
+Bu maydonlarni strategiyaning o'zi to'ldiradi (`ISessionPaymentStrategy.GetPrerequisitesAsync`) —
+sirtda usul nomi bo'yicha `if` yozilmaydi. Sessiya snapshot'i (`Session/Current`, `Bootstrap`,
+SignalR `DeviceConnected`) `payment` blokini olib keladi.
 Eski `/api/HoldInvoice/*` bir reliz alias bo'lib qoladi (`HoldInvoiceLegacyController`).
 
 ### Message flow (mobile ↔ device) — single broker (MQTT), no RabbitMQ

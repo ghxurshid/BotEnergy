@@ -101,6 +101,20 @@ namespace Application.Payments
         protected virtual Task<SettlementMode> ResolveSettlementModeAsync(PaymentSessionEntity ps)
             => Task.FromResult(Profile.Settlement);
 
+        /// <summary>
+        /// Mijozga ko'rsatiladigan qisqa ko'rsatma — to'lov oynasining sarlavhasi ostida turadi.
+        /// Har bir strategiya o'z matnini beradi, shuning uchun sirtda usul nomiga qarab
+        /// <c>if</c> yozilmaydi.
+        /// </summary>
+        protected abstract string CustomerHint { get; }
+
+        /// <summary>
+        /// Mijoz shu usul bilan to'lay olishi uchun nima kerakligi. Sukut bo'yicha qo'shimcha
+        /// shart yo'q — karta/telefon talab qiladigan strategiyalar buni override qiladi.
+        /// </summary>
+        public virtual Task<PaymentPrerequisites> GetPrerequisitesAsync(PaymentSessionEntity ps, long userId)
+            => Task.FromResult(PaymentPrerequisites.Ready(CustomerHint));
+
         /// <summary>Watcher shu intent'ni ishlay oladimi (provider identifikatori yetarlimi).</summary>
         protected virtual bool IsProcessable(PaymentIntentEntity intent)
             => !string.IsNullOrEmpty(intent.ProviderReceiptId);
@@ -202,13 +216,25 @@ namespace Application.Payments
 
             if (!funding.Call.IsSuccess)
             {
-                await Intents.TryTransitionAsync(intent.Id, PaymentIntentStatus.Failed,
+                // Provider ATAYLAB rad etdi (mablag' yetmadi, karta bloklangan): pul umuman
+                // harakatlanmadi va strategiya ochilgan chekni bekor qildi — bu operator ishi
+                // emas. Shuning uchun Cancelled: mijoz darhol boshqa karta bilan qayta urinadi,
+                // sessiya yopilishi esa "Failed intent" tufayli kutib qolmaydi.
+                //
+                // Tarmoq/timeout (Transient) da esa provider tomonda nima bo'lgani NOMA'LUM —
+                // u Failed bo'lib operator ro'yxatiga tushadi.
+                var permanent = funding.Call.Outcome == ProviderOutcome.Permanent;
+
+                await Intents.TryTransitionAsync(intent.Id,
+                    permanent ? PaymentIntentStatus.Cancelled : PaymentIntentStatus.Failed,
                     failureReason: $"Mablag' so'rash: {funding.Call.Message}");
 
-                // Tarmoq/provider nosozligi (502) va providerning ATAYLAB rad javobi (402) —
-                // mijoz uchun butunlay boshqa xabar: birinchisida qayta urinadi, ikkinchisida karta almashtiradi.
+                await PublishSessionPaymentStateAsync(ps.SessionId,
+                    permanent ? BalanceChangeReasons.Cancelled : BalanceChangeReasons.Failed, intent.Id);
+
+                // Mijoz uchun butunlay boshqa xabar: 502 da qayta urinadi, 402 da karta almashtiradi.
                 return GenericDto<PaymentIntentResultDto>.Blocked(
-                    funding.Call.Outcome == ProviderOutcome.Permanent
+                    permanent
                         ? StopFactors.Payment.ProviderRejected(funding.Call.Message)
                         : StopFactors.Payment.ProviderUnavailable);
             }

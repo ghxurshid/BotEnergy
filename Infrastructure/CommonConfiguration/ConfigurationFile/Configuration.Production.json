@@ -99,8 +99,8 @@
     "BackoffMaxSeconds": 300,
     "IntentTtlMinutes": 30,
     "MaxIntentsPerSession": 10,
+    "MinAmountUzs": 5000,
     "SettlingGraceMinutes": 15,
-    "SendReceiptToPhone": false,
     "DefaultMethod": 2,
     "CheckoutBaseUrl": "https://checkout.paycom.uz"
   },

@@ -25,8 +25,33 @@ namespace Domain.Payments
         /// <summary>Sessiya to'lov konteksti: balans + intent ro'yxati (mobil uchun).</summary>
         Task<GenericDto<PaymentSessionDto>> GetForSessionAsync(long sessionId, long userId);
 
+        /// <summary>
+        /// Mahsulot tanlangandan keyingi TO'LOV OYNASI: usul, narx, qancha to'lash kerakligi,
+        /// saqlangan kartalar va usul talab qiladigan narsalar — bitta javobda.
+        /// </summary>
+        Task<GenericDto<PaymentCheckoutDto>> GetCheckoutAsync(PaymentCheckoutQueryDto query);
+
+        /// <summary>
+        /// Sessiya snapshot'iga qo'shiladigan qisqa to'lov holati. To'lov konteksti bo'lmasa null
+        /// — chaqiruvchi (sessiya servisi) buni xato deb hisoblamaydi.
+        /// </summary>
+        Task<SessionPaymentSnapshotDto?> GetSnapshotAsync(long sessionId);
+
         /// <summary>Sessiyaning barcha intent'lari (FIFO tartibda).</summary>
         Task<GenericDto<List<PaymentIntentItemDto>>> GetIntentsForSessionAsync(long sessionId, long userId);
+    }
+
+    /// <summary>To'lov oynasi so'rovi — sessiya + (ixtiyoriy) tanlangan mahsulot va miqdor.</summary>
+    public sealed class PaymentCheckoutQueryDto
+    {
+        public long SessionId { get; set; }
+        public long UserId { get; set; }
+
+        /// <summary>Mijoz tanlagan mahsulot. Berilmasa oyna faqat balans holatini qaytaradi.</summary>
+        public long? ProductId { get; set; }
+
+        /// <summary>Mijoz so'ragan miqdor (litr/kWh...). Berilmasa mavjud mablag' bo'yicha hisoblanadi.</summary>
+        public decimal? RequestedAmount { get; set; }
     }
 
     /// <summary>

@@ -1,3 +1,5 @@
+using Domain.Dtos.PaymentSession;
+
 namespace Domain.Dtos.Session
 {
     /// <summary>
@@ -17,6 +19,13 @@ namespace Domain.Dtos.Session
         public string DeviceSerialNumber { get; set; } = string.Empty;
         public string DeviceType { get; set; } = string.Empty;
         public List<DeviceProductCapabilityDto> Products { get; set; } = new();
+
+        /// <summary>
+        /// Ulanish paytidayoq ochilgan to'lov konteksti: qaysi usul, hold-mi, balans.
+        /// Ilova mahsulot tanlashdan oldin to'lov usulini ko'rsatishi uchun.
+        /// </summary>
+        public SessionPaymentSnapshotDto? Payment { get; set; }
+
         public string ResultMessage { get; set; } = string.Empty;
     }
 

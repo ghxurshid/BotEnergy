@@ -161,6 +161,10 @@ namespace Application.Services
                 })
                 .ToList();
 
+            // To'lov konteksti ulanish paytida yaratiladi — ilova mahsulot tanlashdan OLDIN
+            // qaysi usul bilan to'lashini bilishi uchun uni shu javobga qo'shamiz.
+            var payment = await _payments.GetSnapshotAsync(session.Id);
+
             var result = new DeviceConnectedResultDto
             {
                 SessionId = session.Id,
@@ -168,6 +172,7 @@ namespace Application.Services
                 DeviceSerialNumber = device.SerialNumber,
                 DeviceType = device.DeviceType.ToString(),
                 Products = capabilities,
+                Payment = payment,
                 ResultMessage = "Qurilma sessiyaga ulandi."
             };
 
@@ -178,6 +183,7 @@ namespace Application.Services
                 serial_number = device.SerialNumber,
                 device_type = device.DeviceType.ToString(),
                 products = capabilities,
+                payment,
                 connected_at = session.ConnectedAt
             });
 
@@ -339,7 +345,7 @@ namespace Application.Services
             if (session is null)
                 return GenericDto<CurrentSessionDto?>.Success(null);
 
-            return GenericDto<CurrentSessionDto?>.Success(MapToCurrent(session));
+            return GenericDto<CurrentSessionDto?>.Success(await MapToCurrentAsync(session));
         }
 
         public async Task<GenericDto<CurrentSessionDto>> GetByIdAsync(long sessionId, long userId)
@@ -354,7 +360,7 @@ namespace Application.Services
             if (stop is not null)
                 return GenericDto<CurrentSessionDto>.Blocked(stop);
 
-            return GenericDto<CurrentSessionDto>.Success(MapToCurrent(found)!);
+            return GenericDto<CurrentSessionDto>.Success((await MapToCurrentAsync(found))!);
         }
 
         public async Task<GenericDto<HeartbeatResultDto>> HeartbeatAsync(long sessionId, long userId)
@@ -397,6 +403,20 @@ namespace Application.Services
                 CreatedAt = s.CreatedAt,
                 ClosedAt = s.ClosedAt
             }));
+        }
+
+        /// <summary>
+        /// Snapshot + to'lov holati. To'lov konteksti sessiyaning ajralmas qismi
+        /// (mahsulot tanlash undan moliyalanadi), shuning uchun u HAR BIR sessiya
+        /// o'qishida birga keladi — ilova alohida so'rov qilishi shart emas.
+        /// </summary>
+        internal async Task<CurrentSessionDto?> MapToCurrentAsync(SessionEntity? session)
+        {
+            var dto = MapToCurrent(session);
+            if (dto is not null)
+                dto.Payment = await _payments.GetSnapshotAsync(dto.SessionId);
+
+            return dto;
         }
 
         internal CurrentSessionDto? MapToCurrent(SessionEntity? session)

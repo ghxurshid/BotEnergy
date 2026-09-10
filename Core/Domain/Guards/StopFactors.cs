@@ -505,6 +505,15 @@ namespace Domain.Guards
             public static readonly StopFactor CardNotFound =
                 new("PAYMENT_CARD_NOT_FOUND", "To'lov uchun saqlangan karta topilmadi.", 404);
 
+            /// <summary>
+            /// Saqlangan kartadan to'laydigan usul (Subscribe), lekin mijozda tasdiqlangan
+            /// karta yo'q. Ilova bu kodni ko'rib to'lov oynasida "karta qo'shish" formasini ochadi.
+            /// </summary>
+            public static readonly StopFactor CardRequired =
+                new("PAYMENT_CARD_REQUIRED",
+                    "To'lov saqlangan karta orqali bajariladi — avval kartani qo'shib, SMS kod bilan tasdiqlang.",
+                    409);
+
             public static readonly StopFactor CardNotVerified =
                 new("PAYMENT_CARD_NOT_VERIFIED", "Karta tasdiqlanmagan — avval SMS kod bilan tasdiqlang.", 409);
 

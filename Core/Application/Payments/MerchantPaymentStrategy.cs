@@ -37,11 +37,19 @@ namespace Application.Payments
         public override PaymentStrategyProfile Profile { get; } = new(
             PaymentMethod.Merchant,
             PaymentIntentKind.Charge,
-            PaymentCapabilities.ProviderCallback,
+            PaymentCapabilities.ProviderCallback | PaymentCapabilities.Checkout,
             SettlementMode.None);
 
         protected override string CreatedMessage(PaymentIntentEntity intent)
             => "To'lov havolasi tayyor — Payme orqali to'lovni yakunlang.";
+
+        protected override string CustomerHint =>
+            "To'lov havolasi (QR) ochiladi va to'lovni Payme'da yakunlaysiz. Pul darhol yechiladi; "
+            + "ishlatilmagan mablag' avtomatik qaytarilmaydi — kerakli summani ajrating.";
+
+        /// <summary>Havola intent yaratilganda tayyor bo'ladi — oldindan hech narsa talab qilinmaydi.</summary>
+        public override Task<PaymentPrerequisites> GetPrerequisitesAsync(PaymentSessionEntity ps, long userId)
+            => Task.FromResult(new PaymentPrerequisites(RequiresCheckout: true, Hint: CustomerHint));
 
         /// <summary>Bu usulda provider chek identifikatori yo'q — order_id yetarli.</summary>
         protected override bool IsProcessable(PaymentIntentEntity intent)

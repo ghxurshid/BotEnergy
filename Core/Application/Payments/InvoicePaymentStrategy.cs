@@ -49,11 +49,31 @@ namespace Application.Payments
             PaymentMethod.Invoice,
             PaymentIntentKind.Charge,
             // PartialRefund YO'Q — Payme chekni qisman qaytarmaydi.
-            PaymentCapabilities.Refund,
+            PaymentCapabilities.Refund | PaymentCapabilities.PhoneDelivery,
             SettlementMode.RefundRemainderOnClose);
 
         protected override string CreatedMessage(PaymentIntentEntity intent)
             => "Chek yuborildi — Payme ilovasida to'lovni yakunlang.";
+
+        protected override string CustomerHint =>
+            "Chek telefon raqamingizga yuboriladi va to'lovni Payme ilovasida yakunlaysiz. "
+            + "Pul darhol yechiladi; ishlatilmagan mablag' sessiya yopilganda qaytariladi.";
+
+        /// <summary>Chek yetkazish kanali — telefon. Raqamsiz mijoz chekni ololmaydi.</summary>
+        public override async Task<PaymentPrerequisites> GetPrerequisitesAsync(
+            PaymentSessionEntity ps, long userId)
+        {
+            var user = await _users.GetByIdAsync(userId);
+            var phone = string.IsNullOrWhiteSpace(user?.PhoneNumber) ? null : user!.PhoneNumber;
+
+            return new PaymentPrerequisites(
+                RequiresPhone: true,
+                Phone: phone,
+                RequiresCheckout: true,
+                IsReady: phone is not null,
+                MissingRequirement: phone is null ? StopFactors.Payment.PhoneRequired.Message : null,
+                Hint: CustomerHint);
+        }
 
         // ── To'siqlar ───────────────────────────────────────────────
 

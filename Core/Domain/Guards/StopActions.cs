@@ -63,6 +63,9 @@ namespace Domain.Guards
         // Pul harakati
         public const string BalanceTopUp = "Balance.TopUp";
         public const string PaymentIntentCreate = "PaymentIntent.Create";
+
+        /// <summary>Mahsulot tanlangandan keyingi to'lov oynasini o'qish.</summary>
+        public const string PaymentCheckout = "Payment.Checkout";
         public const string PaymentIntentCancel = "PaymentIntent.Cancel";
         public const string PaymentPay = "Payment.Pay";
 

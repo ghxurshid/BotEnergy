@@ -1,3 +1,5 @@
+using Domain.Dtos.PaymentSession;
+
 namespace Domain.Dtos.Session
 {
     /// <summary>
@@ -16,6 +18,13 @@ namespace Domain.Dtos.Session
 
         public CurrentSessionDeviceDto? Device { get; set; }
         public CurrentSessionProcessDto? ActiveProcess { get; set; }
+
+        /// <summary>
+        /// Sessiyaning to'lov holati: qaysi usul, qancha mablag' bor, mijozdan amal
+        /// kutilyaptimi. Ilova cold start'da (Bootstrap) to'lov ekranini shu bloksiz
+        /// qayta tiklay olmasdi. To'lov konteksti hali yaratilmagan bo'lsa null.
+        /// </summary>
+        public SessionPaymentSnapshotDto? Payment { get; set; }
     }
 
     public class CurrentSessionDeviceDto

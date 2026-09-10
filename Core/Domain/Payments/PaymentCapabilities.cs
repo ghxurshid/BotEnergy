@@ -27,7 +27,13 @@ namespace Domain.Payments
         ProviderCallback = 1 << 4,
 
         /// <summary>Saqlangan karta tokeni bilan server tomondan to'lash.</summary>
-        SavedCard = 1 << 5
+        SavedCard = 1 << 5,
+
+        /// <summary>Chek mijozning telefon raqamiga yuboriladi — raqamsiz to'lov mumkin emas.</summary>
+        PhoneDelivery = 1 << 6,
+
+        /// <summary>Mijoz to'lovni tashqi havola/QR (checkout) orqali yakunlaydi.</summary>
+        Checkout = 1 << 7
     }
 
     /// <summary>
