@@ -46,6 +46,9 @@ namespace SessionApi.Mqtt.Middlewares
                     _logger.LogWarning(
                         "[MQTT-IN] Handler topilmadi kind={Kind} type={Type} serial={Serial}",
                         context.TopicKind, context.Envelope.Type, context.SerialNumber);
+
+                    await MqttRejectionResponder.RespondAsync(context, _logger, MqttResultCodes.UnknownType,
+                        $"Server \"{context.Envelope.Type}\" turini qo'llamaydi \u2014 firmware versiyasini tekshiring.");
                 }
                 return;
             }
@@ -62,6 +65,11 @@ namespace SessionApi.Mqtt.Middlewares
                 _logger.LogError(ex,
                     "[MQTT-IN] Handler xato berdi type={Type} serial={Serial}",
                     context.Envelope.Type, context.SerialNumber);
+
+                // Ichki xato ham qurilmani ack-timeout'da ushlab turmasin: u qayta urinishi
+                // yoki xatoni ekranda ko'rsatishi mumkin. Istisno tafsiloti YUBORILMAYDI.
+                await MqttRejectionResponder.RespondAsync(context, _logger, MqttResultCodes.InternalError,
+                    "Serverda ichki xato \u2014 birozdan so'ng qayta urinib ko'ring.");
                 return;
             }
 

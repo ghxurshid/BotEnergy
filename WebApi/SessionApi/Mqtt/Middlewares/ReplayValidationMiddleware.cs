@@ -42,6 +42,12 @@ namespace SessionApi.Mqtt.Middlewares
                     "[MQTT-IN] Replay rad etildi id={Id} type={Type} serial={Serial}",
                     context.Envelope.Id, context.Envelope.Type, context.SerialNumber);
                 BotEnergyMetrics.RecordRejected("replay", context.TopicKind.ToString());
+
+                // Odatda qurilma EEPROM'i tozalangan va counter serverdagidan orqada:
+                // operator ResetMqttCounters (Manage) bilan tiklamaguncha hech nima o'tmaydi.
+                await MqttRejectionResponder.RespondAsync(context, _logger, MqttResultCodes.ReplayRejected,
+                    $"id={context.Envelope.Id} qabul qilingan oxirgi id'dan katta emas \u2014 " +
+                    "qurilma hisoblagichi orqada qolgan (operator MQTT counter'larni tiklashi kerak).");
                 return;
             }
 

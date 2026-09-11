@@ -17,9 +17,9 @@ namespace SessionApi.Mqtt.Middlewares
 
         public TimestampValidationMiddleware(ILogger<TimestampValidationMiddleware> logger) => _logger = logger;
 
-        public Task InvokeAsync(MqttContext context, MqttNext next)
+        public async Task InvokeAsync(MqttContext context, MqttNext next)
         {
-            if (context.Envelope is null) return Task.CompletedTask;
+            if (context.Envelope is null) return;
 
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             var ts = context.Envelope.Timestamp;
@@ -31,7 +31,10 @@ namespace SessionApi.Mqtt.Middlewares
                     "[MQTT-IN] Timestamp juda eski age={Age}s id={Id} serial={Serial}",
                     age, context.Envelope.Id, context.SerialNumber);
                 BotEnergyMetrics.RecordRejected("timestamp_old", context.TopicKind.ToString());
-                return Task.CompletedTask;
+
+                await MqttRejectionResponder.RespondAsync(context, _logger, MqttResultCodes.TimestampSkew,
+                    $"Xabar {age}s eski (chegara {MaxAgeSeconds}s) \u2014 qurilma soatini sinxronlang (NTP).");
+                return;
             }
 
             if (age < -MaxFutureSeconds)
@@ -40,10 +43,13 @@ namespace SessionApi.Mqtt.Middlewares
                     "[MQTT-IN] Timestamp kelajakdan skew={Skew}s id={Id} serial={Serial}",
                     -age, context.Envelope.Id, context.SerialNumber);
                 BotEnergyMetrics.RecordRejected("timestamp_future", context.TopicKind.ToString());
-                return Task.CompletedTask;
+
+                await MqttRejectionResponder.RespondAsync(context, _logger, MqttResultCodes.TimestampSkew,
+                    $"Qurilma soati {-age}s oldinda (chegara {MaxFutureSeconds}s) \u2014 NTP bilan sinxronlang.");
+                return;
             }
 
-            return next();
+            await next();
         }
     }
 }
