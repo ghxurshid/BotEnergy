@@ -25,10 +25,22 @@ namespace SessionApi.Mqtt.Middlewares
 
             if (!MqttEnvelopeSerializer.VerifyHmac(context.Envelope, context.Device.SecretKey))
             {
+                // Sababsiz "HMAC mos kelmadi" dalada foydasiz: kalit eskirganmi yoki payload
+                // matni farq qilyaptimi — ikkisi butunlay boshqa ishni talab qiladi.
+                var cause = MqttEnvelopeSerializer.DiagnoseMismatch(context.Envelope, context.Device.SecretKey);
+
                 _logger.LogWarning(
-                    "[MQTT-IN] HMAC mos kelmadi id={Id} type={Type} serial={Serial}",
-                    context.Envelope.Id, context.Envelope.Type, context.SerialNumber);
-                BotEnergyMetrics.RecordRejected("hmac", context.TopicKind.ToString());
+                    "[MQTT-IN] HMAC mos kelmadi id={Id} type={Type} serial={Serial} sabab={Cause} " +
+                    "serverKeyFp={KeyFp} payloadLen={PayloadLen} hmacGot={HmacGot} hmacExp={HmacExp}",
+                    context.Envelope.Id, context.Envelope.Type, context.SerialNumber, cause,
+                    MqttEnvelopeSerializer.KeyFingerprint(context.Device.SecretKey),
+                    context.Envelope.PayloadJson.Length,
+                    MqttEnvelopeSerializer.ShortHmac(context.Envelope.Hmac),
+                    MqttEnvelopeSerializer.ShortHmac(MqttEnvelopeSerializer.ComputeHmac(
+                        context.Envelope.Id, context.Envelope.Type, context.Envelope.Timestamp,
+                        context.Envelope.PayloadJson, context.Device.SecretKey)));
+
+                BotEnergyMetrics.RecordRejected($"hmac_{cause}", context.TopicKind.ToString());
                 return Task.CompletedTask;
             }
 

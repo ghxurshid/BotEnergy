@@ -32,6 +32,23 @@ namespace SessionApi.Mqtt.Abstractions
         public string Hmac { get; init; } = string.Empty;
     }
 
+    /// <summary>HMAC mos kelmaganda aniqlangan sabab — logdan to'g'ri harakatni tanlash uchun.</summary>
+    public enum HmacMismatchCause
+    {
+        /// <summary>
+        /// Kalit eskirgan/noto'g'ri yoki envelope maydonlari (id/type/timestamp) o'zgartirilgan.
+        /// Amaliyotda deyarli har doim: qurilmadagi SecretKey DB'dagisiga teng emas
+        /// (qurilma qayta ro'yxatdan o'tkazilgan — RegisterAsync yangi kalit generatsiya qiladi).
+        /// </summary>
+        KeyOrContent = 0,
+
+        /// <summary>
+        /// Kalit to'g'ri, lekin jo'natuvchi imzolagan payload MATNI yuborgan matndan farq qiladi
+        /// (bo'shliq/pretty-print). HMAC xom matn ustidan hisoblanadi — canonicalization YO'Q.
+        /// </summary>
+        PayloadTextDiffers = 1
+    }
+
     public static class MqttEnvelopeSerializer
     {
         private const string HmacKeyPrefix = "BOT-ENERGY-MQTT-HMAC:";
@@ -147,6 +164,59 @@ namespace SessionApi.Mqtt.Abstractions
 
         public static string ComputeHmac(long id, string type, long timestamp, string payloadJson, string deviceSecretKey)
             => Convert.ToBase64String(ComputeHmacBytes(id, type, timestamp, payloadJson, deviceSecretKey));
+
+        /// <summary>
+        /// HMAC nega mos kelmaganini ajratadi — dalada bu ikki sabab butunlay boshqa ishni talab qiladi:
+        /// kalit eskirgan bo'lsa qurilmani qayta provisioning qilish kerak, matn farqi bo'lsa
+        /// firmware payload'ni imzolagan matndan boshqacha yuboryapti.
+        /// </summary>
+        public static HmacMismatchCause DiagnoseMismatch(MqttEnvelope envelope, string deviceSecretKey)
+        {
+            // Payload matnini siqib (bo'shliqlarsiz) qayta tekshiramiz: shunda mos kelsa,
+            // kalit TO'G'RI — jo'natuvchi imzolagan matn bilan yuborgan matni farq qilgan
+            // (masalan pretty-print yoki qayta serializatsiya oraliqda).
+            try
+            {
+                using var doc = JsonDocument.Parse(envelope.PayloadJson);
+                var compact = JsonSerializer.Serialize(doc.RootElement);
+
+                if (!string.Equals(compact, envelope.PayloadJson, StringComparison.Ordinal))
+                {
+                    var alt = ComputeHmacBytes(envelope.Id, envelope.Type, envelope.Timestamp, compact, deviceSecretKey);
+                    if (TryDecode(envelope.Hmac, out var provided)
+                        && CryptographicOperations.FixedTimeEquals(alt, provided))
+                        return HmacMismatchCause.PayloadTextDiffers;
+                }
+            }
+            catch (JsonException)
+            {
+                // Payload allaqachon parse bo'lgan — bu yerga tushishi kutilmaydi.
+            }
+
+            return HmacMismatchCause.KeyOrContent;
+        }
+
+        /// <summary>
+        /// Kalitning barmoq izi (SHA-256 ning dastlabki 8 hex belgisi). Kalitning O'ZI logga
+        /// hech qachon yozilmaydi; qurilma tomonida ham shu qiymatni hisoblab solishtirish mumkin.
+        /// </summary>
+        public static string KeyFingerprint(string deviceSecretKey)
+        {
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(deviceSecretKey));
+            return Convert.ToHexString(hash)[..8].ToLowerInvariant();
+        }
+
+        /// <summary>Base64 HMAC ning solishtirishga yetarli qisqa ko'rinishi (sir emas — u simda ochiq ketadi).</summary>
+        public static string ShortHmac(string base64Hmac)
+            => string.IsNullOrEmpty(base64Hmac) ? "(yo'q)"
+             : base64Hmac.Length <= 8 ? base64Hmac
+             : base64Hmac[..8];
+
+        private static bool TryDecode(string base64, out byte[] bytes)
+        {
+            try { bytes = Convert.FromBase64String(base64); return true; }
+            catch (FormatException) { bytes = Array.Empty<byte>(); return false; }
+        }
 
         private static byte[] ComputeHmacBytes(long id, string type, long timestamp, string payloadJson, string deviceSecretKey)
         {
