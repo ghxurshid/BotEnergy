@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MQTTnet.Protocol;
 using SessionApi.Mqtt.Abstractions;
 using SessionApi.Mqtt.Handlers;
@@ -27,11 +28,16 @@ namespace SessionApi.Mqtt.Middlewares
     public sealed class DiagnosticEchoMiddleware : IMqttMiddleware
     {
         private readonly MqttConnection _connection;
+        private readonly MqttOptions _options;
         private readonly ILogger<DiagnosticEchoMiddleware> _logger;
 
-        public DiagnosticEchoMiddleware(MqttConnection connection, ILogger<DiagnosticEchoMiddleware> logger)
+        public DiagnosticEchoMiddleware(
+            MqttConnection connection,
+            IOptions<MqttOptions> options,
+            ILogger<DiagnosticEchoMiddleware> logger)
         {
             _connection = connection;
+            _options = options.Value;
             _logger = logger;
         }
 
@@ -50,7 +56,7 @@ namespace SessionApi.Mqtt.Middlewares
                 "[diag.echo] serial={Serial} id={Id} kind={Kind} skew={Skew}s — javob qaytarilmoqda.",
                 context.SerialNumber, context.Envelope.Id, context.TopicKind, skew);
 
-            var payload = BuildPayload(context, serverUnix, skew);
+            var payload = BuildPayload(context, serverUnix, skew, _options.EffectiveClientId);
             var json = BuildUnsignedEnvelope(context.Envelope.Id, MqttHandlerTypes.DiagEcho, serverUnix, payload);
 
             await _connection.PublishAsync(
@@ -70,7 +76,8 @@ namespace SessionApi.Mqtt.Middlewares
         /// Javob payload'i: qurilma yuborganini qaytaradi + soat farqini aytadi.
         /// Hech qanday DB/Redis o'qish yo'q — echo hech narsaga bog'liq bo'lmasligi kerak.
         /// </summary>
-        private static string BuildPayload(MqttContext context, long serverUnix, long skew)
+        private static string BuildPayload(
+            MqttContext context, long serverUnix, long skew, string serverInstance)
         {
             var sb = new StringBuilder(context.Envelope!.PayloadJson.Length + 256);
 
@@ -83,6 +90,12 @@ namespace SessionApi.Mqtt.Middlewares
               // Musbat qiymat — qurilma soati orqada. |skew| > 60s bo'lsa oddiy xabarlar
               // TIMESTAMP_SKEW bilan rad etiladi, echo esa baribir ishlayveradi.
               .Append(",\"clock_skew_sec\":").Append(skew)
+              // Shared subscription ($share/{group}/...) xabarlarni obunachilar orasida
+              // navbat bilan taqsimlaydi. Echo javoblari GOH kelib goh kelmasa — guruhda
+              // bir nechta obunachi bor: javob bergan instansiyalarni shu maydon oshkor qiladi.
+              // Faqat BITTA id ko'rinsa-yu, xabarlarning yarmi yo'qolsa — brokerda
+              // tashlab ketilgan (ghost) sessiya navbatda turibdi.
+              .Append(",\"server_instance\":\"").Append(Escape(serverInstance)).Append('"')
               .Append(",\"echo\":").Append(context.Envelope.PayloadJson)
               .Append('}');
 

@@ -1650,8 +1650,20 @@ aks holda aynan tekshirmoqchi bo'lgan holatda test foydasiz bo'lardi.
 { "ok": true, "serial": "ST3-FUEL-001", "topic_kind": "Request",
   "received_id": 5, "received_timestamp": 1757563200,
   "server_unix": 1757563209, "clock_skew_sec": 9,
+  "server_instance": "botenergy-session-api-vps-b31fd2d4-1654386",
   "echo": { "nonce": "a1b2c3" } }
 ```
+
+`server_instance` — shared subscription tashxisi. Xabarlar guruhdagi obunachilar
+orasida NAVBAT BILAN taqsimlanadi, shuning uchun echo javoblari **goh kelib goh kelmasa**
+guruhda ortiqcha obunachi bor:
+
+- javoblarda **ikki xil** `server_instance` → ikkita tirik SessionApi jarayoni
+  (`pgrep -af SessionApi`);
+- javoblarda **bitta** id, lekin xabarlarning yarmi yo'qoladi → brokerda **tashlab
+  ketilgan (ghost) sessiya** guruhda tirik obunachi sifatida navbatda turibdi va unga
+  tushgan xabarlar offline queue'ga ketadi. Ghost — `CleanSession=false` bilan ulangan
+  eski jarayonlardan qoladi (hozir `true`, lekin avval yaratilganlari o'z-o'zidan yo'qolmaydi).
 
 Nima uchun kerak: "qurilma javob olmayapti" muammosida **transportni** (broker, obuna,
 ACL, topic) **biznes qatlamidan** (kalit, pending sessiya, hisoblagich) ajratadi.
