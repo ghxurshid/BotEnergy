@@ -1621,18 +1621,45 @@ POST /api/DeviceAuth/Authenticate
 
 ### MQTT Topic strukturasi
 
-Qurilma quyidagi topic larga subscribe bo'ladi:
+Topic — transport, xabar turi esa envelope ichidagi `type` da (`MqttHandlerTypes`).
 
 | Topic | Yo'nalish | Tavsif |
 |-------|-----------|--------|
-| `station/{serial}/command/start` | Server → Device | Ishni boshlash (product_id, amount) |
-| `station/{serial}/command/pause` | Server → Device | Pauza |
-| `station/{serial}/command/resume` | Server → Device | Davom ettirish |
-| `station/{serial}/command/stop` | Server → Device | To'xtatish |
-| `station/{serial}/session/connected` | Device → Server | QR skanerlandi |
-| `station/{serial}/telemetry` | Device → Server | Real-time progress |
-| `station/{serial}/session/completed` | Device → Server | Ish tugadi |
-| `station/{serial}/status` | Device → Server | Qurilma holati |
+| `device/{serial}/request` | Device → Server | Javob talab qiladi (`session.connect`, `cash.*`, `diag.echo`) |
+| `device/{serial}/response` | Device → Server | Server so'roviga javob (id echo) |
+| `device/{serial}/event` | Device → Server | Fire-and-forget (`device.heartbeat`, `device.status`, `process.finished`) |
+| `device/{serial}/telemetry` | Device → Server | Real-time progress (QoS 0) |
+| `device/{serial}/state` | Device → Server | Retained snapshot |
+| `server/{serial}/request` | Server → Device | Buyruq (`process.start|pause|resume|stop`, `session.close`, `balance.update`) |
+| `server/{serial}/response` | Server → Device | Qurilma so'roviga javob (id echo) |
+
+Server `$share/{group}/device/+/{kind}` bilan obuna bo'ladi (shared subscription —
+bir nechta instansiya orasida taqsimlanadi).
+
+#### `diag.echo` — transportni yakka o'zini tekshirish
+
+Qurilma `device/{serial}/request` ga `type=diag.echo` yuboradi, server esa
+**hech qanday tekshiruvsiz** — HMAC, qurilma DB'da bor-yo'qligi, timestamp va replay
+counter tekshirilmaydi — darhol `server/{serial}/response` ga javob qaytaradi.
+
+Javob **imzolanmaydi** (`hmac:""`): kaliti noto'g'ri qurilma ham uni o'qiy olishi kerak,
+aks holda aynan tekshirmoqchi bo'lgan holatda test foydasiz bo'lardi.
+
+```jsonc
+// javob payload'i
+{ "ok": true, "serial": "ST3-FUEL-001", "topic_kind": "Request",
+  "received_id": 5, "received_timestamp": 1757563200,
+  "server_unix": 1757563209, "clock_skew_sec": 9,
+  "echo": { "nonce": "a1b2c3" } }
+```
+
+Nima uchun kerak: "qurilma javob olmayapti" muammosida **transportni** (broker, obuna,
+ACL, topic) **biznes qatlamidan** (kalit, pending sessiya, hisoblagich) ajratadi.
+
+- javob keldi → yo'l ochiq, muammo yuqori qatlamda; `clock_skew_sec` ham darhol ko'rinadi
+- javob kelmadi → muammo transportda (server→qurilma yo'li yopiq)
+
+Device simulyatorida **📡 MQTT echo test** tugmasi shuni yuboradi va natijani logga yozadi.
 
 ---
 

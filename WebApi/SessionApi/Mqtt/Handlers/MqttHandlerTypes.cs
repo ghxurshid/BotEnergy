@@ -6,6 +6,13 @@ namespace SessionApi.Mqtt.Handlers
     /// </summary>
     public static class MqttHandlerTypes
     {
+        /// <summary>
+        /// Diagnostika: MQTT transportini yakka o'zini tekshirish. HECH QANDAY tekshiruvsiz
+        /// (HMAC/qurilma/timestamp/replay) darhol javob qaytariladi — handler emas,
+        /// <c>DiagnosticEchoMiddleware</c> ishlaydi.
+        /// </summary>
+        public const string DiagEcho = "diag.echo";
+
         // device → server
         public const string SessionConnect = "session.connect";
         public const string ProcessTelemetry = "process.telemetry";

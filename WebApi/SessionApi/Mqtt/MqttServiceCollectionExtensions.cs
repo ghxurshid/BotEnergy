@@ -32,6 +32,7 @@ namespace SessionApi.Mqtt
             // Middlewarelar — per-message scope ichida resolve qilinadi
             services.AddScoped<LoggingMiddleware>();
             services.AddScoped<DeserializeMiddleware>();
+            services.AddScoped<DiagnosticEchoMiddleware>();
             services.AddScoped<TimestampValidationMiddleware>();
             services.AddScoped<DeviceAuthMiddleware>();
             services.AddScoped<HmacValidationMiddleware>();
@@ -42,6 +43,9 @@ namespace SessionApi.Mqtt
             services.AddSingleton(_ => new MqttPipelineBuilder()
                 .Use<LoggingMiddleware>()
                 .Use<DeserializeMiddleware>()
+                // Echo — barcha tekshiruvlardan OLDIN: u aynan tekshiruvlar yiqilgan
+                // holatda ham transport ishlayotganini ko'rsatishi kerak.
+                .Use<DiagnosticEchoMiddleware>()
                 .Use<TimestampValidationMiddleware>()
                 .Use<DeviceAuthMiddleware>()
                 .Use<HmacValidationMiddleware>()
