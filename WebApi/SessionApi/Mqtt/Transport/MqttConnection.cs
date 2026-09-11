@@ -1,4 +1,4 @@
-﻿using System.Security.Authentication;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -70,9 +70,24 @@ namespace SessionApi.Mqtt.Transport
 
         public async Task SubscribeAsync(string topic, MqttQualityOfServiceLevel qos, CancellationToken ct)
         {
-            await _client.SubscribeAsync(
+            var result = await _client.SubscribeAsync(
                 new MqttTopicFilterBuilder().WithTopic(topic).WithQualityOfServiceLevel(qos).Build(),
                 ct);
+
+            // Broker obunani RAD ETISHI mumkin (ACL) va bu istisno tashlamaydi — natija
+            // kodisiz server "obuna bo'ldim" deb o'ylab, hech qachon xabar olmasdi.
+            foreach (var item in result.Items)
+            {
+                if (item.ResultCode is MqttClientSubscribeResultCode.GrantedQoS0
+                                    or MqttClientSubscribeResultCode.GrantedQoS1
+                                    or MqttClientSubscribeResultCode.GrantedQoS2)
+                    continue;
+
+                _logger.LogError(
+                    "MQTT subscribe RAD ETILDI topic={Topic} kod={Code} — broker ACL/konfiguratsiyasini tekshiring.",
+                    item.TopicFilter.Topic, item.ResultCode);
+            }
+
             _logger.LogDebug("MQTT subscribe: {Topic} qos={Qos}", topic, qos);
         }
 
@@ -91,7 +106,19 @@ namespace SessionApi.Mqtt.Transport
                 .WithRetainFlag(false)
                 .Build();
 
-            await _client.PublishAsync(message, ct);
+            var result = await _client.PublishAsync(message, ct);
+
+            // Broker publish'ni RAD ETISHI mumkin (ACL, quota) — MQTTnet buni istisno bilan
+            // emas, reason code bilan bildiradi. Tekshirmasak, server "javob yubordim" deb
+            // logga yozadi, qurilma esa hech narsa olmay ack-timeout beradi.
+            if (!result.IsSuccess)
+            {
+                _logger.LogError(
+                    "[MQTT-OUT] Publish RAD ETILDI topic={Topic} kod={Code} — broker ACL'ini tekshiring.",
+                    topic, result.ReasonCode);
+                return;
+            }
+
             _logger.LogDebug("[MQTT-OUT] {Topic} ({Len} bytes)", topic, payload.Length);
         }
 

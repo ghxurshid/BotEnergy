@@ -61,6 +61,28 @@ namespace SessionApi.Services
                 var entry = await _pendingStore.GetAsync(userId);
                 if (entry is null)
                 {
+                    // Pending yo'qligining ikkita butunlay boshqa sababi bor va qurilma ekranida
+                    // ular turlicha ko'rinishi kerak:
+                    //  • mijozda allaqachon ochiq sessiya bor — ilova yangi QR YARATA OLMAYDI
+                    //    (CreateSessionAsync SESSION_ALREADY_ACTIVE bilan to'xtaydi), ya'ni
+                    //    "QR eskirgan, yangisini oching" deyish mijozni yopiq ko'chaga boshlaydi;
+                    //  • QR haqiqatan eskirgan (TTL) yoki ulanish allaqachon ishlatilgan.
+                    var hasOpenSession = await _sessionRepo.HasActiveAsync(
+                        userId,
+                        SessionStatus.Created,
+                        SessionStatus.Connected,
+                        SessionStatus.InProcess,
+                        SessionStatus.Paused,
+                        SessionStatus.Settling);
+
+                    if (hasOpenSession)
+                    {
+                        _logger.LogWarning(
+                            "[CONNECT] Step 1 — pending yo'q, lekin userId={UserId} da ochiq sessiya bor.",
+                            userId);
+                        return Fail(ConnectResultCodes.ActiveSessionExists);
+                    }
+
                     _logger.LogWarning(
                         "[CONNECT] Step 1 — pending sessiya topilmadi userId={UserId}", userId);
                     return Fail(ConnectResultCodes.NoPendingSession);
