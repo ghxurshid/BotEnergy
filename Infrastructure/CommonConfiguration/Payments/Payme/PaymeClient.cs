@@ -102,7 +102,9 @@ namespace CommonConfiguration.Payments.Payme
             => InvokeAsync("cards.create", new
             {
                 card = new { number, expire },
-                save = true
+                // save=false — kassa save=true bilan cards.create'ni rad etadi.
+                // Token baribir qaytadi va cards.verify'dan keyin to'lovga yaroqli bo'ladi.
+                save = false
             }, ParseCard, creds, authWithKey: false, ct);
 
         public Task<PaymeApiCall<PaymeVerifyCodeRequest>> GetCardVerifyCodeAsync(string token, PaymeCredentials? creds = null, CancellationToken ct = default)

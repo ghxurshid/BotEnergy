@@ -64,7 +64,7 @@ namespace Domain.Interfaces.Payme
         // DIQQAT: karta metodlari X-Auth sifatida FAQAT kassa id'sini oladi (kalitsiz),
         // receipts.* esa "{cashbox}:{key}" — Payme Subscribe API shunday ajratadi.
 
-        /// <summary>cards.create — karta tokenini yaratadi (save=true: qayta ishlatiladigan).</summary>
+        /// <summary>cards.create — karta tokenini yaratadi (save=false: kassa save=true'ni rad etadi).</summary>
         Task<PaymeApiCall<PaymeCard>> CreateCardAsync(
             string number,
             string expire,
