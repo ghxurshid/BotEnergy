@@ -40,14 +40,14 @@ namespace CommonConfiguration.Payments.Payme
                 ? new
                 {
                     amount = amountTiyin,
-                    account = new { order_id = orderId },
+                    account = new { receipt_id = orderId },
                     hold = true,
                     description
                 }
                 : (object)new
                 {
                     amount = amountTiyin,
-                    account = new { order_id = orderId },
+                    account = new { receipt_id = orderId },
                     description
                 }, ParseReceipt, creds, authWithKey: true, ct);
 
@@ -307,29 +307,41 @@ namespace CommonConfiguration.Payments.Payme
             if (!receiptElem.TryGetProperty("account", out var account))
                 return null;
 
-            // account ko'pincha array (Payme spec): [{ "name": "order_id", "value": "..." }]
+            // account ko'pincha array (Payme spec): [{ "name": "receipt_id", "value": "..." }]
             if (account.ValueKind == JsonValueKind.Array)
             {
                 foreach (var entry in account.EnumerateArray())
                 {
                     if (entry.TryGetProperty("name", out var n) &&
-                        n.GetString() == "order_id" &&
+                        IsOrderField(n.GetString()) &&
                         entry.TryGetProperty("value", out var v))
                     {
-                        return v.GetString();
+                        return v.ValueKind == JsonValueKind.String ? v.GetString() : v.ToString();
                     }
                 }
                 return null;
             }
 
-            // ba'zan obyekt: { "order_id": "..." }
-            if (account.ValueKind == JsonValueKind.Object &&
-                account.TryGetProperty("order_id", out var oid))
+            // ba'zan obyekt: { "receipt_id": "..." }
+            if (account.ValueKind == JsonValueKind.Object)
             {
-                return oid.GetString();
+                foreach (var prop in account.EnumerateObject())
+                {
+                    if (IsOrderField(prop.Name))
+                        return prop.Value.ValueKind == JsonValueKind.String
+                            ? prop.Value.GetString()
+                            : prop.Value.ToString();
+                }
             }
 
             return null;
         }
+
+        /// <summary>
+        /// Kassa account maydonining nomi sozlanadi — biz <c>receipt_id</c> yuboramiz,
+        /// eski kassalar esa <c>order_id</c> qaytaradi. Ikkalasini ham qabul qilamiz.
+        /// </summary>
+        private static bool IsOrderField(string? name)
+            => name is "receipt_id" or "order_id";
     }
 }

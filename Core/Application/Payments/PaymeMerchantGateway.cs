@@ -290,7 +290,7 @@ namespace Application.Payments
                 id = i.ProviderTransactionId,
                 time = i.ProviderTransactionTime ?? ToUnixMs(i.ProviderCreatedAt),
                 amount = i.AmountTiyin,
-                account = new { order_id = i.ProviderOrderId },
+                account = new { receipt_id = i.ProviderOrderId },
                 create_time = ToUnixMs(i.ProviderCreatedAt),
                 perform_time = ToUnixMs(i.ProviderPerformedAt),
                 cancel_time = ToUnixMs(i.ProviderCancelledAt),
@@ -325,7 +325,7 @@ namespace Application.Payments
             state = StateOf(intent)
         };
 
-        /// <summary>account.order_id bo'yicha intent topadi va merchant mosligini tekshiradi.</summary>
+        /// <summary>account.receipt_id bo'yicha intent topadi va merchant mosligini tekshiradi.</summary>
         private async Task<(PaymentIntentEntity? intent, PaymeRpcError? error)> ResolveOrderAsync(
             JsonElement p, long merchantId)
         {
@@ -492,12 +492,21 @@ namespace Application.Payments
             if (p.ValueKind != JsonValueKind.Object || !p.TryGetProperty("account", out var account))
                 return null;
 
-            if (account.ValueKind == JsonValueKind.Object &&
-                account.TryGetProperty("order_id", out var oid))
-                return oid.ValueKind == JsonValueKind.String ? oid.GetString() : oid.ToString();
+            if (account.ValueKind != JsonValueKind.Object)
+                return null;
+
+            // Kassa account maydonining nomi sozlanadi — biz receipt_id yuboramiz,
+            // eski kassa/havolalar esa order_id bilan keladi. Ikkalasini ham qabul qilamiz.
+            foreach (var name in AccountFieldNames)
+            {
+                if (account.TryGetProperty(name, out var oid))
+                    return oid.ValueKind == JsonValueKind.String ? oid.GetString() : oid.ToString();
+            }
 
             return null;
         }
+
+        private static readonly string[] AccountFieldNames = { "receipt_id", "order_id" };
 
         private static long? ToUnixMs(DateTime? value)
             => value is null

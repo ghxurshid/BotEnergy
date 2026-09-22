@@ -51,11 +51,11 @@ namespace Application.Payments
         public override Task<PaymentPrerequisites> GetPrerequisitesAsync(PaymentSessionEntity ps, long userId)
             => Task.FromResult(new PaymentPrerequisites(RequiresCheckout: true, Hint: CustomerHint));
 
-        /// <summary>Bu usulda provider chek identifikatori yo'q — order_id yetarli.</summary>
+        /// <summary>Bu usulda provider chek identifikatori yo'q — receipt_id yetarli.</summary>
         protected override bool IsProcessable(PaymentIntentEntity intent)
             => !string.IsNullOrEmpty(intent.ProviderOrderId);
 
-        protected override string NotProcessableReason => "order_id yo'q — checkout havolasi yaratilmagan.";
+        protected override string NotProcessableReason => "receipt_id yo'q — checkout havolasi yaratilmagan.";
 
         /// <summary>
         /// Bu usulda tick faqat TTL uchun — holatni callback keltiradi. 3 soniyalik polling
@@ -92,11 +92,11 @@ namespace Application.Payments
         }
 
         /// <summary>
-        /// Payme <c>m=...;ac.order_id=...;a=...</c> parametrlarini base64 qilib checkout havolasiga qo'yadi.
+        /// Payme <c>m=...;ac.receipt_id=...;a=...</c> parametrlarini base64 qilib checkout havolasiga qo'yadi.
         /// </summary>
         private string BuildCheckoutUrl(string paymeMerchantId, string orderId, long amountTiyin)
         {
-            var payload = $"m={paymeMerchantId};ac.order_id={orderId};a={amountTiyin}";
+            var payload = $"m={paymeMerchantId};ac.receipt_id={orderId};a={amountTiyin}";
             var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(payload));
             return $"{Options.CheckoutBaseUrl.TrimEnd('/')}/{encoded}";
         }

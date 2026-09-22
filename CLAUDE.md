@@ -173,7 +173,7 @@ To'lov usuli qattiq bog'lanmagan: sessiya va jarayon servislari faqat
     (mijoz ilovaga o'tmaydi), yopilishda `confirm_hold(consumed)`. **Hold faqat shu yerda.**
   - `Invoice` — `receipts.create` + `receipts.send(phone)`, mijoz Payme ilovasida to'laydi;
     pul darhol yechiladi, yopilishda ishlatilmagani `receipts.cancel` bilan qaytariladi.
-  - `Merchant` — checkout havolasi (`m=...;ac.order_id=...;a=...` base64), **chiquvchi chaqiruv yo'q**:
+  - `Merchant` — checkout havolasi (`m=...;ac.receipt_id=...;a=...` base64), **chiquvchi chaqiruv yo'q**:
     Payme bizga JSON-RPC qiladi (`PaymeMerchantGateway`), pul `PerformTransaction` da yechiladi.
     Qaytarishni ham Payme boshlaydi → `PaymentCapabilities.Refund` YO'Q, `SettlementMode.None`.
 - **Hold vs Charge** (`PaymentIntentKind`): Hold — pul ushlanadi, yopilishda `confirm_hold(consumed)`;

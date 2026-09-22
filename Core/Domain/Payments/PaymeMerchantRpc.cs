@@ -99,11 +99,11 @@ namespace Domain.Payments
 
         /// <summary>Buyurtma topilmadi (account xatolari uchun ajratilgan -31050..-31099 oralig'i).</summary>
         public static PaymeRpcError OrderNotFound() => new(-31050, new PaymeRpcMessage(
-            "Заказ не найден", "Buyurtma topilmadi", "Order not found"), "order_id");
+            "Заказ не найден", "Buyurtma topilmadi", "Order not found"), "receipt_id");
 
         /// <summary>Buyurtma to'lovga yaroqli emas (allaqachon to'langan yoki yopilgan).</summary>
         public static PaymeRpcError OrderNotPayable() => new(-31051, new PaymeRpcMessage(
-            "Заказ недоступен для оплаты", "Buyurtma to'lovga yaroqli emas", "Order is not payable"), "order_id");
+            "Заказ недоступен для оплаты", "Buyurtma to'lovga yaroqli emas", "Order is not payable"), "receipt_id");
     }
 
     /// <summary>Payme tranzaksiya holatlari (Merchant API).</summary>
