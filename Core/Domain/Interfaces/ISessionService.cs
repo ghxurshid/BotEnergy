@@ -19,6 +19,13 @@ namespace Domain.Interfaces
         /// </summary>
         Task<GenericDto<DeviceConnectedResultDto>> NotifyDeviceConnectedAsync(string sessionToken);
 
+        /// <summary>
+        /// Mijoz qurilmadagi QR (seriya raqami) ni skanerlaganda sessiyani darhol ochadi —
+        /// pending token va qurilma readeri ishtirokisiz. Qurilma readeri bo'lgan
+        /// stansiyalarda eski yo'l (<see cref="CreateSessionAsync"/>) ham ishlayveradi.
+        /// </summary>
+        Task<GenericDto<CurrentSessionDto>> ConnectByDeviceAsync(ConnectByDeviceDto dto);
+
         Task<GenericDto<CloseSessionResultDto>> CloseSessionByUserAsync(CloseSessionDto dto);
         Task CloseTimedOutSessionsAsync();
 

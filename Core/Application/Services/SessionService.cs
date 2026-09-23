@@ -130,6 +130,79 @@ namespace Application.Services
                 .Replace('/', '_');
         }
 
+        /// <summary>
+        /// Telefon qurilmadagi QR stikerni skanerlaganda sessiya ochish.
+        /// Qurilma readeri orqali ulanish bilan bir xil tekshiruvlardan o'tadi
+        /// (qurilma bor/faol, stansiya faol, mijoz bloklanmagan, boshqa aktiv
+        /// sessiya yo'q) va oxirida xuddi shunday Connected sessiya + to'lov
+        /// konteksti qoldiradi.
+        /// </summary>
+        public async Task<GenericDto<CurrentSessionDto>> ConnectByDeviceAsync(ConnectByDeviceDto dto)
+        {
+            var serial = (dto.SerialNumber ?? string.Empty).Trim();
+
+            var user = await _userRepo.GetByIdAsync(dto.UserId);
+            var device = string.IsNullOrEmpty(serial) ? null : await _deviceRepo.GetBySerialNumberAsync(serial);
+
+            var stop = StopFactorCheck.For("Session.ConnectByDevice")
+                .StopIf(user is null, StopFactors.User.NotFound)
+                .StopIf(() => user!.IsBlocked, StopFactors.User.Blocked)
+                .StopIf(() => device is null, StopFactors.Device.NotFound)
+                .StopIf(() => !device!.IsActive, StopFactors.Device.Inactive)
+                .StopIf(() => device!.Station is null, StopFactors.Device.NoStation)
+                .StopIf(() => device!.Station is { IsActive: false }, StopFactors.Station.Inactive)
+                .Result();
+
+            if (stop is not null)
+                return GenericDto<CurrentSessionDto>.Blocked(stop);
+
+            // Bitta mijozda bir vaqtda bitta sessiya — qurilma readeri orqali
+            // ulanishdagi bilan bir xil qoida.
+            var hasActive = await _sessionRepo.HasActiveAsync(
+                dto.UserId,
+                SessionStatus.Created,
+                SessionStatus.Connected,
+                SessionStatus.InProcess,
+                SessionStatus.Paused,
+                SessionStatus.Settling);
+
+            if (hasActive)
+                return GenericDto<CurrentSessionDto>.Blocked(StopFactors.Session.AlreadyActive);
+
+            var now = DateTime.Now;
+            var session = new SessionEntity
+            {
+                UserId = dto.UserId,
+                DeviceId = device!.Id,
+                SessionToken = GenerateSessionToken(),
+                Status = SessionStatus.Connected,
+                CreatedAt = now,
+                ConnectedAt = now,
+                LastActivityAt = now
+            };
+
+            await _sessionRepo.CreateAsync(session);
+
+            // To'lov konteksti bu yerda yaratilmaydi: uni `SessionPayment/Checkout`
+            // birinchi chaqiruvda o'zi ochadi (EnsureForSessionAsync). Shu sabab
+            // SessionService faqat SessionApi'da mavjud bo'lgan IPaymentSessionService'ga
+            // bog'lanib qolmaydi — u boshqa API'larda ro'yxatdan o'tmagan.
+
+            // Boshqa qurilmalarda ochilgan ilova nusxalari ham holatni bilsin.
+            var notify = await NotifyDeviceConnectedAsync(session.SessionToken);
+            if (!notify.IsSuccess)
+            {
+                _logger.LogWarning("[CONNECT-QR] SignalR xabari yuborilmadi sessionId={SessionId}", session.Id);
+            }
+
+            _logger.LogInformation(
+                "[CONNECT-QR] Sessiya ochildi sessionId={SessionId} userId={UserId} serial={Serial}",
+                session.Id, dto.UserId, serial);
+
+            var current = await _sessionRepo.GetByIdWithProcessesAsync(session.Id) ?? session;
+            return GenericDto<CurrentSessionDto>.Success(await MapToCurrentAsync(current));
+        }
+
         public async Task<GenericDto<DeviceConnectedResultDto>> NotifyDeviceConnectedAsync(string sessionToken)
         {
             var found = await _sessionRepo.GetByTokenAsync(sessionToken);

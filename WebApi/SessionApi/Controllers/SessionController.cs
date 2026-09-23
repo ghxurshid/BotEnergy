@@ -95,6 +95,41 @@ namespace SessionApi.Controllers
         }
 
         /// <summary>
+        /// Qurilmadagi (kolonkadagi) QR kodni skanerlab sessiya ochish.
+        ///
+        /// <c>Create</c> ning teskari yo'nalishi: u yerda telefon QR ko'rsatadi va qurilma
+        /// reader o'qiydi; bu yerda telefon qurilmaning seriya raqamli QR stikerini o'qiydi.
+        /// Natija bir xil — Connected sessiya, to'lov konteksti va SignalR xabari.
+        /// </summary>
+        /// <response code="200">Sessiya ochildi (qurilma, mahsulotlar va to'lov holati bilan)</response>
+        /// <response code="403">Foydalanuvchi bloklangan</response>
+        /// <response code="404">Qurilma yoki foydalanuvchi topilmadi</response>
+        /// <response code="409">Qurilma/stansiya faol emas yoki mijozda allaqachon faol sessiya bor</response>
+        [HttpPost]
+        [RequirePermission(Permissions.SessionCreate)]
+        [Idempotent]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> ConnectByDevice([FromBody] ConnectByDeviceRequest request)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var result = await _sessionService.ConnectByDeviceAsync(new ConnectByDeviceDto
+            {
+                UserId = userId,
+                SerialNumber = request.SerialNumber
+            });
+
+            if (!result.IsSuccess)
+                return result.ToErrorResponse();
+
+            return Ok(result.Result);
+        }
+
+        /// <summary>
         /// Sessiyani yopish. Aktiv jarayonlar bo'lsa, ular avval to'xtatiladi va balansdan yechiladi.
         /// </summary>
         /// <response code="200">Sessiya yopildi</response>
