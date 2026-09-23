@@ -42,6 +42,13 @@ namespace SessionApi.Messaging
                 reason
             }, ct);
 
+        public Task PublishSessionAttachedAsync(string serialNumber, long sessionId, long userId, CancellationToken ct = default)
+            => _publisher.PublishRequestAsync(serialNumber, MqttHandlerTypes.SessionAttached, new
+            {
+                session_id = sessionId,
+                user_id = userId
+            }, ct);
+
         public Task PublishBalanceUpdateAsync(string serialNumber, Domain.Dtos.PaymentSession.SessionBalanceChangedDto e, CancellationToken ct = default)
             => _publisher.PublishRequestAsync(serialNumber, MqttHandlerTypes.BalanceUpdate, new
             {

@@ -130,6 +130,41 @@ namespace SessionApi.Controllers
         }
 
         /// <summary>
+        /// Kolonka ekranida ko'rsatilgan **bir martalik** QR kodni skanerlab sessiya ochish.
+        ///
+        /// Kod qurilma tomonidan MQTT (<c>qr.issue</c>) orqali olinadi va qisqa muddat
+        /// amal qiladi. Muvaffaqiyatli ulanishda kod darhol kuyadi — takroriy
+        /// skanerlash (screenshot) ishlamaydi.
+        /// </summary>
+        /// <response code="200">Sessiya ochildi (qurilma, mahsulotlar va to'lov holati bilan)</response>
+        /// <response code="403">Foydalanuvchi bloklangan</response>
+        /// <response code="404">Qurilma topilmadi</response>
+        /// <response code="409">QR eskirgan/ishlatilgan, qurilma yoki stansiya faol emas, aktiv sessiya bor</response>
+        [HttpPost]
+        [RequirePermission(Permissions.SessionCreate)]
+        [Idempotent]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> ConnectByQr([FromBody] ConnectByQrRequest request)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var result = await _sessionService.ConnectByQrAsync(new ConnectByQrDto
+            {
+                UserId = userId,
+                Code = request.Code
+            });
+
+            if (!result.IsSuccess)
+                return result.ToErrorResponse();
+
+            return Ok(result.Result);
+        }
+
+        /// <summary>
         /// Sessiyani yopish. Aktiv jarayonlar bo'lsa, ular avval to'xtatiladi va balansdan yechiladi.
         /// </summary>
         /// <response code="200">Sessiya yopildi</response>

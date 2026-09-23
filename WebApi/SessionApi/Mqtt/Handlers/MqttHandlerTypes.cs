@@ -22,6 +22,12 @@ namespace SessionApi.Mqtt.Handlers
         public const string DeviceStatus = "device.status";
         public const string PaymentQr = "payment.qr";
 
+        /// <summary>
+        /// Kolonka ekranida ko'rsatish uchun bir martalik QR kod so'rash.
+        /// Qurilma ekranni yangilashdan oldin (va kod muddati tugashidan avval) so'raydi.
+        /// </summary>
+        public const string QrIssue = "qr.issue";
+
         // device → server: naqd → karta oqimi (mijoz kolonka ekranida ishlaydi)
         public const string CashSessionOpen = "cash.session.open";
         public const string CashBillAccepted = "cash.bill.accepted";
@@ -36,6 +42,12 @@ namespace SessionApi.Mqtt.Handlers
         public const string ProcessStop = "process.stop";
         public const string PaymentResult = "payment.result";
         public const string SessionClose = "session.close";
+
+        /// <summary>
+        /// Mijoz QR ni skanerlab sessiya ochdi — qurilma ekranda QR o'rniga
+        /// "ulandi" holatini ko'rsatishi va yangi kod so'ramasligi kerak.
+        /// </summary>
+        public const string SessionAttached = "session.attached";
         public const string BalanceUpdate = "balance.update";
         public const string CashSessionResult = "cash.session.result";
         public const string CashBoxOpen = "cash.box.open";

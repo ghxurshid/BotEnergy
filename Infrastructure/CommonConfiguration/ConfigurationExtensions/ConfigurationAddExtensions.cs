@@ -355,6 +355,12 @@ namespace CommonConfiguration.ConfigurationExtensions
             services.AddSingleton<InMemoryPendingSessionStore>();
             services.AddSingleton<IPendingSessionStore, ResilientPendingSessionStore>();
 
+            // Kolonka ekranidagi bir martalik QR kodlar (device_qr:*) — pending sessiya
+            // bilan bir xil andoza: Redis asosiy, in-memory zaxira.
+            services.AddSingleton<RedisDeviceQrStore>();
+            services.AddSingleton<InMemoryDeviceQrStore>();
+            services.AddSingleton<IDeviceQrStore, ResilientDeviceQrStore>();
+
             // Replay protection counter'lari Redis'da (TTL'siz) — restart'da yo'qolmaydi.
             // In-memory nusxa faqat Redis yiqilganda fallback/shadow sifatida ishlaydi.
             services.AddSingleton<RedisMqttMessageIdStore>();

@@ -26,6 +26,18 @@ namespace Domain.Interfaces
         /// </summary>
         Task<GenericDto<CurrentSessionDto>> ConnectByDeviceAsync(ConnectByDeviceDto dto);
 
+        /// <summary>
+        /// Kolonka ekranida ko'rsatish uchun bir martalik QR kod beradi (qurilma so'raydi).
+        /// Har chaqiruvda yangi kod, avvalgisi bekor bo'ladi.
+        /// </summary>
+        Task<GenericDto<DeviceQrDto>> IssueDeviceQrAsync(string serialNumber, int? ttlSeconds = null);
+
+        /// <summary>
+        /// Mijoz kolonka ekranidagi QR ni skanerlaganda sessiya ochadi.
+        /// Kod bir martalik: muvaffaqiyatli ulanishda darhol iste'mol qilinadi.
+        /// </summary>
+        Task<GenericDto<CurrentSessionDto>> ConnectByQrAsync(ConnectByQrDto dto);
+
         Task<GenericDto<CloseSessionResultDto>> CloseSessionByUserAsync(CloseSessionDto dto);
         Task CloseTimedOutSessionsAsync();
 

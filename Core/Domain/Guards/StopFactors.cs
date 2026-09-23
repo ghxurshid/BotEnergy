@@ -223,6 +223,14 @@ namespace Domain.Guards
             public static readonly StopFactor AlreadyActive =
                 new("SESSION_ALREADY_ACTIVE", "Sizda allaqachon faol sessiya bor. Avval uni yoping.", 409);
 
+            /// <summary>
+            /// Kolonka ekranidagi QR kod eskirgan, allaqachon ishlatilgan yoki noto'g'ri.
+            /// Mijozga "kolonka ekranidagi yangi kodni skanerlang" deyish kerak.
+            /// </summary>
+            public static readonly StopFactor QrInvalid =
+                new("SESSION_QR_INVALID",
+                    "QR kod eskirgan yoki allaqachon ishlatilgan — kolonka ekranidagi yangi kodni skanerlang.", 409);
+
             public static readonly StopFactor HasActiveProcess =
                 new("SESSION_HAS_ACTIVE_PROCESS", "Avval jarayonni to'xtating, keyin sessiyani yoping.", 409);
 

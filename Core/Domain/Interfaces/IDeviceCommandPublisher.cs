@@ -20,6 +20,13 @@
         Task PublishSessionClosedAsync(string serialNumber, long sessionId, string reason, CancellationToken ct = default);
 
         /// <summary>
+        /// Mijoz kolonka ekranidagi QR ni skanerlab sessiya ochdi (MQTT type:
+        /// <c>session.attached</c>). Qurilma ekranda QR ni olib tashlab, mijoz
+        /// ulanganini ko'rsatadi va yangi kod so'ramaydi.
+        /// </summary>
+        Task PublishSessionAttachedAsync(string serialNumber, long sessionId, long userId, CancellationToken ct = default);
+
+        /// <summary>
         /// Sessiya hold balansi o'zgardi — qurilma displeyida ko'rsatish uchun.
         /// SignalR SessionBalanceChanged bilan BIR XIL event modeli (MQTT type: balance.update).
         /// </summary>

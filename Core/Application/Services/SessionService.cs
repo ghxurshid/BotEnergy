@@ -28,6 +28,7 @@ namespace Application.Services
         private readonly ISessionPaymentService _payments;
         private readonly IPushNotificationService _push;
         private readonly IPendingSessionStore _pendingStore;
+        private readonly IDeviceQrStore _qrStore;
         private readonly IDeviceStatusService _deviceStatus;
         private readonly ITransactionRunner _tx;
         private readonly ILogger<SessionService> _logger;
@@ -54,6 +55,7 @@ namespace Application.Services
             ISessionPaymentService payments,
             IPushNotificationService push,
             IPendingSessionStore pendingStore,
+            IDeviceQrStore qrStore,
             IDeviceStatusService deviceStatus,
             ITransactionRunner tx,
             ILogger<SessionService> logger)
@@ -69,6 +71,7 @@ namespace Application.Services
             _payments = payments;
             _push = push;
             _pendingStore = pendingStore;
+            _qrStore = qrStore;
             _deviceStatus = deviceStatus;
             _tx = tx;
             _logger = logger;
@@ -124,6 +127,97 @@ namespace Application.Services
         private static string GenerateSessionToken()
         {
             var bytes = RandomNumberGenerator.GetBytes(24);
+            return Convert.ToBase64String(bytes)
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+        }
+
+        /// <summary>
+        /// Kolonka ekranidagi bir martalik QR kod uchun amal qilish muddati.
+        /// Qisqa muddat — skrinshot bilan boshqa joyda ishlatishga yo'l qo'ymaslik uchun;
+        /// qurilma muddati tugashidan oldin yangisini so'rab turadi.
+        /// </summary>
+        private static readonly TimeSpan DeviceQrTtl = TimeSpan.FromMinutes(2);
+
+        /// <summary>QR kod matnining prefiksi — ilova uni stikerdan ajratadi.</summary>
+        public const string DeviceQrPrefix = "BE1:";
+
+        public async Task<GenericDto<DeviceQrDto>> IssueDeviceQrAsync(string serialNumber, int? ttlSeconds = null)
+        {
+            var serial = (serialNumber ?? string.Empty).Trim();
+            var device = string.IsNullOrEmpty(serial) ? null : await _deviceRepo.GetBySerialNumberAsync(serial);
+
+            var stop = StopFactorCheck.For("Session.IssueDeviceQr")
+                .StopIf(device is null, StopFactors.Device.NotFound)
+                .StopIf(() => !device!.IsActive, StopFactors.Device.Inactive)
+                .StopIf(() => device!.Station is null, StopFactors.Device.NoStation)
+                .StopIf(() => device!.Station is { IsActive: false }, StopFactors.Station.Inactive)
+                .Result();
+
+            if (stop is not null)
+                return GenericDto<DeviceQrDto>.Blocked(stop);
+
+            var ttl = ttlSeconds is > 0
+                ? TimeSpan.FromSeconds(Math.Min(ttlSeconds.Value, 600))
+                : DeviceQrTtl;
+
+            var code = GenerateQrCode();
+            var expiresAt = DateTime.Now.Add(ttl);
+
+            await _qrStore.SetAsync(code, new DeviceQrEntry(device!.Id, serial, expiresAt), ttl);
+
+            _logger.LogInformation(
+                "[QR] Kod berildi serial={Serial} deviceId={DeviceId} ttl={Ttl}s",
+                serial, device.Id, (int)ttl.TotalSeconds);
+
+            return GenericDto<DeviceQrDto>.Success(new DeviceQrDto
+            {
+                Code = code,
+                Payload = DeviceQrPrefix + code,
+                ExpiresAt = expiresAt,
+                TtlSeconds = (int)ttl.TotalSeconds
+            });
+        }
+
+        public async Task<GenericDto<CurrentSessionDto>> ConnectByQrAsync(ConnectByQrDto dto)
+        {
+            var raw = (dto.Code ?? string.Empty).Trim();
+            if (raw.StartsWith(DeviceQrPrefix, StringComparison.OrdinalIgnoreCase))
+                raw = raw[DeviceQrPrefix.Length..];
+
+            if (string.IsNullOrEmpty(raw))
+                return GenericDto<CurrentSessionDto>.Blocked(StopFactors.Session.QrInvalid);
+
+            // Kodni oldindan o'qiymiz: mijoz yoki qurilma tekshiruvidan o'tmasa,
+            // kod iste'mol qilinmasin (mijoz qayta urinib ko'ra olsin).
+            var entry = await _qrStore.GetAsync(raw);
+            if (entry is null)
+                return GenericDto<CurrentSessionDto>.Blocked(StopFactors.Session.QrInvalid);
+
+            var result = await ConnectByDeviceAsync(new ConnectByDeviceDto
+            {
+                UserId = dto.UserId,
+                SerialNumber = entry.SerialNumber
+            });
+
+            if (!result.IsSuccess)
+                return result;
+
+            // Sessiya ochildi — kod bir martalik, darhol kuydiriladi.
+            await _qrStore.ConsumeAsync(raw);
+
+            _logger.LogInformation(
+                "[QR] Kod ishlatildi deviceId={DeviceId} userId={UserId} sessionId={SessionId}",
+                entry.DeviceId, dto.UserId, result.Result?.SessionId);
+
+            return result;
+        }
+
+        /// <summary>Bir martalik QR kod — 12 belgili URL-xavfsiz tasodifiy matn.</summary>
+        private static string GenerateQrCode()
+        {
+            var bytes = RandomNumberGenerator.GetBytes(9);
             return Convert.ToBase64String(bytes)
                 .TrimEnd('=')
                 .Replace('+', '-')
@@ -187,6 +281,18 @@ namespace Application.Services
             // birinchi chaqiruvda o'zi ochadi (EnsureForSessionAsync). Shu sabab
             // SessionService faqat SessionApi'da mavjud bo'lgan IPaymentSessionService'ga
             // bog'lanib qolmaydi — u boshqa API'larda ro'yxatdan o'tmagan.
+
+            // Kolonka ekrani QR ni olib tashlab, "mijoz ulandi" holatiga o'tsin.
+            try
+            {
+                await _commandPublisher.PublishSessionAttachedAsync(device.SerialNumber, session.Id, dto.UserId);
+                await _qrStore.InvalidateForDeviceAsync(device.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "[CONNECT-QR] Qurilmaga session.attached yuborilmadi serial={Serial}", device.SerialNumber);
+            }
 
             // Boshqa qurilmalarda ochilgan ilova nusxalari ham holatni bilsin.
             var notify = await NotifyDeviceConnectedAsync(session.SessionToken);
