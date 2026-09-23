@@ -108,6 +108,21 @@ namespace UserApi.Controllers
             return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
+        /// <summary>
+        /// Karta qo'shish mumkin bo'lgan merchantlar (kassalar) ro'yxati.
+        /// Ilova sessiya ochmasdan turib ham karta qo'sha olishi uchun kerak:
+        /// ro'yxatda bitta merchant bo'lsa ilova uni avtomatik tanlaydi.
+        /// </summary>
+        /// <response code="200">Payme kassasi sozlangan faol merchantlar</response>
+        [HttpGet]
+        [RequirePermission(Permissions.PaymentCardList)]
+        [ProducesResponseType(typeof(List<CardMerchantDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> Merchants()
+        {
+            var result = await _cards.GetMerchantsAsync();
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
+        }
+
         /// <summary>Shu merchant uchun asosiy kartani belgilash.</summary>
         [HttpPost("{cardId}")]
         [RequirePermission(Permissions.PaymentCardSetDefault)]

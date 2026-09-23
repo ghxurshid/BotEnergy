@@ -9,6 +9,13 @@ namespace Domain.Repositories
         Task<PagedResult<MerchantEntity>> GetAllAsync(PaginationParams param, long? merchantId = null);
         Task<MerchantEntity?> GetByPhoneNumberAsync(string phoneNumber);
 
+        /// <summary>
+        /// Payme kassasi to'liq sozlangan faol merchantlar (karta qo'shish uchun).
+        /// Shart PaymeCredentialResolver bilan bir xil: IsActive + PaymeEnabled +
+        /// PaymeCashboxId va PaymeKey to'ldirilgan.
+        /// </summary>
+        Task<List<MerchantEntity>> GetPaymeEnabledAsync();
+
         /// <summary>INN band-emasligini tekshiradi (inn ustunida unique indeks bor).</summary>
         Task<bool> ExistsByInnAsync(string inn, long? excludeMerchantId = null);
         Task<MerchantEntity> CreateAsync(MerchantEntity merchant);

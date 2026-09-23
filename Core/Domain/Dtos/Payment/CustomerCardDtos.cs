@@ -61,4 +61,16 @@ namespace Domain.Dtos.Payment
         public long CardId { get; set; }
         public string ResultMessage { get; set; } = string.Empty;
     }
+
+    /// <summary>
+    /// Mijozga karta qo'shish uchun tanlanadigan merchant (kassa). Faqat
+    /// Payme sozlangan, faol merchantlar qaytariladi — mobil ilova sessiyasiz
+    /// ham (masalan asosiy ekrandan) karta qo'sha olishi uchun.
+    /// Mijozga faqat identifikator va nom ko'rsatiladi, sirlar hech qachon emas.
+    /// </summary>
+    public class CardMerchantDto
+    {
+        public long MerchantId { get; set; }
+        public string CompanyName { get; set; } = string.Empty;
+    }
 }

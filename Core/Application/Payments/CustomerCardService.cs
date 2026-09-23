@@ -20,17 +20,20 @@ namespace Application.Payments
         private readonly ICustomerCardRepository _cards;
         private readonly IPaymeClient _payme;
         private readonly IPaymeCredentialResolver _credResolver;
+        private readonly IMerchantRepository _merchants;
         private readonly ILogger<CustomerCardService> _logger;
 
         public CustomerCardService(
             ICustomerCardRepository cards,
             IPaymeClient payme,
             IPaymeCredentialResolver credResolver,
+            IMerchantRepository merchants,
             ILogger<CustomerCardService> logger)
         {
             _cards = cards;
             _payme = payme;
             _credResolver = credResolver;
+            _merchants = merchants;
             _logger = logger;
         }
 
@@ -208,6 +211,14 @@ namespace Application.Payments
         {
             var cards = await _cards.GetForUserAsync(userId, merchantId);
             return GenericDto<List<CardItemDto>>.Success(cards.Select(MapItem).ToList());
+        }
+
+        public async Task<GenericDto<List<CardMerchantDto>>> GetMerchantsAsync()
+        {
+            var merchants = await _merchants.GetPaymeEnabledAsync();
+            return GenericDto<List<CardMerchantDto>>.Success(merchants
+                .Select(m => new CardMerchantDto { MerchantId = m.Id, CompanyName = m.CompanyName })
+                .ToList());
         }
 
         public async Task<GenericDto<CardResultDto>> SetDefaultAsync(long cardId, long userId)

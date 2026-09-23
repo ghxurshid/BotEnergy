@@ -26,6 +26,15 @@ namespace Persistence.Repositories
         public async Task<MerchantEntity?> GetByPhoneNumberAsync(string phoneNumber)
             => await _context.Merchants.FirstOrDefaultAsync(c => c.PhoneNumber == phoneNumber);
 
+        public Task<List<MerchantEntity>> GetPaymeEnabledAsync()
+            => _context.Merchants
+                .Where(m => m.IsActive
+                            && m.PaymeEnabled
+                            && m.PaymeCashboxId != null && m.PaymeCashboxId != string.Empty
+                            && m.PaymeKey != null && m.PaymeKey != string.Empty)
+                .OrderBy(m => m.CompanyName)
+                .ToListAsync();
+
         public Task<bool> ExistsByInnAsync(string inn, long? excludeMerchantId = null)
         {
             var normalized = (inn ?? string.Empty).Trim();

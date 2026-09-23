@@ -25,6 +25,13 @@ namespace Domain.Interfaces
         /// <summary>Foydalanuvchi kartalari (merchant bo'yicha filtr — mobil ilova stansiya merchantini beradi).</summary>
         Task<GenericDto<List<CardItemDto>>> GetMyAsync(long userId, long? merchantId = null);
 
+        /// <summary>
+        /// Karta qo'shish mumkin bo'lgan merchantlar (Payme kassasi sozlangan,
+        /// faol). Ilova sessiyasiz, masalan asosiy ekrandan karta qo'shayotganda
+        /// merchantId shu ro'yxatdan olinadi.
+        /// </summary>
+        Task<GenericDto<List<CardMerchantDto>>> GetMerchantsAsync();
+
         /// <summary>Shu merchant uchun asosiy kartani belgilash.</summary>
         Task<GenericDto<CardResultDto>> SetDefaultAsync(long cardId, long userId);
 
