@@ -16,6 +16,12 @@ namespace Domain.Entities
 
         /// <summary>Faqat <see cref="CustomerUserType.Corporate"/> uchun to'ldiriladi; balans
         /// shu tashkilotning <see cref="OrganizationEntity.Balance"/>idan olinadi.</summary>
+        /// <summary>
+        /// Tasdiqlash kodlari yuboriladigan Telegram chat. Foydalanuvchi botda
+        /// telefon raqamini ulashganda to'ldiriladi (raqamni Telegram tasdiqlaydi).
+        /// </summary>
+        public long? TelegramChatId { get; set; }
+
         public long? OrganizationId { get; set; }
         public OrganizationEntity? Organization { get; set; }
 

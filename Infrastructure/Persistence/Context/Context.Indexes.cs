@@ -173,7 +173,8 @@ namespace Persistence.Context
                     .HasColumnType("numeric(18,2)")
                     .HasDefaultValue(0m);
 
-                b.Property(x => x.OrganizationId).HasColumnName("organization_id");
+                b.Property(x => x.TelegramChatId).HasColumnName("telegram_chat_id");
+            b.Property(x => x.OrganizationId).HasColumnName("organization_id");
                 b.HasOne(x => x.Organization)
                     .WithMany(x => x.CustomerUsers)
                     .HasForeignKey(x => x.OrganizationId)
@@ -185,6 +186,11 @@ namespace Persistence.Context
                     .OnDelete(DeleteBehavior.SetNull);
 
                 b.HasIndex(x => x.OrganizationId);
+
+            // Botdan kelgan xabarni foydalanuvchiga bog'lash uchun teskari qidiruv.
+            b.HasIndex(x => x.TelegramChatId)
+                .IsUnique()
+                .HasFilter("is_deleted = false AND telegram_chat_id IS NOT NULL");
             });
         }
 

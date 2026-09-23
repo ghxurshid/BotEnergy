@@ -67,6 +67,14 @@
       }
     }
   },
+  "Telegram": {
+    "BotToken": "",
+    "BotUsername": "BOTENERGY_bot",
+    "BaseUrl": "https://api.telegram.org",
+    "TimeoutSeconds": 30,
+    "Enabled": false,
+    "LinkTtlMinutes": 15
+  },
   "Payme": {
     "BaseUrl": "https://checkout.test.paycom.uz/api",
     "MerchantId": "",

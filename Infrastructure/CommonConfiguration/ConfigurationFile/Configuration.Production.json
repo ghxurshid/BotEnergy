@@ -1,5 +1,5 @@
 {
-  "_note": "Production sirlar SHU FAYLDA SAQLANMAYDI. Barcha 'Env_*' qiymatlar placeholder — ResolveSecret ularni 'berilmagan' deb biladi va servis fail-fast qiladi. Haqiqiy qiymatlarni systemd EnvironmentFile beradi (/etc/botenergy/botenergy.env): ConnectionStrings__DefaultConnection, Jwt__Secret, Mqtt__Password, InternalApi__SharedSecret, Seed__AdminPassword, Payme__MerchantId, Payme__Key. Env var json'dagi qiymatni override qiladi.",
+  "_note": "Production sirlar SHU FAYLDA SAQLANMAYDI. Barcha 'Env_*' qiymatlar placeholder — ResolveSecret ularni 'berilmagan' deb biladi va servis fail-fast qiladi. Haqiqiy qiymatlarni systemd EnvironmentFile beradi (/etc/botenergy/botenergy.env): ConnectionStrings__DefaultConnection, Jwt__Secret, Mqtt__Password, InternalApi__SharedSecret, Seed__AdminPassword, Payme__MerchantId, Payme__Key, Telegram__BotToken. Env var json'dagi qiymatni override qiladi.",
 
   "ConnectionStrings": {
     "DefaultConnection": "Env_ConnectionStrings__DefaultConnection"
@@ -58,6 +58,14 @@
     // AdminApi → SessionApi (inkassatsiya "boxni ochish" buyrug'i). Localhost:
     // servis portlari tashqaridan yopiq, chaqiruv server ichida qoladi.
     "SessionApiBaseUrl": "http://localhost:5007"
+  },
+  "Telegram": {
+    "BotToken": "Env_Telegram__BotToken",
+    "BotUsername": "BOTENERGY_bot",
+    "BaseUrl": "https://api.telegram.org",
+    "TimeoutSeconds": 30,
+    "Enabled": true,
+    "LinkTtlMinutes": 15
   },
   "Payme": {
     "BaseUrl": "https://checkout.paycom.uz/api",

@@ -25,6 +25,10 @@ builder.Services.RegisterAuthServices(builder.Configuration);
 // Redis (RegisterAuthServices'dagi AuthService IRefreshTokenStore'ga bog'liq)
 builder.Services.AddRedisServices(builder.Configuration);
 
+// Telegram bot: tasdiqlash kodlarini yetkazish + botdan kelgan xabarlarni tinglash.
+builder.Services.AddTelegram(builder.Configuration);
+builder.Services.AddHostedService<AuthApi.BackgroundServices.TelegramUpdatePollerService>();
+
 // Login/OTP brute-force himoyasi — IP boshiga 30 req/min, oshsa 429.
 builder.Services.AddIpRateLimiting(builder.Configuration);
 

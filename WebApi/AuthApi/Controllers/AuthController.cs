@@ -35,10 +35,33 @@ namespace UserApi.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly Domain.Interfaces.Telegram.ITelegramGateway _telegram;
 
-        public AuthController(IAuthService authService)
+        public AuthController(IAuthService authService, Domain.Interfaces.Telegram.ITelegramGateway telegram)
         {
             _authService = authService;
+            _telegram = telegram;
+        }
+
+        /// <summary>
+        /// Tasdiqlash kodini Telegram orqali olish uchun havola.
+        ///
+        /// Ilova foydalanuvchini shu havola bo'yicha botga olib o'tadi; havola ichidagi
+        /// bir martalik token **qaysi profil** uchun ochilganini botga bildiradi.
+        /// Bog'lash foydalanuvchi telefon raqamini ulashganda yakunlanadi — raqamni
+        /// Telegram o'zi tasdiqlaydi va u profil raqamiga mos kelishi shart.
+        /// </summary>
+        /// <response code="200">Havola yaratildi</response>
+        /// <response code="404">Foydalanuvchi topilmadi</response>
+        /// <response code="409">Telegram bot sozlanmagan</response>
+        [HttpPost]
+        [ProducesResponseType(typeof(Domain.Dtos.Telegram.TelegramLinkDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> TelegramLink([FromBody] TelegramLinkRequest request)
+        {
+            var result = await _telegram.CreateLinkAsync(request.UserId);
+            return result.IsSuccess ? Ok(result.Result) : result.ToErrorResponse();
         }
 
         /// <summary>

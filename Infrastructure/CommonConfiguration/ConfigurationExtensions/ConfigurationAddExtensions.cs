@@ -480,7 +480,14 @@ namespace CommonConfiguration.ConfigurationExtensions
             // AddRedisServices() AuthApi'da baribir chaqirilgan (IRefreshTokenStore uchun).
             services.AddSingleton<OtpService>();
             services.AddSingleton<Redis.RedisOtpService>();
-            services.AddSingleton<IOtpService, Redis.ResilientOtpService>();
+
+            // OTP zanjiri: Redis (+in-memory zaxira) ustiga Telegram yuboruvchi
+            // dekorator qo'yiladi — kod yaratilishi bilan botga uzatiladi.
+            services.AddSingleton<Redis.ResilientOtpService>();
+            services.AddSingleton<IOtpService>(sp => new Application.Services.TelegramNotifyingOtpService(
+                sp.GetRequiredService<Redis.ResilientOtpService>(),
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Application.Services.TelegramNotifyingOtpService>>()));
 
             // Auth servislar repository larga bog'liq (CommonConfiguration AuthApi'da
             // RegisterServices chaqirmasligi mumkin, shuning uchun shu yerda ham ro'yxatga olamiz).
@@ -609,6 +616,36 @@ namespace CommonConfiguration.ConfigurationExtensions
         /// keltirib chiqarishi mumkin chunki PaymentService IPaymeClient'ga bog'liq).
         /// IPaymentTransactionRepository RegisterServices'da ro'yxatga olinishi shart.
         /// </summary>
+        /// <summary>
+        /// Telegram bot integratsiyasi: Bot API klienti, havola tokenlari ombori va
+        /// kodlarni yetkazuvchi gateway. Token berilmagan bo'lsa hammasi jim turadi
+        /// (ro'yxatdan o'tish oqimi baribir ishlayveradi).
+        /// </summary>
+        public static IServiceCollection AddTelegram(this IServiceCollection services, IConfiguration config)
+        {
+            services.Configure<Domain.Options.TelegramOptions>(config.GetSection("Telegram"));
+
+            // Sir "Env_..." placeholder bo'lib qolgan bo'lsa — token yo'q deb hisoblaymiz.
+            services.PostConfigure<Domain.Options.TelegramOptions>(options =>
+            {
+                if (!string.IsNullOrWhiteSpace(options.BotToken) &&
+                    options.BotToken.StartsWith("Env_", StringComparison.Ordinal))
+                {
+                    options.BotToken = string.Empty;
+                }
+            });
+
+            services.AddHttpClient<Domain.Interfaces.Telegram.ITelegramBotClient, Telegram.TelegramBotClient>();
+
+            services.AddSingleton<Redis.RedisTelegramLinkStore>();
+            services.AddSingleton<Redis.InMemoryTelegramLinkStore>();
+            services.AddSingleton<Domain.Interfaces.Telegram.ITelegramLinkStore, Redis.ResilientTelegramLinkStore>();
+
+            services.AddScoped<Domain.Interfaces.Telegram.ITelegramGateway, Application.Services.TelegramGateway>();
+
+            return services;
+        }
+
         public static IServiceCollection AddPaymeClient(this IServiceCollection services, IConfiguration config)
         {
             services.Configure<PaymeOptions>(config.GetSection("Payme"));

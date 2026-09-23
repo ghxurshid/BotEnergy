@@ -79,6 +79,15 @@ namespace Domain.Guards
                 new("DEVICE_OUT_OF_SCOPE", "Bu qurilma sizning doirangizga tegishli emas.", 403);
         }
 
+        // ─────────────────────────── Telegram ───────────────────────────
+
+        public static class Telegram
+        {
+            public static readonly StopFactor NotConfigured =
+                new("TELEGRAM_NOT_CONFIGURED",
+                    "Telegram bot sozlanmagan — kodlar hozircha bot orqali yuborilmaydi.", 409);
+        }
+
         // ─────────────────────────── Stansiya ───────────────────────────
 
         public static class Station
