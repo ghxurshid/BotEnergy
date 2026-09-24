@@ -79,7 +79,11 @@
     "BaseUrl": "https://checkout.test.paycom.uz/api",
     "MerchantId": "",
     "Key": "",
-    "TimeoutSeconds": 30
+    "TimeoutSeconds": 30,
+    // Kassada "kartani saqlash (Subscribe)" yoqilgach true qiling: faqat shunda
+    // Payme kartani saqlaydi, SMS kod yuboradi va token hold uchun yaroqli bo'ladi.
+    // Hozir false — kassa save=true ni rad etadi (11.09.2026, commit 982c938).
+    "SaveCard": false
   },
   "Bank": {
     "Provider": "Fake",

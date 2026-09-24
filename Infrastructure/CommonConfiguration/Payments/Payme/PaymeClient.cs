@@ -98,20 +98,58 @@ namespace CommonConfiguration.Payments.Payme
         // ═══════════════════════ Kartalar ═══════════════════════
         // X-Auth: FAQAT kassa id (kalitsiz) — Payme Subscribe API karta metodlarini shunday ajratadi.
 
-        public Task<PaymeApiCall<PaymeCard>> CreateCardAsync(string number, string expire, PaymeCredentials? creds = null, CancellationToken ct = default)
-            => InvokeAsync("cards.create", new
+        public async Task<PaymeApiCall<PaymeCard>> CreateCardAsync(string number, string expire, PaymeCredentials? creds = null, CancellationToken ct = default)
+        {
+            // save — sozlamadan. Kartani keyin ishlatish (hold) va SMS bilan tasdiqlash
+            // uchun true kerak; kassada "kartani saqlash" yoqilmagan bo'lsa Payme uni
+            // rad etadi va vaqtincha yechim sifatida false qo'yiladi.
+            var call = await InvokeAsync("cards.create", new
             {
                 card = new { number, expire },
-                // save=false — kassa save=true bilan cards.create'ni rad etadi.
-                // Token baribir qaytadi va cards.verify'dan keyin to'lovga yaroqli bo'ladi.
-                save = false
+                save = _options.SaveCard
             }, ParseCard, creds, authWithKey: false, ct);
 
-        public Task<PaymeApiCall<PaymeVerifyCodeRequest>> GetCardVerifyCodeAsync(string token, PaymeCredentials? creds = null, CancellationToken ct = default)
-            => InvokeAsync("cards.get_verify_code", new
+            if (call.IsSuccess && call.Result is not null)
+            {
+                // Diagnostika: SMS kutilayaptimi yoki karta darhol tayyormi — shu yerda ko'rinadi.
+                _logger.LogInformation(
+                    "[PAYME] cards.create OK save={Save} recurrent={Recurrent} verify={Verify}",
+                    _options.SaveCard, call.Result.Recurrent, call.Result.Verify);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "[PAYME] cards.create RAD ETILDI save={Save} code={Code} msg={Message} javob={Body}",
+                    _options.SaveCard, call.Error?.Code, call.Error?.Message ?? call.FailureMessage, Trim(call.ResponseBody));
+            }
+
+            return call;
+        }
+
+        public async Task<PaymeApiCall<PaymeVerifyCodeRequest>> GetCardVerifyCodeAsync(string token, PaymeCredentials? creds = null, CancellationToken ct = default)
+        {
+            var call = await InvokeAsync("cards.get_verify_code", new
             {
                 token
             }, ParseVerifyCode, creds, authWithKey: false, ct);
+
+            // SMS kelmadi degan shikoyatning sababi shu qatorda ko'rinadi: Payme
+            // xatosi (masalan -32504 "yetarli huquq yo'q") yoki sent=false.
+            if (call.IsSuccess && call.Result is not null)
+            {
+                _logger.LogInformation(
+                    "[PAYME] cards.get_verify_code sent={Sent} phone={Phone} wait={Wait}",
+                    call.Result.Sent, call.Result.Phone, call.Result.Wait);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "[PAYME] cards.get_verify_code RAD ETILDI code={Code} msg={Message} javob={Body}",
+                    call.Error?.Code, call.Error?.Message ?? call.FailureMessage, Trim(call.ResponseBody));
+            }
+
+            return call;
+        }
 
         public Task<PaymeApiCall<PaymeCard>> VerifyCardAsync(string token, string code, PaymeCredentials? creds = null, CancellationToken ct = default)
             => InvokeAsync("cards.verify", new
@@ -275,6 +313,10 @@ namespace CommonConfiguration.Payments.Payme
                 OrderId = ExtractOrderId(receiptElem)
             };
         }
+
+        /// <summary>Logga uzun javobni to'liq yozmaymiz.</summary>
+        private static string Trim(string? body)
+            => string.IsNullOrEmpty(body) ? string.Empty : (body.Length <= 400 ? body : body[..400]);
 
         private static PaymeCard ParseCard(JsonElement resultElem)
         {
